@@ -146,18 +146,22 @@ export class SylloraService {
           point.name = title.parse(base['name']); break
         }
         case 'plan': {
-          const p = z.object({ scope: z.array(key).min(1), dailyMinutes: z.number().int().min(1).max(720), days: z.number().int().min(1).max(90), restDays: z.array(z.number().int().min(0).max(6)).default([]), baseVersion: z.number().int() }).parse(base)
+          const p = z.object({ scope: z.array(key).min(1), dailyMinutes: z.number().int().min(1).max(720), days: z.number().int().min(1).max(90), restDays: z.array(z.number().int().min(0).max(6)).default([]), baseVersion: z.number().int(), deadline: z.iso.date('目标日期必须是有效的 YYYY-MM-DD 日期').nullish(), estimates: z.record(z.string().uuid(), z.number().int().min(5).max(240)).optional() }).parse(base)
           if (p.baseVersion !== (course.plan?.version ?? 0)) fail('VERSION_CONFLICT','计划已更新，请刷新后查看最新版本')
+          if (p.deadline && p.deadline < localDate(this.now(), course.timezone)) fail('PAST_DEADLINE','目标日期已过，无法在该日期前完成；请调整目标日期后重新生成')
+          if (p.deadline && Math.round((Date.parse(`${p.deadline}T12:00:00Z`) - Date.parse(`${localDate(this.now(), course.timezone)}T12:00:00Z`)) / 86400000) >= 366) fail('LIMIT_EXCEEDED','目标日期超出 366 天排程窗口，请缩短日期范围')
           const available = new Set(usableSources(course).map(s => s.id))
           p.scope = [...new Set(p.scope)]
           for (const pointId of p.scope) if (!course.points.some(k => k.id === pointId && k.sourceIds.some(s => available.has(s)))) fail('NO_USABLE_SOURCE','所选知识点缺少有效来源，请补充资料')
-          course.draft = buildPlan(course,p,this.now(),id)
+          const estimates = Object.fromEntries(Object.entries(p.estimates ?? {}).filter(([pointId]) => p.scope.includes(pointId)))
+          course.draft = buildPlan(course,{ scope: p.scope, dailyMinutes: p.dailyMinutes, days: p.days, restDays: p.restDays, deadline: p.deadline ?? null, estimates },this.now(),id)
           break
         }
         case 'confirmPlan': {
           const draft = course.draft ?? fail('NOT_FOUND','没有待确认计划')
           if (base['draftId'] !== draft.id) fail('VERSION_CONFLICT','另一页面更新了草案，请查看最新差异后确认')
           if (base['baseVersion'] !== (course.plan?.version ?? 0) || draft.baseVersion !== (course.plan?.version ?? 0)) fail('VERSION_CONFLICT','计划已变化，请重新生成草案')
+          if (draft.deadline && draft.deadline < localDate(this.now(), course.timezone)) fail('PAST_DEADLINE','目标日期已过，请调整目标日期后重新生成草案')
           if (course.plan?.tasks.some(t => t.status !== 'todo' && !draft.tasks.some(d => d.id === t.id && d.status === t.status))) fail('VERSION_CONFLICT','任务进度已变化，请重新生成草案以保留最新学习记录')
           if (!draft.feasible) fail('PLAN_INFEASIBLE','预算不足，不能激活该计划；请调整预算、日期或范围')
           const before = course.plan
