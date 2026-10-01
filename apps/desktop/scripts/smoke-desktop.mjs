@@ -18,11 +18,14 @@ import { existsSync, readFileSync, rmSync, mkdtempSync, mkdirSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, redactSecrets } from './startup-diagnosis.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const desktop = resolve(here, '..')
 const require = createRequire(import.meta.url)
 const electron = process.env.ELECTRON_PATH ?? require('electron')
+const launch = electronLaunchOptions()
+console.log('[smoke] electron =', electron)
 
 // 隔离的 userData：通过 main.cjs 的 SYLLORA_DESKTOP_USERDATA override
 // 精确指定（A9），不再枚举猜测 Electron 的 app name 目录规则。
@@ -31,14 +34,14 @@ console.log('[smoke] userData =', userData)
 
 // ELECTRON_RUN_AS_NODE 会让 electron 二进制退化为纯 Node 运行（app 未定义，
 // main.cjs 直接崩）——调用方环境（CI/Harness）可能带着它，必须显式剔除。
-const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData }
+const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData, SYLLORA_DESKTOP_SMOKE: '1' }
 delete childEnv.ELECTRON_RUN_AS_NODE
 
 const child = spawn(electron, ['.'], {
   cwd: desktop,
   env: childEnv,
-  stdio: ['ignore', 'pipe', 'pipe'],
-  windowsHide: true,
+  stdio: launch.stdio,
+  windowsHide: launch.windowsHide,
 })
 let out = ''
 let spawnError = null
@@ -74,13 +77,32 @@ const diagnostics = () => {
 try {
 
 const t0 = Date.now()
+let printedLines = 0
+let reportedPreMain = false
 while (Date.now() - t0 < 20000) {
+  const entries = diagnosticEntries(diagnostics())
+  for (const entry of entries.slice(printedLines)) {
+    const stamped = entry.at ? Date.parse(entry.at) - t0 : Date.now() - t0
+    console.log('[smoke] stage', formatStage(entry, stamped))
+  }
+  printedLines = entries.length
+  if (entries.at(-1)?.message.startsWith('fatal:')) break
+  if (entries.length === 0 && !reportedPreMain && Date.now() - t0 > 2000) {
+    console.log('[smoke] stage', formatStage({ at: null, message: 'waiting for main.cjs' }, Date.now() - t0))
+    reportedPreMain = true
+  }
   if (existsSync(hostJsonPath)) break
   if (spawnError !== null || exit !== null) break
   await new Promise(r => setTimeout(r, 250))
 }
 if (!existsSync(hostJsonPath)) {
-  throw new Error(`host.json not found; spawn=${spawnError?.code ?? 'ok'} exit=${JSON.stringify(exit)}\n${diagnostics()}\n${out.slice(-1500)}`)
+  throw new Error(`${describeMissingHost({
+    desktopLog: diagnostics(),
+    spawnCode: spawnError?.code ?? null,
+    exit,
+    windowsHide: launch.windowsHide,
+    elapsedMs: Date.now() - t0,
+  })}\n${redactSecrets(out.slice(-1500))}`)
 }
 // host.json 同理由非原子 writeFile 写出：existsSync 命中时可能只写了一半，
 // 裸 JSON.parse 会抛未捕获异常崩栈（CLI 集成测试对同一场景专门做了重试）。
