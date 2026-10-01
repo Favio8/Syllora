@@ -5,7 +5,9 @@
 - 本仓库承载 Syllora AI 学习工作台的源码、测试、配置、迁移、构建脚本和版本化开发文档。
 - 在完整协作工作区中，本仓库位于 `Syllora-ai/Syllora/`，上级目录负责 PRD、调研、计划和评审记录；同时遵循上级 `AGENTS.md`。
 - 独立克隆本仓库时，本文件与 `CONTRIBUTING.md` 应足以说明开发协作要求。不要让构建、运行或测试依赖仓库外的本机文件和绝对路径。
-- 初始化阶段尚未确定技术栈，也没有应用源码、构建命令或测试命令。不得凭空指定框架、包管理器或声称功能已经实现。
+- 用户已明确要求直接搬入并复用本地 `studyclaw-next`。当前沿用其 pnpm monorepo、Next.js / React、Node Host、模型适配器与资料解析库，不另起技术栈。
+- Syllora 首页位于 `apps/web/src/components/Syllora.tsx`，业务服务与规则位于 `packages/host/chat-service/src/syllora.ts` 和 `syllora-domain.ts`。旧 StudyClaw 模块仍保留；不要把旧 SM-2／掌握度概率规则混入 Syllora 的证据状态。
+- `pnpm build:web` 生成静态前端，`pnpm serve` 启动本机服务。运行数据默认写入 `.syllora-home/` 与 `.syllora-data/`；不得提交这些目录。
 
 ## 执行前确认
 

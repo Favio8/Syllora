@@ -1,0 +1,43 @@
+node_modules/
+.syllora-home/
+.syllora-data/
+lib/
+# 源码目录 src/lib 不是构建产物，必须重新包含（lib/ 规则会吞掉任意深度的 lib/）
+!**/src/lib/
+!**/src/lib/**
+dist/
+*.tsbuildinfo
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+coverage/
+.next/
+out/
+
+# 临时 E2E 实验产物（非测试套件，勿提交）
+.e2e-*
+
+# 验证/冒烟临时目录与脚本（可能含本机凭据与密钥，勿提交）
+verify_tmp/
+.tmp-*
+.smoke-*
+
+# 本地运行时产物（host 注册表 / E2E 工作区，勿提交）
+.studyclaw/
+e2e-workspace/
+
+# 损坏旧 .git 的备份（2026-08-24 重建仓库时保留，确认无误后可删除）
+.git.broken-20260824/
+# 用户学习数据与构建产物不入库（ENG-3）
+courses/
+artifacts/
+
+# 桌面壳组装/构建产物（assemble 与 electron-builder 生成，勿提交）
+apps/desktop/resources/
+apps/desktop/dist/
+apps/desktop/dist*/
+apps/desktop/host-runtime/node_modules/
+apps/desktop/host-runtime/package-lock.json

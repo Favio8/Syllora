@@ -6,7 +6,7 @@
 
 - 先阅读 `AGENTS.md`，确认任务范围与验收标准。
 - 新功能先完成 GitHub 同类项目调研和方案确认，再编写代码。
-- 当前未选择技术栈，尚无应用、依赖或测试工具链。后续确定后，在 `README.md` 中补齐可执行命令。
+- 已按用户要求复用 StudyClaw 的 TypeScript / Next.js / Node Host 技术栈。安装、构建、启动命令与当前 MVP 边界见 `README.md`。
 
 ## 分支
 

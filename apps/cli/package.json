@@ -1,0 +1,42 @@
+{
+  "name": "@studyclaw/cli",
+  "version": "0.1.1-beta",
+  "description": "StudyClaw CLI and host server (serve hosts the Web UI; bin is a flat tsdown bundle)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "bin": {
+    "studyclaw": "./lib/bin.js"
+  },
+  "files": [
+    "lib/*.js"
+  ],
+  "dependencies": {
+    "@studyclaw/acp": "workspace:^",
+    "@studyclaw/apiproxy": "workspace:^",
+    "@studyclaw/course-summary": "workspace:^",
+    "@studyclaw/directory-picker-native": "workspace:^",
+    "@studyclaw/workspace": "workspace:^",
+    "@studyclaw/chat-service": "workspace:^",
+    "@studyclaw/course-builder": "workspace:^",
+    "@studyclaw/session": "workspace:^",
+    "@studyclaw/agent": "workspace:^",
+    "koffi": "^3.1.0",
+    "pdf-parse": "^2.4.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-storage-json": "workspace:^"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.2"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "build:bundle": "tsc -b tsconfig.json && tsdown"
+  }
+}
