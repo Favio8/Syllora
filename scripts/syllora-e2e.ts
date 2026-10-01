@@ -1,3 +1,4 @@
+import { fixtureLecture, fixturePdf } from './syllora-fixture.ts'
 /** Browser acceptance with a clearly labelled local model fixture; no paid API calls. */
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -25,10 +26,11 @@ const mock=createServer((req,res)=>{
       const sources=JSON.parse(text.slice(start))
       const sourceId=(sources.find((s:{text:string})=>s.text.includes('主对角线'))??sources[0]).id
       let output:unknown
-      if(text.includes('从资料生成课程')) output={points:[{chapter:'矩阵与线性变换',name:'单位矩阵',sourceIds:[sourceId]}]}
+      if(text.includes('初始化整理课程讲义')) output=fixtureLecture(sources,sourceId)
+      else if(text.includes('从资料生成课程')) output={points:[{chapter:'矩阵与线性变换',name:'单位矩阵',sourceIds:[sourceId]}]}
       else if(text.includes('审查下面的题目')) output={valid:true,reason:'测试服务：单一标准答案'}
       else if(text.includes('生成一道四选一题')) {sequence++;output={stem:`练习 ${sequence}：单位矩阵的主对角线元素等于什么？`,options:['1','0','2','3'],answer:0,explanation:'依据本次导入讲义：主对角线为 1，其余元素为 0。',sourceIds:[sourceId],quote:'单位矩阵的主对角线元素为 1'}}
-      else output={text:'单位矩阵的主对角线元素为 **1**，其余元素为 **0**。\n\n例如二阶单位矩阵保持二维向量不变。这是教学示例。',sourceIds:[sourceId],insufficient:false}
+      else output={text:sources.some((s:{text:string})=>s.text.includes('主对角线'))?'单位矩阵的主对角线元素为 **1**，其余元素为 **0**。\n\n例如二阶单位矩阵保持二维向量不变。这是教学示例。':`这是本地自动化测试响应。资料原文：${sources[0].text}`,sourceIds:[sourceId],insufficient:false}
       res.writeHead(200,{'Content-Type':'text/event-stream'})
       res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'syllora-test-fixture',choices:[{index:0,delta:{role:'assistant',content:JSON.stringify(output)},finish_reason:null}]})}\n\n`)
       res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'syllora-test-fixture',choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{prompt_tokens:150,completion_tokens:80,total_tokens:230}})}\n\n`)
@@ -53,7 +55,7 @@ try {
   if(!info)throw new Error(`Host startup failed: ${hostOutput}`)
   const origin=`http://127.0.0.1:${info.port}`
   async function rpc(action:string,payload:unknown={}) {const response=await fetch(`${origin}/api/syllora/${action}`,{method:'POST',headers:{Authorization:`Bearer ${info!.token}`,'Content-Type':'application/json'},body:JSON.stringify({payload})});const body=await response.json() as any;if(body.error)throw new Error(body.error.message);return body.result}
-  await rpc('preferences',{consent:true,callLimit:20})
+  await rpc('preferences',{consent:true})
   const require=createRequire(join(root,'apps/web/package.json'))
   const {chromium}=require('playwright-core')
   browser=await chromium.launch({executablePath:process.env.SYLLORA_BROWSER??'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',headless:true})
@@ -61,15 +63,27 @@ try {
   page.on('pageerror',(e:Error)=>errors.push(e.message))
   page.on('response',(response:any)=>{if(response.status()>=400)failedResponses.push(`${response.status()} ${new URL(response.url()).pathname}`)})
   await page.goto(origin)
-  await page.getByRole('button',{name:'创建第一门课程'}).click()
-  await page.getByLabel('课程名称').fill('线性代数 · 自动化测试')
-  await page.getByRole('button',{name:'创建课程',exact:true}).click()
+  const courseFolder=join(testRoot,'线性代数 · 自动化测试')
+  await mkdir(courseFolder,{recursive:true})
+  await page.getByRole('button',{name:'打开课程文件夹',exact:true}).first().click()
+  await page.getByLabel('课程文件夹路径').fill(courseFolder)
+  await page.getByRole('button',{name:'打开此课程',exact:true}).click()
   await page.getByRole('heading',{name:'线性代数 · 自动化测试'}).waitFor()
   await page.getByLabel('或粘贴正文').fill('自有测试讲义：单位矩阵\n\n单位矩阵的主对角线元素为 1，其余元素为 0。单位矩阵与维度匹配的向量相乘，得到原向量。')
   await page.getByRole('button',{name:'保存正文'}).click()
-  await page.getByText('可用 · 2 个片段',{exact:true}).waitFor()
+  await page.getByRole('button',{name:/初始化课程 · 1 份资料/}).waitFor()
+  await page.getByRole('button',{name:/初始化课程 · 1 份资料/}).click()
+  for(let i=0;i<150;i++){if((await rpc('state')).courses[0]?.revision)break;await new Promise(r=>setTimeout(r,100))}
+  assert.ok((await rpc('state')).courses[0].revision)
+  await page.getByRole('tab',{name:'讲义',exact:true}).click()
+  await page.getByRole('region',{name:'课程讲义'}).getByRole('heading',{name:'矩阵与线性变换',exact:true}).waitFor()
+  await page.getByRole('button',{name:/线性代数 · 自动化测试.*1 个知识点/}).waitFor()
+  await page.getByRole('button',{name:'取消',exact:true}).waitFor({state:'detached'})
+  await page.screenshot({path:join(testRoot,'course-lecture.png'),fullPage:true})
+  await page.getByRole('region',{name:'课程讲义'}).getByRole('button',{name:'原文 1',exact:true}).first().click()
+  await page.getByRole('dialog',{name:'资料来源'}).waitFor()
+  await page.getByRole('button',{name:'关闭来源'}).click()
   await page.getByRole('tab',{name:'大纲',exact:true}).click()
-  await page.getByRole('button',{name:'从资料生成／补充大纲'}).click()
   await page.getByRole('button',{name:'选择全部知识点'}).waitFor({timeout:20000})
   await page.getByRole('button',{name:'选择全部知识点'}).click()
   await page.getByRole('button',{name:'生成计划草案'}).click()
@@ -132,9 +146,10 @@ try {
   await page.getByRole('button',{name:'模型与设置'}).click();await page.getByRole('dialog',{name:'模型与设置'}).waitFor();await page.screenshot({path:join(testRoot,'model-settings.png'),fullPage:true})
   await page.getByRole('button',{name:'关闭设置',exact:true}).click()
   await page.getByRole('textbox',{name:'向课程资料提问'}).fill('切课后保留的未发送问题')
-  await page.getByRole('button',{name:'新建课程',exact:true}).click()
-  await page.getByLabel('课程名称').fill('切课草稿检查')
-  await page.getByRole('button',{name:'创建课程',exact:true}).click()
+  const secondFolder=join(testRoot,'切课草稿检查');await mkdir(secondFolder)
+  await page.getByRole('button',{name:'打开课程文件夹',exact:true}).click()
+  await page.getByLabel('课程文件夹路径').fill(secondFolder)
+  await page.getByRole('button',{name:'打开此课程',exact:true}).click()
   await page.getByRole('heading',{name:'切课草稿检查',exact:true}).waitFor()
   await page.getByRole('button',{name:/线性代数 · 自动化测试.*个知识点/}).click()
   await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor()
@@ -145,8 +160,38 @@ try {
   await page.getByRole('button',{name:/线性代数 · 自动化测试.*个知识点/}).click()
   await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor()
   await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='切课后保留的未发送问题')
+  const pdfFolder=join(testRoot,'PDF 原件验收');await mkdir(pdfFolder)
+  const original=fixturePdf(['PDF original fixture text.','','Final physical page evidence.']);await writeFile(join(pdfFolder,'讲义.pdf'),original)
+  await page.getByRole('button',{name:'打开课程文件夹',exact:true}).click();await page.getByLabel('课程文件夹路径').fill(pdfFolder);await page.getByRole('button',{name:'打开此课程',exact:true}).click()
+  await page.getByRole('heading',{name:'PDF 原件验收',exact:true}).waitFor();await page.getByRole('button',{name:/初始化课程 · 1 份资料/}).click()
+  await page.locator('.sy-job.sy-error').filter({hasText:'资料部分可用'}).waitFor()
+  await page.getByRole('checkbox',{name:'解析部分失败时，接受明确列出的可用部分'}).check()
+  await page.getByRole('button',{name:/初始化课程 · 1 份资料/}).click()
+  await page.getByRole('button',{name:'预览原文件',exact:true}).waitFor()
+  await page.locator('.sy-issues summary').click();await page.locator('.sy-issues').getByText(/第 2 页/).waitFor()
+  await page.screenshot({path:join(testRoot,'pdf-material-details.png'),fullPage:true})
+  const previewResponse=page.waitForResponse((response:any)=>new URL(response.url()).pathname==='/api/syllora/material-file')
+  await page.getByRole('button',{name:'预览原文件',exact:true}).click();const preview=await previewResponse
+  assert.equal(preview.status(),200);assert.equal(preview.request().method(),'GET');assert.ok(preview.request().headers().authorization);assert.equal(new URL(preview.url()).searchParams.has('token'),false)
+  await page.getByRole('dialog',{name:'原文件预览'}).waitFor()
+  // Read the blob actually used by the viewer; CDP may hide native PDF response bodies.
+  const previewBytes=await page.evaluate(async()=>{const src=document.querySelector<HTMLIFrameElement>('iframe[title="PDF 原文件"]')!.src;return Array.from(new Uint8Array(await(await fetch(src)).arrayBuffer()))})
+  assert.ok(Buffer.from(previewBytes).equals(original),'PDF viewer blob must match the original bytes')
+  await page.getByRole('link',{name:'下载原文件'}).waitFor()
+  await page.waitForTimeout(750)
+  await page.screenshot({path:join(testRoot,'pdf-original-preview.png'),fullPage:true});await page.getByRole('button',{name:'关闭原文件预览'}).click()
+  await page.getByRole('textbox',{name:'向课程资料提问'}).fill('根据资料说明');await page.getByRole('button',{name:'发送问题',exact:true}).click()
+  await page.locator('.sy-job').filter({hasText:/本次使用 \d+ \/ \d+ 个候选片段/}).waitFor();await page.screenshot({path:join(testRoot,'context-coverage.png'),fullPage:true})
+  state=await rpc('state');const pdfCourse=state.courses.find((c:{folder?:string})=>c.folder===pdfFolder),originalSourceIds=pdfCourse.materials[0].sources.map((s:{id:string})=>s.id),firstRevision=pdfCourse.revision
+  await writeFile(join(pdfFolder,'讲义.pdf'),fixturePdf(['PDF original fixture text.','','Revised final page evidence.']))
+  await page.getByRole('button',{name:'预览原文件',exact:true}).click();await page.getByRole('alert').filter({hasText:'原文件已变化'}).waitFor()
+  await page.getByRole('button',{name:'重新扫描资料',exact:true}).click();await page.getByText(/内容已变化/).waitFor();await page.getByRole('button',{name:/更新课程讲义 · 1 份资料/}).click()
+  for(let i=0;i<150;i++){const latest=(await rpc('state')).courses.find((c:{id:string})=>c.id===pdfCourse.id);if(latest.revision!==firstRevision){assert.equal(latest.materials[0].revisionNumber,2);assert.ok(originalSourceIds.every((id:string)=>[...latest.materials[0].sources,...latest.materials[0].history].some(s=>s.id===id)));break}await new Promise(r=>setTimeout(r,100))}
+  assert.notEqual((await rpc('state')).courses.find((c:{id:string})=>c.id===pdfCourse.id).revision,firstRevision)
+  await page.getByText(/部分可用 · 已接受 · v2 ·/).waitFor();await page.screenshot({path:join(testRoot,'pdf-version-update.png'),fullPage:true})
+  assert.deepEqual(failedResponses,['409 /api/syllora/material-file'])
   assert.deepEqual(errors,[])
-  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,model:'local test fixture, not a live provider',checks:['create','import','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft'],browserErrors:errors},null,2))
+  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,model:'local test fixture, not a live provider',checks:['open course folder','inspect saved source','initialize','read lecture','locate original source','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft','PDF partial confirmation and physical page issues','authenticated byte-for-byte original preview','answer context coverage','changed original preview rejected','material version update preserves original source IDs'],browserErrors:errors,expectedFailures:failedResponses},null,2))
   console.log(JSON.stringify({passed:true,artifacts:testRoot}))
 } catch(error) {
   await page?.screenshot({path:join(testRoot,'failure.png'),fullPage:true})

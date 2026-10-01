@@ -24,7 +24,7 @@ import WorkspaceRegistry from '@syllora/workspace'
 import { AcpProtocolError, AcpRouter, parseAcpRequest, type AcpHost, type AcpNotification, type AcpRequest, type AcpUpdate } from '@syllora/acp'
 import { listCourseSummaries } from '@syllora/course-summary'
 import { migrateLegacyLayout, stateDirOf, extractPdfPages } from '@syllora/course-builder'
-import { SylloraService, SylloraError } from '@syllora/chat-service'
+import { SylloraProjects, SylloraError, migrateSharedSettings } from '@syllora/chat-service'
 import { dispatch, type HostServices, type SessionSearchResultView } from '@syllora/apiproxy'
 import { pickNativeDirectory } from '@syllora/directory-picker-native'
 import {
@@ -533,9 +533,15 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   if (registry.lastOpenedPath !== '') await agentService.recover(registry.lastOpenedPath)
   const acpRequests = new Map<string, AbortController>()
 
+  const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
+  await mkdir(settingsRoot, { recursive: true })
+  await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
-    registry.lastOpenedPath === '' ? null : await loadChatConfig(registry.lastOpenedPath).catch(() => null)
-  const syllora = new SylloraService(registry.lastOpenedPath || join(hostHome(), 'syllora'), { pdf: extractPdfPages })
+    await loadChatConfig(settingsRoot).catch(() => null)
+  const syllora = new SylloraProjects(settingsRoot, { pdf: extractPdfPages, registerProject: async path => {
+    const workspace = await registry.create(path)
+    await registry.setLastOpenedPath(workspace.workspace.path)
+  } })
 
   function wrapCourseService(): HostServices['courseService'] {
     const activeRoot = (): string => registry.lastOpenedPath
@@ -678,7 +684,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       updateTodos: async (agentId, items) => await agentService.updateTodos(agentId, items) as unknown as Array<Record<string, unknown>>,
     },
     chatConfig: async () => {
-      const config = await loadChatConfig(registry.lastOpenedPath)
+      const config = await loadChatConfig(settingsRoot)
       return {
         defaultMode: config.defaultMode,
         model: config.model,
@@ -687,11 +693,10 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       }
     },
     settingsService: {
-      // FL-03：未打开工作区时 root 为 ''，`join('', '.syllora', 'config.yaml')`
-      // 会落在宿主进程 cwd——UI 报"已保存"但配置写飞，重启即失忆。所有落盘
-      // 操作必须先有工作区。
-      get: async () => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '读取设置'); return settingsPayload(registry.lastOpenedPath) as unknown as Record<string, unknown> },
-      update: async partial => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '更新设置'); return updateSettings(registry.lastOpenedPath, partial) as unknown as Record<string, unknown> },
+      // Use the fixed application directory even before any course is opened.
+      // The directory guard prevents settings from falling back to the host cwd.
+      get: async () => { requireWorkspaceRootForSettings(settingsRoot, '读取设置'); return settingsPayload(settingsRoot) as unknown as Record<string, unknown> },
+      update: async partial => { requireWorkspaceRootForSettings(settingsRoot, '更新设置'); return updateSettings(settingsRoot, partial) as unknown as Record<string, unknown> },
       catalog: async () => providerCatalog() as unknown as Array<Record<string, unknown>>,
       // M6：设置页「从端点获取」永远实时探测；sessionModels 的自动发现才走缓存。
       // 密钥解析优先级：表单新填 > 已加密存储的凭据（按 providerId 取，与 chat /
@@ -702,8 +707,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       discover: async input => {
         let apiKey = input.apiKey?.trim() ?? ''
         const providerId = input.providerId?.trim() ?? ''
-        if (apiKey === '' && providerId !== '' && registry.lastOpenedPath !== '') {
-          const resolved = await loadChatConfig(registry.lastOpenedPath, { providerId }).catch(() => null)
+        if (apiKey === '' && providerId !== '' && settingsRoot !== '') {
+          const resolved = await loadChatConfig(settingsRoot, { providerId }).catch(() => null)
           apiKey = resolved?.apiKey ?? ''
         }
         return discoverModels({
@@ -713,10 +718,10 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           refresh: true,
         }) as unknown as Array<Record<string, unknown>>
       },
-      save: async input => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '保存模型供应商'); return saveProvider(registry.lastOpenedPath, input as Parameters<typeof saveProvider>[1]) as unknown as Record<string, unknown> },
-      remove: async providerId => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '删除模型供应商'); return deleteProvider(registry.lastOpenedPath, providerId) as unknown as Record<string, unknown> },
-      activate: async providerId => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '激活模型供应商'); return activateProvider(registry.lastOpenedPath, providerId) as unknown as Record<string, unknown> },
-      credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '保存 API Key'); return setCredential(registry.lastOpenedPath, providerId, apiKey) as unknown as Record<string, unknown> },
+      save: async input => { requireWorkspaceRootForSettings(settingsRoot, '保存模型供应商'); return saveProvider(settingsRoot, input as Parameters<typeof saveProvider>[1]) as unknown as Record<string, unknown> },
+      remove: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '删除模型供应商'); return deleteProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
+      activate: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '激活模型供应商'); return activateProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
+      credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(settingsRoot, '保存 API Key'); return setCredential(settingsRoot, providerId, apiKey) as unknown as Record<string, unknown> },
     },
     courseService: wrapCourseService(),
     toolProviders: () => ({
@@ -904,6 +909,23 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           for (const [name, value] of Object.entries(hit.headers ?? {})) response.setHeader(name, value)
           response.writeHead(hit.status)
           response.end(request.method === 'HEAD' ? undefined : hit.body)
+        })()
+        return
+      }
+      if(url.pathname==='/api/syllora/material-file') {
+        void (async()=>{
+          try {
+            const {file,data}=await syllora.readMaterialFile(url.searchParams.get('courseId')??'',url.searchParams.get('materialId')??'')
+            const asciiName=file.name.replace(/[^\x20-\x7e]|["\\]/g,'_')
+            const encodedName=encodeURIComponent(file.name).replace(/['()*]/g,c=>`%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+            response.writeHead(200,{'Content-Type':'application/pdf','Content-Length':String(data.length),'Content-Disposition':`inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            response.end(request.method==='HEAD'?undefined:data)
+          } catch(error) {
+            if(response.headersSent||response.writableEnded||response.destroyed)return
+            const code=error instanceof SylloraError?error.code:'INTERNAL_ERROR'
+            const status=code==='INVALID_REQUEST'?400:code==='SOURCE_CHANGED'?409:code==='LIMIT_EXCEEDED'?413:code==='NOT_FOUND'?404:500
+            response.writeHead(status);response.end(JSON.stringify({error:{code,message:error instanceof SylloraError?error.message:'原文件读取失败',details:null}}))
+          }
         })()
         return
       }

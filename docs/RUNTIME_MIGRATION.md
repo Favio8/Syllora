@@ -18,7 +18,11 @@
 `credentials.json`：加密凭据必须配合原 `master.key` 使用。
 
 - `pnpm serve` 默认 Host 目录仍为仓库 `.syllora-home/`，业务目录仍为
-  `.syllora-data/`；工作区内部状态与模型配置统一存放在 `.syllora/`。
+  `.syllora-data/`。2026-10-02 起共享模型配置固定存放于业务目录的 `.syllora/`，
+  不随当前课程切换；首次启动在共享配置不存在时，从已注册旧工作区复制配置与
+  加密凭据，继续使用原 Host 主密钥，旧文件保留。课程状态改为各课程根目录的
+  `.syllora/course.json`，产物保存在 `revisions/`；旧 `syllora.json` 在首页逐课程
+  迁移，不自动搬动原始资料。细节见 [COURSE_PROJECTS.md](COURSE_PROJECTS.md)。
 - 旧工作区的 `.studyclaw/` 在第一次访问应用状态时整目录重命名为
   `.syllora/`。配置、密文、大纲、题池、历史、Agent/Memory 文件一起迁移。
 - 单独运行 `syllora serve` 的默认 Host 目录为 `~/.syllora/`；没有显式
