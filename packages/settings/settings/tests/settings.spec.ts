@@ -4,6 +4,13 @@ import z from '@deepseek-ai/schemastery'
 import { SettingsProvider, SettingsConflictError, deepEqualJson, installSettingsSection, settingsNamespace, type SettingsNamespace, type SettingsScope, type SettingsUpdateSource } from '../src/index.ts'
 import { MemorySettings } from './memory.ts'
 
+/**
+ * Fixture value standing in for a stored secret. It deliberately carries no
+ * provider's key shape: these tests only exercise store/read/redact behaviour,
+ * and the repository rule is that test code holds no credential-shaped literal.
+ */
+const PLACEHOLDER = 'placeholder-value'
+
 /** A provider implementing only the three primitives: the Service Definition owns initialization. */
 class BareProvider extends SettingsProvider {
   doc: Record<string, unknown>
@@ -832,36 +839,36 @@ describe('mutate (path-addressed writes)', () => {
     // REDACTED descriptor (no apiKey), the user resets baseURL, and the client
     // rebuilds the section from what it holds. A wholesale replace of that
     // rebuild deletes the stored literal key; a path unset cannot.
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored', baseURL: 'https://user', reasoning: 'high' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER, baseURL: 'https://user', reasoning: 'high' } })
     const redacted = ctx.settings.describe({ redactSecrets: true }).find(d => d.ns === KEYED)!
     expect(redacted.user).toEqual({ baseURL: 'https://user', reasoning: 'high' })
 
     await ctx.settings.mutate(KEYED, [{ op: 'unset', path: ['baseURL'] }])
 
     const raw = ctx.settings.describe().find(d => d.ns === KEYED)!
-    expect(raw.user).toEqual({ apiKey: 'sk-stored', reasoning: 'high' })
+    expect(raw.user).toEqual({ apiKey: PLACEHOLDER, reasoning: 'high' })
   })
 
   it('applies set and unset in one write, in order', async () => {
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored', baseURL: 'https://old' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER, baseURL: 'https://old' } })
     await ctx.settings.mutate(KEYED, [
       { op: 'set', path: ['baseURL'], value: 'https://new' },
       { op: 'set', path: ['reasoning'], value: 'low' },
       { op: 'unset', path: ['reasoning'] },
     ])
     expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user)
-      .toEqual({ apiKey: 'sk-stored', baseURL: 'https://new' })
+      .toEqual({ apiKey: PLACEHOLDER, baseURL: 'https://new' })
   })
 
   it('reads the section as it stands at the front of the queue, not at call time', async () => {
     // Two concurrent writers: the mutate is issued against the pre-update
     // section but must observe the update that ran before it.
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER } })
     const first = ctx.settings.update(KEYED, { baseURL: 'https://first', reasoning: 'high' })
     const second = ctx.settings.mutate(KEYED, [{ op: 'unset', path: ['reasoning'] }])
     await Promise.all([first, second])
     expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user)
-      .toEqual({ apiKey: 'sk-stored', baseURL: 'https://first' })
+      .toEqual({ apiKey: PLACEHOLDER, baseURL: 'https://first' })
   })
 
   it('creates intermediate objects for a nested set and leaves an absent unset alone', async () => {
@@ -884,7 +891,7 @@ describe('mutate (path-addressed writes)', () => {
   })
 
   it('addresses the section itself through the empty path', async () => {
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored', baseURL: 'https://user' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER, baseURL: 'https://user' } })
     await ctx.settings.mutate(KEYED, [{ op: 'set', path: [], value: { reasoning: 'low' } }])
     expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ reasoning: 'low' })
     await ctx.settings.mutate(KEYED, [{ op: 'unset', path: [] }])
@@ -892,26 +899,26 @@ describe('mutate (path-addressed writes)', () => {
   })
 
   it('refuses a non-object at the section root, leaving the stored section alone', async () => {
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER } })
     await expect(ctx.settings.mutate(KEYED, [{ op: 'set', path: [], value: 'a whole section' }]))
       .rejects.toThrow(/setting the section root requires a plain object/)
-    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: 'sk-stored' })
+    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: PLACEHOLDER })
   })
 
   it('rejects ops that are not an array at all', async () => {
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER } })
     await expect(ctx.settings.mutate(KEYED, { op: 'unset', path: ['apiKey'] } as never))
       .rejects.toThrow(/must be an array of path ops/)
-    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: 'sk-stored' })
+    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: PLACEHOLDER })
   })
 
   it('rejects a malformed op before anything is queued', async () => {
-    const ctx = await mounted({ keyed: { apiKey: 'sk-stored' } })
+    const ctx = await mounted({ keyed: { apiKey: PLACEHOLDER } })
     await expect(ctx.settings.mutate(KEYED, [{ op: 'delete' } as never]))
       .rejects.toThrow(/must be \{op:'set'\|'unset', path\}/)
     await expect(ctx.settings.mutate(KEYED, [{ op: 'unset', path: ['a', 1] as never }]))
       .rejects.toThrow(/op paths must be arrays of strings/)
-    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: 'sk-stored' })
+    expect(ctx.settings.describe().find(d => d.ns === KEYED)!.user).toEqual({ apiKey: PLACEHOLDER })
   })
 
   it('rejects a value that lossless JSON cannot represent', async () => {

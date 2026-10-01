@@ -1,6 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+/** 夹具里代表"用户粘贴的密钥"的值：不带任何供应商的密钥形态，避免仓库里
+ *  出现凭据形态的字面量。 */
+const KEY_INPUT = "placeholder-value";
+const KEY_INPUT_DS = "placeholder-value-ds";
+const KEY_INPUT_NEW = "placeholder-value-new";
+
 const { flashStatusBanner, apiMocks, catalog, ApiError } = vi.hoisted(() => {
   class ApiError extends Error {
     code: string;
@@ -129,7 +135,7 @@ describe("ModelsSection 首次运行与目录添加", () => {
     expect(screen.getByLabelText(/默认模型/)).toHaveValue("");
 
     const keyInput = screen.getByPlaceholderText("输入 API Key");
-    fireEvent.change(keyInput, { target: { value: "sk-test" } });
+    fireEvent.change(keyInput, { target: { value: KEY_INPUT } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => expect(apiMocks.saveProvider).toHaveBeenCalledTimes(1));
@@ -137,7 +143,7 @@ describe("ModelsSection 首次运行与目录添加", () => {
     expect(profile.id).toBe("deepseek");
     expect(profile.baseUrl).toBe("https://api.deepseek.com");
     expect(profile.models.map((m: { id: string }) => m.id)).toEqual([]);
-    expect(apiMocks.setProviderCredential).toHaveBeenCalledWith("deepseek", "sk-test");
+    expect(apiMocks.setProviderCredential).toHaveBeenCalledWith("deepseek", KEY_INPUT);
     // 横幅点名保存的 provider（显示名优先）
     expect(flashStatusBanner).toHaveBeenCalledWith(expect.stringContaining("DeepSeek 官方"));
   });
@@ -374,7 +380,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     const providerSelect = screen.getByLabelText(/选择供应商/);
 
     // 当前条目（deepseek）填 Key + 手填一个模型
-    fireEvent.change(screen.getByPlaceholderText("输入 API Key"), { target: { value: "sk-ds" } });
+    fireEvent.change(screen.getByPlaceholderText("输入 API Key"), { target: { value: KEY_INPUT_DS } });
     await openAdvancedFold();
     fireEvent.click(screen.getByRole("button", { name: "＋ 手动添加" }));
     fireEvent.change(await screen.findByLabelText("模型 ID 1"), { target: { value: "custom-1" } });
@@ -435,12 +441,12 @@ describe("ModelsSection Key 保存失败一致性（P1-4）", () => {
     openManage();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
-    fireEvent.change(screen.getByPlaceholderText("保留当前密钥，留空不修改"), { target: { value: "sk-new" } });
+    fireEvent.change(screen.getByPlaceholderText("保留当前密钥，留空不修改"), { target: { value: KEY_INPUT_NEW } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(apiMocks.saveProvider).toHaveBeenCalledTimes(1);
-      expect(apiMocks.setProviderCredential).toHaveBeenCalledWith("acme", "sk-new");
+      expect(apiMocks.setProviderCredential).toHaveBeenCalledWith("acme", KEY_INPUT_NEW);
     });
     // 横幅：配置已保存 + Key 失败 + 补救路径（编辑该行补填）。
     const banner = flashStatusBanner.mock.calls.at(-1)?.[0] as string;
@@ -497,7 +503,7 @@ describe("ModelsSection 覆盖路径的 Key 失败一致性（N-1）", () => {
 
     // 创建态撞已存在 id → 409 → 覆盖确认框。
     fireEvent.change(screen.getByPlaceholderText("acme-gateway"), { target: { value: "acme" } });
-    fireEvent.change(screen.getByPlaceholderText("输入 API Key"), { target: { value: "sk-new" } });
+    fireEvent.change(screen.getByPlaceholderText("输入 API Key"), { target: { value: KEY_INPUT_NEW } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     const dialog = await screen.findByRole("dialog", { name: "Provider 已存在" });
     fireEvent.click(within(dialog).getByRole("button", { name: "覆盖" }));

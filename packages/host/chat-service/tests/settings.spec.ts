@@ -21,6 +21,13 @@ import {
 import { loadChatConfig } from '../src/config.ts'
 import { unsealCredentials } from '../src/secret-box.ts'
 
+/** Fixture values standing in for stored secrets; none carries a provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+const PLACEHOLDER_LEGACY = 'placeholder-value-legacy'
+const PLACEHOLDER_NEW = 'placeholder-value-new'
+const PLACEHOLDER_STORED = 'placeholder-value-stored'
+
 async function setup(): Promise<{ root: string; ws: string }> {
   const root = await mkdtemp(join(tmpdir(), 'syllora-settings-'))
   const ws = join(root, 'ws')
@@ -99,13 +106,13 @@ describe('settings domain', () => {
 
   it('setCredential seals credentials.json and backfills api_key_env (P0-2)', async () => {
     const { root, ws } = await setup()
-    await setCredential(ws, 'mock', 'sk-test-123')
+    await setCredential(ws, 'mock', PLACEHOLDER)
     const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     // 密文形态：明文 key 不允许再出现在落盘文件里。
     expect(raw).toContain('"sealed": true')
-    expect(raw).not.toContain('sk-test-123')
+    expect(raw).not.toContain(PLACEHOLDER)
     const creds = (await unsealCredentials(raw)).data
-    expect(creds['MOCK_API_KEY']).toBe('sk-test-123')
+    expect(creds['MOCK_API_KEY']).toBe(PLACEHOLDER)
     const payload = await settingsPayload(ws)
     expect(payload.providers[0]!.apiKeyConfigured).toBe(true)
     expect(payload.providers[0]!.apiKeyEnv).toBe('MOCK_API_KEY')
@@ -116,13 +123,13 @@ describe('settings domain', () => {
 
   it('legacy 明文凭据在读取时自动迁移为密文（P0-2）', async () => {
     const { root, ws } = await setup()
-    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
+    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: PLACEHOLDER_LEGACY }), 'utf8')
     const payload = await settingsPayload(ws)
     expect(payload.providers[0]!.apiKeyConfigured).toBe(true)
     const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     expect(raw).toContain('"sealed": true')
     const creds = (await unsealCredentials(raw)).data
-    expect(creds['MOCK_KEY']).toBe('sk-legacy')
+    expect(creds['MOCK_KEY']).toBe(PLACEHOLDER_LEGACY)
     process.env.SYLLORA_HOME = ''
     delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
@@ -130,17 +137,17 @@ describe('settings domain', () => {
 
   it('RV-17：legacy 明文 + setCredential 不死锁，密封后新 key 生效（迁移写与持锁 RMW 串行）', async () => {
     const { root, ws } = await setup()
-    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
+    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: PLACEHOLDER_LEGACY }), 'utf8')
     // setCredential 持 config→credential 锁；若 readCredentials 的迁移写也去取
     // 凭据锁（不可重入的 promise 链），这里会死锁挂起（本用例即回归网）。
-    await setCredential(ws, 'mock', 'sk-new')
+    await setCredential(ws, 'mock', PLACEHOLDER_NEW)
     const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     const unsealed = await unsealCredentials(raw)
     expect(unsealed.wasPlaintext).toBe(false)
-    // 新 key 落盘且配置指向它——迁移写若锁外竞速覆盖，这里会退回 sk-legacy 或丢失。
-    expect(unsealed.data['MOCK_API_KEY']).toBe('sk-new')
+    // 新 key 落盘且配置指向它——迁移写若锁外竞速覆盖，这里会退回旧值或丢失。
+    expect(unsealed.data['MOCK_API_KEY']).toBe(PLACEHOLDER_NEW)
     const config = await loadChatConfig(ws)
-    expect(config.apiKey).toBe('sk-new')
+    expect(config.apiKey).toBe(PLACEHOLDER_NEW)
     process.env.SYLLORA_HOME = ''
     delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
@@ -148,7 +155,7 @@ describe('settings domain', () => {
 
   it('deleteProvider removes the record, credential, and clears the active pointer (no phantom route)', async () => {
     const { root, ws } = await setup()
-    await setCredential(ws, 'mock', 'sk-test-123')
+    await setCredential(ws, 'mock', PLACEHOLDER)
     const payload = await deleteProvider(ws, 'mock')
     expect(payload.providers).toHaveLength(0)
     expect(payload.activeProviderId).toBe('')
@@ -428,13 +435,13 @@ describe('settings domain', () => {
     const { root, ws } = await setup()
     try {
       await saveProvider(ws, { id: 'stored', name: '已存', model: 'm', baseUrl })
-      await setCredential(ws, 'stored', 'sk-stored-secret')
+      await setCredential(ws, 'stored', PLACEHOLDER_STORED)
       // 模拟 bin.ts 的解析：表单没填 key → 用 loadChatConfig 取已存凭据。
       const resolved = await loadChatConfig(ws, { providerId: 'stored' })
-      expect(resolved.apiKey).toBe('sk-stored-secret')
+      expect(resolved.apiKey).toBe(PLACEHOLDER_STORED)
       const models = await discoverModels({ baseUrl, apiKey: resolved.apiKey, refresh: true })
       expect(models.map(m => m.id)).toEqual(['stored-model'])
-      expect(sawAuthorization).toBe('Bearer sk-stored-secret')
+      expect(sawAuthorization).toBe('Bearer ' + PLACEHOLDER_STORED)
     } finally {
       await new Promise<void>(resolve => server.close(() => resolve()))
       await rm(root, { recursive: true, force: true })
