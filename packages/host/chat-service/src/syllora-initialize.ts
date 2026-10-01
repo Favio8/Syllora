@@ -6,6 +6,7 @@ import type { Course, Material, Point, Source } from './syllora-domain.ts'
 import type { Lecture } from './syllora-project-types.ts'
 export type { Lecture } from './syllora-project-types.ts'
 import { atomicJson, jsonFile, managedDirectory, pdfPageIssues, scanFiles, sha, stableId, stateDirectory, structuredSources, within } from './syllora-files.ts'
+import { generationFailure } from './syllora-jobs.ts'
 
 const section = z.object({ text: z.string().trim().min(1).max(6000), sourceIds: z.array(z.string()).min(1) })
 const concept = section.extend({ name: z.string().trim().min(1).max(60), quote: z.string().trim().min(4) })
@@ -122,10 +123,12 @@ export async function initializeFolder(options: {
         } catch(e) { error=e;output=null; if(attempt===0) await new Promise(r=>setTimeout(r,300)) }
       }
       if(!output) {
-        const message=`${group[0]!.section}（${group[0]!.anchor} 至 ${group.at(-1)!.anchor}）：${error instanceof Error?error.message:'整理失败'}`
+        const localValidation=['讲义引用了未提供的来源','讲义依据不是资料原文','本批资料没有完整关联到讲义，请重试']
+        const reason=error instanceof Error&&localValidation.includes(error.message)?error.message:generationFailure(error).message
+        const message=`${group[0]!.section}（${group[0]!.anchor} 至 ${group.at(-1)!.anchor}）：${reason}`
         failures.push(message)
         await options.progress({stage:'organizing',done:i,total:batches.length,failures:[...failures],message:'章节整理失败；已完成批次可在重试时复用'})
-        throw new Error(message)
+        throw new Error(message, {cause:error})
       }
       await options.check(); await atomicJson(cachePath,output)
     }

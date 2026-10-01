@@ -1,5 +1,8 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
+import { DEFAULT_REVIEW_HOURS, learningSettings, validReviewHours, type EvidenceRuleSnapshot, type LearningSettings } from './syllora-policy.js'
+import { currentSession, sessionMetrics, type LearningEvent, type LearningSession, type SessionJob, type SourceVersion } from './syllora-sessions.js'
 export const RULE_VERSION = 'syllora-v1'
+export function ruleSnapshot(course:Course):EvidenceRuleSnapshot { const settings=learningSettings(course);return {version:RULE_VERSION,settingsRevision:settings.revision,reviewHours:[...settings.reviewHours]} }
 export const HOUR = 3_600_000
 export interface Source { id: string; materialId: string; anchor: string; text: string; version?: string; section?: string; context?: string; kind?: string; start?: number; end?: number; previousId?: string; nextId?: string }
 export type PageIssueReason = 'blank-page' | 'unextracted-text' | 'parse-failed'
@@ -8,14 +11,14 @@ export interface MaterialFile { id:string;ext:string;bytes:number;name:string }
 export interface JobCoverage { sourcesUsed:number;sourcesTotal:number;charsUsed:number;charsTotal:number;materialsWithOmitted:string[];sourceIds:string[];revision:string|null }
 export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[]; path?: string; version?: string|number; revisionNumber?:number; versionOf?:string|null; file?:MaterialFile|null; pageIssues?:PageIssue[]; parseError?:string|null; history?: Source[]; missingOriginal?: boolean; warnings?: string[]; active?: boolean }
 export interface Point { id: string; chapter: string; name: string; sourceIds: string[]; originKey?: string }
-export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean }
-export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number }
+export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean; dispute?: { reason:string; at:number } }
+export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number; ruleSnapshot?:EvidenceRuleSnapshot; sessionId?:string; planVersion?:number; sourceVersions?:SourceVersion[]; nextActionId?:string }
 export interface Evidence { state: '未评估' | '待验证' | '待加强' | '初步掌握' | '复测通过'; count: number; streak: number; learnedAt: number | null; dueAt: number | null; interval: number; lastAt: number | null; reason: string; ruleVersion: string }
 export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; date: string; minutes: number; status: 'todo' | 'in_progress' | 'completed' | 'skipped'; explained: boolean; slots: number; cycle: number | null; immediate?: boolean }
 export interface OverflowEntry { pointId: string; reason: 'window-full' | 'task-too-large' }
 export interface PlanInput { scope: string[]; dailyMinutes: number; days: number; restDays: number[]; deadline?: string | null; estimates?: Record<string, number> }
 export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: OverflowEntry[]; dailyMinutes: number; feasible: boolean; days: number; deadline: string | null; restDays: number[]; estimates: Record<string, number> }
-export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number }
+export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number; report?:{reason:string;at:number} }
 export interface AnswerDraft { questionId: string; option: number }
 export interface Drafts { prompt: string; answers: AnswerDraft[] }
 export interface PlanDiff {
@@ -31,7 +34,7 @@ export interface DenominatorChange { id: string; at: number; planVersion: number
 export interface ScheduleNotice { kind: 'due' | 'restore' | 'immediate'; pointIds: string[]; text: string }
 export interface NextAction {
   id: string
-  kind: 'continue' | 'retest' | 'review' | 'planned' | 'summary' | 'prepare' | 'archived'
+  kind: 'continue' | 'retest' | 'review' | 'planned' | 'waiting' | 'blocked' | 'summary' | 'prepare' | 'archived'
   text: string
   reason: string
   pointId: string | null
@@ -43,11 +46,13 @@ export interface NextAction {
   trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
   practice: { pointId: string; text: string } | null
 }
-export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; folder?: string; revision?: string; initializedAt?: number }
+export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
 export function normalizeCourse(course: Course) {
   if (!Array.isArray(course.actions)) course.actions = []
+  if (!Array.isArray(course.sessions)) course.sessions = []
+  if (!Array.isArray(course.learningEvents)) course.learningEvents = []
   if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
   if (!Array.isArray(course.changes)) course.changes = []
   if (course.notice === undefined) course.notice = null
@@ -73,39 +78,66 @@ export function usableSources(course: Course): Source[] {
   return course.materials.filter(m => m.status !== 'deleted' && (m.status === 'ready' || m.accepted)).flatMap(m => [...m.sources, ...(m.history ?? [])])
 }
 
+/** Historical sources remain eligible for replay; new teaching uses current active sources only. */
+export function learningSources(course: Course): Source[] {
+  return course.materials.filter(m => m.status !== 'deleted' && m.active !== false && (m.status === 'ready' || m.accepted)).flatMap(m => m.sources)
+}
+
+export function pointHasSources(course: Course, pointId: string): boolean {
+  const available = new Set(learningSources(course).map(source => source.id))
+  return course.points.some(point => point.id === pointId && point.sourceIds.some(sourceId => available.has(sourceId)))
+}
+
+/** First instant of a calendar day, including DST and non-integer UTC offsets. */
+export function dayStart(day: string, timezone: string): number {
+  const anchor = Date.parse(`${day}T00:00:00Z`)
+  let low = anchor - 36 * HOUR, high = anchor + 36 * HOUR
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (localDate(middle, timezone) < day) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
 export function evidence(course: Course, pointId: string): Evidence {
   const result: Evidence = { state: '未评估', count: 0, streak: 0, learnedAt: null, dueAt: null, interval: 24, lastAt: null, reason: '尚无有效独立作答', ruleVersion: RULE_VERSION }
   const sources = new Set(usableSources(course).map(s => s.id))
   const seen = new Set<string>()
   let hadError = false
+  let intervalStage=0
   for (const attempt of [...course.attempts].sort((a,b) => a.at - b.at || a.sequence - b.sequence)) {
     const q = course.questions.find(q => q.id === attempt.questionId)
-    if (!q || q.pointId !== pointId || q.status !== 'valid' || attempt.assisted || !q.sourceIds.length || q.sourceIds.some(id => !sources.has(id)) || seen.has(q.family)) continue
+    if ((attempt.ruleSnapshot&&(attempt.ruleSnapshot.version!==RULE_VERSION||!validReviewHours(attempt.ruleSnapshot.reviewHours))) || !q || q.pointId !== pointId || q.status !== 'valid' || attempt.assisted || !q.sourceIds.length || q.sourceIds.some(id => !sources.has(id)) || seen.has(q.family)) continue
     seen.add(q.family)
     result.count++
     result.lastAt = attempt.at
+    const hours=attempt.ruleSnapshot?.reviewHours??DEFAULT_REVIEW_HOURS
     if (!attempt.correct) {
       hadError = true
       result.state = '待加强'
       result.streak = 0
       result.learnedAt = null
-      result.interval = 24
-      result.dueAt = Math.min(result.dueAt ?? Infinity, attempt.at + 24 * HOUR)
+      intervalStage=0
+      result.interval = hours[0]
+      result.dueAt = Math.min(result.dueAt ?? Infinity, attempt.at + hours[0] * HOUR)
       // Consuming an already due cycle starts a new cycle, rather than leaving it overdue.
-      if (result.dueAt <= attempt.at) result.dueAt = attempt.at + 24 * HOUR
+      if (result.dueAt <= attempt.at) result.dueAt = attempt.at + hours[0] * HOUR
     } else {
       result.streak++
       if (result.streak < 2) {
         result.state = hadError ? '待加强' : '待验证'
-        if (result.dueAt !== null && attempt.at >= result.dueAt) result.dueAt = attempt.at + 24 * HOUR
+        if (result.dueAt !== null && attempt.at >= result.dueAt) result.dueAt = attempt.at + hours[0] * HOUR
       } else if (result.learnedAt === null) {
         result.state = '初步掌握'
         result.learnedAt = attempt.at
-        result.interval = 24
-        result.dueAt = attempt.at + 24 * HOUR
+        intervalStage=0
+        result.interval = hours[0]
+        result.dueAt = attempt.at + hours[0] * HOUR
       } else if (result.dueAt !== null && attempt.at >= result.dueAt && attempt.at >= result.learnedAt + 24 * HOUR) {
         result.state = '复测通过'
-        result.interval = result.interval === 24 ? 72 : 168
+        intervalStage=Math.min(2,intervalStage+1)
+        result.interval = hours[intervalStage]!
         result.dueAt = attempt.at + result.interval * HOUR
       }
     }
@@ -190,7 +222,7 @@ function evidenceSnap(course: Course, pointId: string | null) {
 
 export function recommend(course: Course, now: number): Omit<NextAction, 'id' | 'at' | 'trigger'> {
   const practiceId = course.scope.find(id => {
-    if (evidence(course, id).state !== '待加强') return false
+    if (!pointHasSources(course, id) || evidence(course, id).state !== '待加强') return false
     const last = [...course.attempts].reverse().find(attempt => {
       const question = course.questions.find(item => item.id === attempt.questionId)
       return question?.pointId === id && question.status === 'valid' && !attempt.assisted
@@ -200,18 +232,33 @@ export function recommend(course: Course, now: number): Omit<NextAction, 'id' | 
   const practice = practiceId ? { pointId: practiceId, text: '可选：生成即时巩固草案，确认后才进入日程' } : null
   if (course.archived) return { kind: 'archived', text: '课程已归档，恢复后可继续学习', reason: '归档课程不新增推荐或提醒', pointId: null, taskId: null, ...evidenceSnap(course, null), availableAt: null, practice: null }
   const active = course.plan?.tasks.find(task => task.status === 'in_progress')
+  if (active && !pointHasSources(course, active.pointId)) return blockedAction(course, active.pointId)
   if (active) return { kind: 'continue', text: '继续当前任务', reason: `先完成进行中的${active.kind === 'review' ? '复习' : '学习'}，再处理队列中的其他事项`, pointId: active.pointId, taskId: active.id, ...evidenceSnap(course, active.pointId), availableAt: null, practice }
-  const invalid = course.scope.find(id => course.questions.some(question => question.pointId === id && question.status !== 'valid' && course.attempts.some(attempt => attempt.questionId === question.id)) && evidence(course, id).count < 2)
-  if (invalid) return { kind: 'retest', text: '评估依据有变更，进行补测', reason: '争议或失效题目已移出证据，剩余有效作答不足，需要补测', pointId: invalid, taskId: null, ...evidenceSnap(course, invalid), availableAt: null, practice }
-  const due = course.scope.map(id => ({ id, item: evidence(course, id) })).filter(entry => entry.item.dueAt !== null && entry.item.dueAt <= now).sort((a, b) => a.item.dueAt! - b.item.dueAt!)[0]
+  const invalid = course.scope.find(id => pointHasSources(course, id) && course.questions.some(question => question.pointId === id && question.status !== 'valid' && course.attempts.some(attempt => attempt.questionId === question.id)) && evidence(course, id).count < 2)
+  if (invalid) {
+    const scheduled = course.plan?.tasks.find(task => task.pointId === invalid && task.kind === 'review' && task.status === 'todo')
+    if (scheduled && scheduled.date > localDate(now, course.timezone)) return { kind: 'waiting', text: '补测已安排，等待计划日期', reason: `评估依据已暂停计入；补测安排在 ${scheduled.date}，不重复创建复习任务`, pointId: invalid, taskId: scheduled.id, ...evidenceSnap(course, invalid), availableAt: dayStart(scheduled.date, course.timezone), practice }
+    return { kind: 'retest', text: '评估依据有变更，进行补测', reason: '争议或失效题目已移出证据，剩余有效作答不足，需要补测', pointId: invalid, taskId: scheduled?.id ?? null, ...evidenceSnap(course, invalid), availableAt: null, practice }
+  }
+  const due = course.scope.filter(id => pointHasSources(course, id) && !course.plan?.tasks.some(task => task.pointId === id && task.kind === 'review' && (task.status === 'todo' || task.status === 'in_progress'))).map(id => ({ id, item: evidence(course, id) })).filter(entry => entry.item.dueAt !== null && entry.item.dueAt <= now).sort((a, b) => a.item.dueAt! - b.item.dueAt!)[0]
   if (due) return { kind: 'review', text: '该知识点已到复习时间', reason: `证据为${due.item.state}，到期复习优先于新的计划内容`, pointId: due.id, taskId: null, ...evidenceSnap(course, due.id), availableAt: due.item.dueAt ?? now, practice }
-  const todo = course.plan?.tasks.find(task => task.status === 'todo')
+  const today = localDate(now, course.timezone)
+  const pending = [...(course.plan?.tasks ?? [])].filter(task => task.status === 'todo').sort((a, b) => a.date.localeCompare(b.date))
+  const todo = pending.find(task => task.date <= today && pointHasSources(course, task.pointId))
   if (todo) return { kind: 'planned', text: '按已确认计划继续学习', reason: `计划 v${course.plan?.version ?? 0} 的下一项尚未开始`, pointId: todo.pointId, taskId: todo.id, ...evidenceSnap(course, todo.pointId), availableAt: null, practice }
+  const future = pending.find(task => pointHasSources(course, task.pointId))
+  if (future) return { kind: 'waiting', text: '等待已确认任务的计划日期', reason: `下一项安排在 ${future.date}；休息日与当天预算保持不变，可调整计划后提前学习`, pointId: future.pointId, taskId: future.id, ...evidenceSnap(course, future.pointId), availableAt: dayStart(future.date, course.timezone), practice }
+  const blocked = course.scope.find(id => !pointHasSources(course, id))
+  if (blocked) return blockedAction(course, blocked)
   if (course.scope.length) {
     const nextDue = course.scope.map(id => evidence(course, id).dueAt).filter((at): at is number => at !== null).sort((a, b) => a - b)[0] ?? null
     return { kind: 'summary', text: '本轮任务已结束，可查看下次复习时间或补充学习范围', reason: nextDue === null ? '当前范围没有未完成任务' : '未到期复习可以查看，提前练习只记为即时巩固', pointId: null, taskId: null, evidenceState: null, evidenceCount: null, availableAt: nextDue, practice }
   }
   return { kind: 'prepare', text: '导入资料，确认大纲与学习计划', reason: '还没有确认的学习范围', pointId: null, taskId: null, evidenceState: null, evidenceCount: null, availableAt: null, practice: null }
+}
+
+function blockedAction(course: Course, pointId: string): Omit<NextAction, 'id' | 'at' | 'trigger'> {
+  return { kind: 'blocked', text: '补充资料后继续当前知识点', reason: '当前知识点没有可用于新讲解或出题的来源。补充并整理资料，确认关联来源后恢复；原任务和作答保留', pointId, taskId: null, ...evidenceSnap(course, pointId), availableAt: null, practice: null }
 }
 
 export function recordNext(course: Course, now: number, makeId: () => string, trigger: NextAction['trigger'], force = false): boolean {
@@ -220,7 +267,7 @@ export function recordNext(course: Course, now: number, makeId: () => string, tr
   const last = course.actions.at(-1)
   if (!force && last && last.kind === recommendation.kind && last.pointId === recommendation.pointId && last.taskId === recommendation.taskId && last.text === recommendation.text && last.evidenceState === recommendation.evidenceState && last.reason === recommendation.reason && last.practice?.pointId === recommendation.practice?.pointId && last.availableAt === recommendation.availableAt) return false
   course.actions.push({ ...recommendation, id: makeId(), at: now, trigger })
-  if (course.actions.length > 40) course.actions.splice(0, course.actions.length - 40)
+  // Keep the durable association used by attempts and session metrics; crop only the public view.
   return true
 }
 
@@ -275,15 +322,15 @@ export function proposeReviews(course: Course, pointIds: string[], now: number, 
   const base = course.plan
   if (!base) throw new Error('没有已确认计划')
   const today = localDate(now, course.timezone)
-  const tasks = structuredClone(base.tasks)
-  const overflow: OverflowEntry[] = []
-  for (const pointId of pointIds) {
+  const pending: Task[] = []
+  for (const pointId of [...new Set(pointIds)]) {
+    if (base.tasks.some(task => task.pointId === pointId && task.kind === 'review' && (task.status === 'todo' || task.status === 'in_progress'))) continue
     const current = evidence(course, pointId)
-    const used = tasks.filter(task => task.date === today && task.status !== 'skipped').reduce((sum, task) => sum + task.minutes, 0)
-    if (used + 10 > base.dailyMinutes) overflow.push({ pointId, reason: base.dailyMinutes < 10 ? 'task-too-large' : 'window-full' })
-    tasks.push({ id: makeId(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: current.dueAt, immediate: current.dueAt === null || current.dueAt > now })
+    pending.push({ id: makeId(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: current.dueAt, immediate: current.dueAt === null || current.dueAt > now })
   }
-  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0, days: base.days, deadline: base.deadline, restDays: base.restDays, estimates: base.estimates }
+  pending.sort((a, b) => (a.cycle ?? Infinity) - (b.cycle ?? Infinity))
+  const placed = placeTasks(base.tasks, pending, base, today)
+  return { ...base, id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks: placed.tasks, overflow: placed.overflow, feasible: placed.overflow.length === 0 && pending.length > 0 }
 }
 
 export function restoreNotice(course: Course, now: number): ScheduleNotice | null {
@@ -293,6 +340,7 @@ export function restoreNotice(course: Course, now: number): ScheduleNotice | nul
 
 export function duePointIds(course: Course, now: number): string[] {
   return course.scope.filter(id => {
+    if (!pointHasSources(course, id)) return false
     const current = evidence(course, id)
     return current.dueAt !== null && current.dueAt <= now && !course.plan?.tasks.some(task => task.pointId === id && task.kind === 'review' && task.status !== 'completed' && task.status !== 'skipped')
   })
@@ -302,7 +350,7 @@ export function refreshNotice(course: Course, now: number): boolean {
   if (!course.notice) return false
   const pending = course.notice.pointIds.filter(id => {
     const scheduled = course.plan?.tasks.some(task => task.pointId === id && task.kind === 'review' && task.status !== 'completed' && task.status !== 'skipped')
-    if (scheduled) return false
+    if (scheduled || !pointHasSources(course, id)) return false
     if (course.notice?.kind === 'immediate') return true
     const current = evidence(course, id)
     return current.dueAt !== null && current.dueAt <= now
@@ -351,7 +399,7 @@ export function diffPlan(oldPlan: Plan | null, newDraft: Plan): DetailedPlanDiff
   return { added, removed, moved, changed, unchanged }
 }
 
-export function publicCourse(course: Course, now: number) {
+export function publicCourse(course: Course, now: number, jobs:SessionJob[] = []) {
   normalizeCourse(course)
   const distribution = Object.fromEntries(EVIDENCE_STATES.map(state => [state, course.scope.filter(id => evidence(course, id).state === state).length])) as Record<(typeof EVIDENCE_STATES)[number], number>
   const completed = course.plan?.tasks.filter(task => task.status === 'completed').length ?? 0
@@ -359,6 +407,11 @@ export function publicCourse(course: Course, now: number) {
   const stored = course.actions.at(-1)
   return {
     ...course,
+    actions:course.actions.slice(-40),
+    learningSettings:learningSettings(course),
+    activeSession:currentSession(course,now),
+    metrics:sessionMetrics(course,now,jobs),
+    blockedPointIds: course.points.filter(point => !pointHasSources(course, point.id)).map(point => point.id),
     materials:course.materials.map(material=>({...material,previewUrl:material.status!=='deleted'&&!material.missingOriginal&&(material.file||material.path?.toLowerCase().endsWith('.pdf'))?`/api/syllora/material-file?courseId=${encodeURIComponent(course.id)}&materialId=${encodeURIComponent(material.id)}`:null})),
     questions: course.questions.map(question => {
       const answered = course.attempts.some(attempt => attempt.questionId === question.id)

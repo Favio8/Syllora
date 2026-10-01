@@ -1,8 +1,8 @@
 /**
  * BUG-001/NEW-004 回归：read_file/write_file 的符号链接越界必须被拒绝；
  * 指向工作区内部的符号链接则解析到真实路径后正常读写（加固不误伤）。
- * Windows 无开发者模式/管理员权限时 symlink 创建会 EPERM——探测不支持时
- * 跳过对应用例（CI/有权限环境仍然覆盖）。
+ * 文件符号链接探测失败时记录实际错误并跳过对应用例；不推断失败原因，
+ * 不改变系统权限。CI/支持环境仍覆盖对应场景。
  */
 
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
@@ -20,11 +20,18 @@ await writeFile(join(workspace, 'docs', 'rs.md'), '# line1\nline2', 'utf8')
 const outsideSecret = join(outsideDir, 'secret.txt')
 await writeFile(outsideSecret, 'top-secret', 'utf8')
 
+const probeErrors:Record<string,{platform:string;name:string;code:string|null;syscall:string|null}>={}
+function recordProbeError(kind:string,error:unknown) {
+  const value=error as NodeJS.ErrnoException
+  const diagnostic={platform:process.platform,name:value?.name??'UnknownError',code:value?.code??null,syscall:value?.syscall??null}
+  probeErrors[kind]=diagnostic;console.warn(`[path-safety] ${kind} probe failed: ${JSON.stringify(diagnostic)}`)
+}
 let symlinkSupported = true
 try {
   await symlink(outsideSecret, join(workspace, 'leak.txt'), 'file')
   await symlink(join(workspace, 'docs', 'note.md'), join(workspace, 'alias.md'), 'file')
-} catch {
+} catch(error) {
+  recordProbeError('file-symlink',error)
   symlinkSupported = false
 }
 
@@ -33,9 +40,12 @@ try {
 let junctionSupported = true
 try {
   await symlink(outsideDir, join(workspace, 'leakdir'), 'junction')
-} catch {
+} catch(error) {
+  recordProbeError('directory-junction',error)
   junctionSupported = false
 }
+
+if(process.env['SYLLORA_TEST_PROBE_REPORT'])await writeFile(process.env['SYLLORA_TEST_PROBE_REPORT'],JSON.stringify({fileSymlinkSupported:symlinkSupported,directoryJunctionSupported:junctionSupported,errors:probeErrors},null,2),'utf8')
 
 afterAll(async () => {
   await rm(workspace, { recursive: true, force: true })

@@ -17,11 +17,24 @@ export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:
 const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__'])
 
 export async function atomicJson(path: string, value: unknown) {
+  return atomicText(path, JSON.stringify(value, null, 2))
+}
+export async function atomicText(path: string, text: string) {
   await mkdir(dirname(path), { recursive: true })
   const tmp = `${path}.tmp-${randomUUID()}`
   const file = await open(tmp, 'wx', 0o600)
-  try { await file.writeFile(JSON.stringify(value, null, 2)); await file.sync() } finally { await file.close() }
-  await rename(tmp, path)
+  try {
+    try { await file.writeFile(text); await file.sync() } finally { await file.close() }
+    // Windows readers/virus scanners may briefly deny replacement; never delete the durable target.
+    for (let attempt = 0; ; attempt++) {
+      try { await rename(tmp, path); break }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (!['EPERM','EACCES','EBUSY'].includes(code ?? '') || attempt >= 5) throw error
+        await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt))
+      }
+    }
+  } catch (error) { await rm(tmp, { force:true }).catch(() => undefined); throw error }
 }
 export async function jsonFile<T>(path: string): Promise<T | null> {
   try { if (!(await lstat(path)).isFile()) throw new Error('状态文件不能是目录或文件链接'); return JSON.parse(await readFile(path, 'utf8')) as T }

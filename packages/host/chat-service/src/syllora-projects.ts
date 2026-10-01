@@ -7,7 +7,7 @@ import { normalizeCourse, type Course } from './syllora-domain.ts'
 import { atomicJson, jsonFile, managedDirectory, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
 import { loadChatConfig } from './config.ts'
 
-interface Project { id:string;path:string;name:string }
+interface Project { id:string;path:string;name:string;deletion?:'pending'|'failed' }
 interface Preferences { consent:boolean }
 interface StoredCourse { version:1;courses:Course[];jobs:unknown[];calls:number;consent:boolean }
 type Options=NonNullable<ConstructorParameters<typeof SylloraService>[1]> & { registerProject?: (path:string)=>Promise<void> }
@@ -19,6 +19,7 @@ export class SylloraProjects {
   private ready:Promise<void>|null=null
   private tail:Promise<unknown>=Promise.resolve()
   private deleting=new Set<string>()
+  private courseOperations=new Map<string,string>()
   constructor(readonly root:string,private readonly options:Options={}) {}
   async readMaterialFile(courseId:string,materialId:string) {
     if(!z.string().uuid().safeParse(courseId).success||!z.string().uuid().safeParse(materialId).success)throw new SylloraError('INVALID_REQUEST','课程或资料 ID 不正确')
@@ -47,7 +48,7 @@ export class SylloraProjects {
     await this.load()
     const project=this.projects.find(p=>p.id===id)
     if(!project)throw new SylloraError('NOT_FOUND','课程未打开，请先打开课程文件夹')
-    if(this.deleting.has(id)&&!allowDeleting)throw new SylloraError('DELETING','课程正在删除，请稍后重试')
+    if((this.deleting.has(id)||project.deletion)&&!allowDeleting)throw new SylloraError('DELETING','课程删除未完成，已停止学习读写；请重试清理，原始资料保留')
     if(!(await stat(project.path).catch(()=>null))?.isDirectory())throw new SylloraError('FOLDER_MISSING','课程文件夹已移动或不存在，请重新打开')
     await stateDirectory(project.path)
     let service=this.services.get(id)
@@ -63,6 +64,7 @@ export class SylloraProjects {
     const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai')}).parse(payload)
     return this.serialize(async()=>{
       const root=await realpath(resolve(p.path))
+      if(this.projects.some(project=>project.path===root&&(project.deletion||this.deleting.has(project.id))))throw new SylloraError('DELETING','课程删除未完成，请先重试清理，不能重新打开')
       if(!(await stat(root)).isDirectory())throw new SylloraError('INVALID_FOLDER','请选择课程文件夹')
       const stateDir=await stateDirectory(root), stored=await jsonFile<StoredCourse>(join(stateDir,'course.json'))
       if(stored&&(stored.version!==1||stored.courses.length!==1))throw new SylloraError('STORAGE_ERROR','课程状态格式不正确，请保留文件并检查')
@@ -86,6 +88,7 @@ export class SylloraProjects {
       const p=z.object({consent:z.boolean()}).parse(payload)
       await atomicJson(join(this.root,'.syllora','preferences.json'),p)
       if(!p.consent)for(const [id,service] of this.services) {
+        if(this.deleting.has(id)||this.projects.find(project=>project.id===id)?.deletion)continue
         const state=await service.handle('state',{}) as {jobs:Array<{id:string;state:string}>}
         for(const job of state.jobs.filter(j=>j.state==='running'))await service.handle('cancel',{courseId:id,jobId:job.id})
       }
@@ -111,17 +114,42 @@ export class SylloraProjects {
     }
     if(action==='migrateCourse')return this.migrate(payload)
     const p=z.object({courseId:z.string().uuid()}).passthrough().parse(payload)
+    if(action==='delete'&&this.courseOperations.get(p.courseId)==='deleteMaterial')throw new SylloraError('COURSE_BUSY','本课程正在删除资料并收束旧任务，请等待原操作完成后重试')
+    if(['deleteMaterial','initialize','generate','import'].includes(action))return this.courseOperation(p.courseId,action,()=>this.handleCourse(action,payload,p))
+    return this.handleCourse(action,payload,p)
+  }
+  /** Launches and destructive cleanup share this guard; workers run outside it, deletion drains them inside it. */
+  private async courseOperation<T>(courseId:string,action:string,run:()=>Promise<T>):Promise<T> {
+    if(this.courseOperations.has(courseId))throw new SylloraError('COURSE_BUSY','本课程正在启动生成或清理资料，请查询原操作结果，完成后再试')
+    this.courseOperations.set(courseId,action)
+    try{return await run()}finally{this.courseOperations.delete(courseId)}
+  }
+  private async handleCourse(action:string,payload:unknown,p:{courseId:string;[key:string]:unknown}):Promise<unknown> {
     const service=await this.service(p.courseId,action==='delete')
     if(action==='delete') {
       if(p['confirmed']!==true)throw new SylloraError('CONFIRMATION_REQUIRED','请确认删除课程整理产物与学习记录')
+      if(this.deleting.has(p.courseId))throw new SylloraError('DELETING','课程正在清理，请查询原操作结果，不要重复发起删除')
       this.deleting.add(p.courseId)
+      let marked=false
       try {
-        const state=await service.handle('state',{}) as {jobs:Array<{id:string;state:string}>}
-        for(const job of state.jobs.filter(j=>j.state==='running'))await service.handle('cancel',{courseId:p.courseId,jobId:job.id})
-        await service.settleJobs()
+        // Persist the intent before any cleanup; restart must not reopen a partially removed course.
+        await this.serialize(async()=>{
+          const pending=this.projects.map(project=>project.id===p.courseId?{...project,deletion:'pending' as const}:project)
+          await atomicJson(join(this.root,'.syllora','projects.json'),pending);this.projects=pending;marked=true
+        })
+        await service.prepareDeletion()
         await removeProducts(this.projects.find(v=>v.id===p.courseId)!.path,['revisions','.staging','course.json'])
-        await this.serialize(async()=>{this.projects=this.projects.filter(v=>v.id!==p.courseId);this.services.delete(p.courseId);await atomicJson(join(this.root,'.syllora','projects.json'),this.projects)})
+        await this.serialize(async()=>{
+          const remaining=this.projects.filter(v=>v.id!==p.courseId)
+          await atomicJson(join(this.root,'.syllora','projects.json'),remaining);this.projects=remaining;this.services.delete(p.courseId)
+        })
         return {saved:true}
+      } catch(error) {
+        if(marked)await this.serialize(async()=>{
+          const failed=this.projects.map(project=>project.id===p.courseId?{...project,deletion:'failed' as const}:project)
+          await atomicJson(join(this.root,'.syllora','projects.json'),failed);this.projects=failed
+        }).catch(()=>undefined) // The durable pending marker remains if recording the failure also fails.
+        throw new SylloraError(marked?'DELETE_INCOMPLETE':'STORAGE_ERROR',marked?'课程删除未完成，已停止学习读写；请重试清理，原始资料保留':'无法保存删除状态，尚未开始清理；请检查目录后重试')
       } finally {this.deleting.delete(p.courseId)}
     }
     if(action==='import')return this.saveUpload(p)

@@ -31,10 +31,18 @@ export async function writeAtomic(path: string, data: string): Promise<void> {
     } finally {
       await handle.close()
     }
-    await rename(tmp, path)
+    // Readers/scanners on Windows can briefly deny replacement; preserve the target throughout.
+    for (let attempt = 0; ; attempt++) {
+      try { await rename(tmp, path); break }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (!['EPERM','EACCES','EBUSY'].includes(code ?? '') || attempt >= 5) throw error
+        await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt))
+      }
+    }
     await fsyncDirectory(dirname(path))
   } catch (error) {
-    await rm(tmp, { force: true })
+    await rm(tmp, { force: true }).catch(() => undefined)
     throw error
   }
 }

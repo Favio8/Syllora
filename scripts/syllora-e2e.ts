@@ -26,8 +26,9 @@ const mock=createServer((req,res)=>{
       const request=JSON.parse(body)
       const last=request.messages.at(-1).content
       const text=typeof last==='string'?last:last.map((p:{text?:string})=>p.text??'').join('')
-      const start=text.indexOf('[{"id":')
-      const sources=JSON.parse(text.slice(start))
+      const start=Math.max(text.lastIndexOf('\n所选资料（'),text.lastIndexOf('\n所选资料：'))
+      assert.ok(start>=0,'fixture source block header')
+      const sources=JSON.parse(text.slice(text.indexOf('\n',start+1)+1))
       const sourceId=(sources.find((s:{text:string})=>s.text.includes('主对角线'))??sources[0]).id
       let output:unknown
       if(text.includes('初始化整理课程讲义')) output=fixtureLecture(sources,sourceId)
@@ -53,7 +54,7 @@ const address=mock.address() as {port:number}
 await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`,protocol})
 await setCredential(data,'syllora-test','test-only-not-a-real-secret')
 await activateProvider(data,'syllora-test')
-const host=spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
+const host=spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data,SYLLORA_SYNTHETIC_RUN:'1'},windowsHide:true,stdio:['ignore','pipe','pipe']})
 let hostOutput='';host.stdout.on('data',b=>{hostOutput+=String(b)});host.stderr.on('data',b=>{hostOutput+=String(b)})
 let browser:any
 let page:any
@@ -103,6 +104,7 @@ try {
   assert.ok(initialDraft.draftDiff.tasksAdded.length>0)
   await page.getByRole('button',{name:'确认生效'}).click()
   await page.getByRole('button',{name:'继续',exact:true}).click()
+  const startedSession=(await rpc('state')).courses[0].activeSession;assert.equal(startedSession.mode,'synthetic');assert.ok(startedSession.id)
   await page.getByRole('button',{name:'获取资料讲解'}).click()
   await page.getByRole('button',{name:'来源 1',exact:true}).waitFor({timeout:20000})
   await page.getByRole('button',{name:'我已完成讲解学习'}).click()
@@ -117,6 +119,7 @@ try {
   await page.getByRole('group',{name:'练习 1 选项'}).waitFor()
   // Answer selection is hydrated from the draft cache in a post-render effect, so wait for the value instead of reading it immediately.
   await page.waitForFunction(()=>String(document.querySelectorAll('[aria-label="练习 1 选项"] button')[1]?.className).includes('is-selected'))
+  assert.equal((await rpc('state')).courses[0].activeSession.id,startedSession.id)
   await page.getByRole('button',{name:'提交答案',exact:true}).click()
   await page.getByText('回答错误 · 已保存独立作答',{exact:true}).waitFor()
   await page.getByRole('button',{name:'生成题目',exact:true}).click()
@@ -125,10 +128,26 @@ try {
   await page.getByRole('button',{name:'提交答案',exact:true}).click()
   await page.getByRole('button',{name:/单位矩阵.*活动完成/}).waitFor()
   await page.getByRole('tab',{name:'复习',exact:true}).click()
+  await page.getByText('错题记录 · 1 题',{exact:true}).click()
+  await page.getByText('你的选项 B：0',{exact:true}).waitFor()
+  await page.getByText('正确选项 A：1',{exact:true}).waitFor()
+  await page.getByRole('button',{name:'查看错题依据',exact:true}).click()
+  await page.getByRole('dialog',{name:'资料来源'}).waitFor();await page.getByRole('button',{name:'关闭来源'}).click()
+  await page.screenshot({path:join(testRoot,'wrong-answer-history.png'),fullPage:true})
   await page.screenshot({path:join(testRoot,'mvp-workbench.png'),fullPage:true})
   state=await rpc('state');const courseId=state.courses[0].id;const pointId=state.courses[0].points[0].id
   assert.equal(state.courses[0].evidence[pointId].state,'待加强');assert.equal(state.courses[0].attempts.length,2)
   assert.ok(state.courses[0].actions.length>0)
+  assert.equal(state.courses[0].attempts[0].sessionId,startedSession.id);assert.ok(state.courses[0].attempts[0].nextActionId)
+  await page.getByText('记录额外人工帮助',{exact:true}).click();await page.getByLabel('人工帮助原因').fill('合成验证：记录额外操作指导');await page.getByRole('button',{name:'保存人工帮助记录',exact:true}).click()
+  for(let i=0;i<50;i++){if((await rpc('state')).courses[0].metrics.helpCount===1)break;await new Promise(r=>setTimeout(r,100))}
+  state=await rpc('state');assert.equal(state.courses[0].metrics.helpCount,1);assert.ok(state.courses[0].metrics.sourceReports.shown>0)
+  await page.getByRole('button',{name:'报告回答来源问题',exact:true}).first().click();const report=page.getByRole('dialog',{name:'回答来源报错'});await report.getByLabel('回答报错原因').fill('合成验证：来源仍需人工核验');await report.getByRole('button',{name:'保存回答报错',exact:true}).click();await report.waitFor({state:'detached'});
+  state=await rpc('state');assert.equal(state.courses[0].messages.find((message:any)=>message.role==='assistant').report.reason,'合成验证：来源仍需人工核验')
+  await page.getByText('复习间隔设置',{exact:true}).click();await page.getByLabel('首次补强与复测（小时）').fill('48');await page.getByLabel('会话闲置关闭（分钟）').fill('45');const oldDue=state.courses[0].evidence[pointId].dueAt;await page.getByRole('button',{name:'保存未来复习间隔',exact:true}).click()
+  for(let i=0;i<50;i++){if((await rpc('state')).courses[0].learningSettings.revision===1)break;await new Promise(r=>setTimeout(r,100))}
+  state=await rpc('state');assert.deepEqual(state.courses[0].learningSettings.reviewHours,[48,72,168]);assert.equal(state.courses[0].evidence[pointId].dueAt,oldDue);assert.equal(state.courses[0].activeSession.idleMinutes,30)
+  await page.getByText('学习过程记录',{exact:true}).click();await page.screenshot({path:join(testRoot,'session-observations.png'),fullPage:true})
   await page.getByRole('tab',{name:'计划',exact:true}).click()
   await page.getByRole('heading',{name:'下一行动记录',exact:true}).waitFor()
   await page.getByRole('heading',{name:'分母变化',exact:true}).waitFor()
@@ -173,6 +192,7 @@ try {
   // The prompt draft is hydrated in a post-render effect; wait for the value instead of reading it immediately.
   await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='切课后保留的未发送问题')
   state=await rpc('state');assert.equal(state.courses.find((c:{id:string})=>c.id===courseId).drafts.prompt,'切课后保留的未发送问题')
+  assert.equal(state.courses.find((c:{id:string})=>c.id===courseId).activeSession.id,startedSession.id)
   await page.reload()
   await page.getByRole('button',{name:/线性代数 · 自动化测试.*个知识点/}).click()
   await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor()
@@ -208,7 +228,7 @@ try {
   await page.getByText(/部分可用 · 已接受 · v2 ·/).waitFor();await page.screenshot({path:join(testRoot,'pdf-version-update.png'),fullPage:true})
   assert.deepEqual(failedResponses,['409 /api/syllora/material-file'])
   assert.deepEqual(errors,[])
-  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,protocol,model:'local test fixture, not a live provider',checks:['open course folder','inspect saved source','initialize','read lecture','locate original source','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings with provider protocol','diagnostics view','rename without moving course folder','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft','PDF partial confirmation and physical page issues','authenticated byte-for-byte original preview','answer context coverage','changed original preview rejected','material version update preserves original source IDs'],browserErrors:errors,expectedFailures:failedResponses},null,2))
+  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,protocol,model:'local test fixture, not a live provider',checks:['synthetic session survives reload and course switch','source exposure and answer report persisted','manual help record persisted','future review settings preserve historical due and active idle snapshot','open course folder','inspect saved source','initialize','read lecture','locate original source','outline','confirm plan','cited answer','hidden answer','fixed grading','grouped wrong-answer history and source','task completion','reload persistence','dispute replay','model settings with provider protocol','diagnostics view','rename without moving course folder','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft','PDF partial confirmation and physical page issues','authenticated byte-for-byte original preview','answer context coverage','changed original preview rejected','material version update preserves original source IDs'],browserErrors:errors,expectedFailures:failedResponses},null,2))
   console.log(JSON.stringify({passed:true,artifacts:testRoot}))
 } catch(error) {
   await page?.screenshot({path:join(testRoot,'failure.png'),fullPage:true})
