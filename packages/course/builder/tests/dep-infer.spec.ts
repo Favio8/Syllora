@@ -159,7 +159,7 @@ describe('CourseBuilder dependency inference integration', () => {
   }
 
   async function setup(inferrer: FakeInferrer): Promise<{ root: string; courseDir: string }> {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-dep-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-dep-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     await writeFile(join(courseDir, 'sources', 'a.md'), DOC, 'utf8')
@@ -199,7 +199,7 @@ describe('CourseBuilder dependency inference integration', () => {
     const builder = new CourseBuilder(courseDir, new FakeGenerator(), inferrer)
     const report = await builder.build(1)
     expect(report.degraded).toContain('dependencies')
-    const raw = await readFile(join(courseDir, '.studyclaw', 'syllabus.json'), 'utf8')
+    const raw = await readFile(join(courseDir, '.syllora', 'syllabus.json'), 'utf8')
     expect(raw).toContain('"prerequisites": []')
     await rm(root, { recursive: true, force: true })
   })

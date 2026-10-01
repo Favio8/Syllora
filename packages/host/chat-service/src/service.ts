@@ -2,12 +2,12 @@
  * Session service: the host-side seam the RPC layer calls — session listing,
  * creation, restore, and the chat stream over one course, wired to
  * TutorSession + defaultToolRegistry + the config-backed LLM client.
- * @module @studyclaw/chat-service/src/service
+ * @module @syllora/chat-service/src/service
  */
 
 import { readFile, readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { AgentLoop, ApprovalQueue, type Agent, type AgentCapability, type AgentEvent, type AgentModelSelection, type AgentPreset, type AgentRegistry, type ApprovalDecision, type ApprovalRequest, type AgentTurnHandle } from '@studyclaw/agent'
+import { AgentLoop, ApprovalQueue, type Agent, type AgentCapability, type AgentEvent, type AgentModelSelection, type AgentPreset, type AgentRegistry, type ApprovalDecision, type ApprovalRequest, type AgentTurnHandle } from '@syllora/agent'
 import {
   agentToolRegistry,
   resolveSourceRef,
@@ -16,14 +16,14 @@ import {
   type ToolActions,
   type ToolHandlerResult,
   type ToolProviders,
-} from '@studyclaw/tools'
-import { SessionEventStore, SessionStore, SessionError, TutorSession, utcTs, sessionModelLine, publicToolArgs, studyclawFallbackTitle, normalizeSessionTitle, type ChatEvent, type LearningMode, type SessionProjection } from '@studyclaw/session'
+} from '@syllora/tools'
+import { SessionEventStore, SessionStore, SessionError, TutorSession, utcTs, sessionModelLine, publicToolArgs, sylloraFallbackTitle, normalizeSessionTitle, type ChatEvent, type LearningMode, type SessionProjection } from '@syllora/session'
 import type { ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient, reasoningEffortsForConfig } from './adapter.ts'
 import { configProblem, createCourseService, type CourseService } from './course.ts'
 import { loadChatConfig } from './config.ts'
 import { discoverModels, settingsPayload, saveProvider } from './settings.ts'
-import { stateDirOf } from '@studyclaw/course-builder'
+import { stateDirOf } from '@syllora/course-builder'
 
 export interface SessionSummaryView {
   readonly sessionId: string
@@ -283,7 +283,7 @@ export interface AgentRuntimeConfig {
 
 function runtimeConfigOf(config: ResolvedChatConfig): AgentRuntimeConfig {
   return {
-    agentPreset: config.agentPreset === 'general' ? 'general' : 'studyclaw-learning',
+    agentPreset: config.agentPreset === 'general' ? 'general' : 'syllora-learning',
     permissionPreset: config.permissionPreset === 'read-only' || config.permissionPreset === 'danger-full-access' ? config.permissionPreset : 'workspace-write',
     plugins: Object.fromEntries(Object.entries(config.plugins ?? {}).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')),
   }
@@ -365,11 +365,11 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
     { id: 'subagent', available: providers.subagent !== undefined, reason: providers.subagent === undefined ? '当前 Host 未启用子 Agent Provider' : null, installAction: providers.subagent === undefined ? '启用 Agent registry' : null },
   ]
   const preset: AgentPreset = {
-    id: options.runtimeConfig?.agentPreset === 'general' ? 'general' : 'studyclaw-learning',
-    label: options.runtimeConfig?.agentPreset === 'general' ? 'General Agent' : 'StudyClaw Learning Tutor',
+    id: options.runtimeConfig?.agentPreset === 'general' ? 'general' : 'syllora-learning',
+    label: options.runtimeConfig?.agentPreset === 'general' ? 'General Agent' : 'Syllora Learning Tutor',
     systemPrompt: options.runtimeConfig?.agentPreset === 'general'
-      ? 'You are the StudyClaw general agent. Use the available tools deliberately and explain outcomes clearly.'
-      : 'You are the StudyClaw learning agent. Guide the learner with evidence from the active course and preserve their agency.',
+      ? 'You are the Syllora general agent. Use the available tools deliberately and explain outcomes clearly.'
+      : 'You are the Syllora learning agent. Guide the learner with evidence from the active course and preserve their agency.',
   }
   return new AgentLoop({
     agentId: options.agentId ?? `study-${options.sessionId}`,
@@ -996,7 +996,7 @@ export async function createSession(
   const store = new SessionStore(join(stateDirOf(courseDir), 'history'))
   const { sessionId, path } = await store.newSession(mode, title)
   // chatStream 的 TutorSession.init 只认「遗留 jsonl 或事件日志」二者之一，而遗留
-  // 目录与这里的 .studyclaw/history 不是同一处；补写 session/create 事件，保证
+  // 目录与这里的 .syllora/history 不是同一处；补写 session/create 事件，保证
   // 先建会话再发消息（CLI 路径）不会报「会话不存在」。
   const events = new SessionEventStore(join(stateDirOf(courseDir), 'history'))
   await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode, agentId: `study-${sessionId}` } })
@@ -1386,7 +1386,7 @@ export async function* chatStream(
     // "新对话" placeholder as soon as the first message exists.
     const history = new SessionStore(join(stateDirOf(courseDir), 'history'))
     let firstPrompt = false
-    const fallbackTitle = studyclawFallbackTitle(input.message)
+    const fallbackTitle = sylloraFallbackTitle(input.message)
     if (fallbackTitle !== '') {
       firstPrompt = await history.applyAutoTitle(session.sessionId, fallbackTitle, 'fallback').catch(() => false)
     }

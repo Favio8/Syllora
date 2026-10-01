@@ -1,11 +1,11 @@
 name: 💡 功能建议
 description: 提出新功能或改进建议
-labels: ["enhancement", "triage"]
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        提建议前不妨先想想：这个建议是否契合 StudyClaw「**本地优先、文件即状态、无遥测**」的定位？
+        提建议前不妨先想想：这个建议是否契合 Syllora「**本地优先、文件即状态、无遥测**」的定位？
         建议先在 [Discussions](../../discussions) 发帖讨论大致想法，成熟后再开 Issue 便于跟踪。
 
   - type: textarea

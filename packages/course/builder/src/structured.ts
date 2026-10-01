@@ -4,7 +4,7 @@
  * JSON is extracted from the text (markdown fences included) — the
  * instructor-equivalent of Python's JSON_SCHEMA → JSON → MD_JSON fallback
  * chain, implemented over the dsh StreamChunk vocabulary.
- * @module @studyclaw/course-builder/src/structured
+ * @module @syllora/course-builder/src/structured
  */
 
 import { z } from 'zod'

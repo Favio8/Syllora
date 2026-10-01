@@ -5,7 +5,7 @@
  * - 正确项恒最长（承载全部限定词，干扰项 30~60 字）→ 长度失衡卡直接丢弃；
  * - MCQ 缺/越界 answer_index → 无法客观判分，丢弃；
  * - 同概念内题干近似重复 → 丢弃后到者。
- * @module @studyclaw/course-builder/src/quality
+ * @module @syllora/course-builder/src/quality
  */
 
 import type { HarnessTask } from './models.ts'

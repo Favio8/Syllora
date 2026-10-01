@@ -1,7 +1,7 @@
 {
-  "name": "@studyclaw/learning",
+  "name": "@syllora/learning",
   "version": "0.1.0",
-  "description": "StudyClaw learning loop: progress board (9-column markdown contract), SM-2 scheduler, rubric evaluator, quiz selection, heatmap metrics, memory track, gitops, and dynamic cards (ported from Python progress.py/scheduler.py/evaluator.py/metrics.py)",
+  "description": "Syllora learning loop: progress board (9-column markdown contract), SM-2 scheduler, rubric evaluator, quiz selection, heatmap metrics, memory track, gitops, and dynamic cards (ported from Python progress.py/scheduler.py/evaluator.py/metrics.py)",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -13,7 +13,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@studyclaw/course-builder": "workspace:^",
+    "@syllora/course-builder": "workspace:^",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-llm": "workspace:^"
   }

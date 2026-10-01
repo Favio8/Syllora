@@ -1,20 +1,20 @@
 /**
- * StudyClaw RPC contract (M1 minimal method set): unary dispatch over
+ * Syllora RPC contract (M1 minimal method set): unary dispatch over
  * `POST /api/<method>` with a typed payload/result envelope, zod payload
  * validation at the boundary, business-error mapping from registry
  * exceptions to stable codes, and the wire views the web sidebar renders.
  * The dispatch body is transport-agnostic — the CLI server wires it to
  * node:http, an in-process caller can await it directly (dsh's
  * InProcessApiClient equivalent).
- * @module @studyclaw/apiproxy
+ * @module @syllora/apiproxy
  */
 
 import { z } from 'zod'
-import type { Workspace, WorkspaceId } from '@studyclaw/workspace'
-import { WorkspaceNameConflictError, WorkspaceOrderInvalidError } from '@studyclaw/workspace'
-import { ProviderExistsError } from '@studyclaw/chat-service'
-import type { CourseSummary } from '@studyclaw/course-summary'
-import type { SessionSummaryView, RestoredSessionView, SessionModelDirectory, SessionModelSelection, SessionEventView } from '@studyclaw/chat-service'
+import type { Workspace, WorkspaceId } from '@syllora/workspace'
+import { WorkspaceNameConflictError, WorkspaceOrderInvalidError } from '@syllora/workspace'
+import { ProviderExistsError } from '@syllora/chat-service'
+import type { CourseSummary } from '@syllora/course-summary'
+import type { SessionSummaryView, RestoredSessionView, SessionModelDirectory, SessionModelSelection, SessionEventView } from '@syllora/chat-service'
 
 /** One workspace as the web sidebar sees it. */
 export interface WorkspaceView {
@@ -750,7 +750,7 @@ export async function dispatch(
       // 加固2：不回显具体路径——master.key/凭据文件损坏时完整主目录路径会经
       // 此返回给调用方，与 discoverModels/fetchUrlSafe 的脱敏姿态不一致。细节
       // 落宿主日志（host-logger 已 tee 到 <home>/logs）。
-      console.error('[studyclaw] rpc workspace path error:', message)
+      console.error('[syllora] rpc workspace path error:', message)
       return err('workspace-invalid-path', 'cannot open workspace (path missing or not a directory)')
     }
     if (message.startsWith('模型不可用:') || message.startsWith('Provider 未配置凭据:')) {
@@ -782,7 +782,7 @@ export async function dispatch(
     }
     // 加固2：未知错误不回显原始消息（可能含文件路径/内部细节）——细节落日志，
     // 调用方只拿到可行动的高层提示。
-    console.error('[studyclaw] rpc unhandled error:', message)
+    console.error('[syllora] rpc unhandled error:', message)
     return err('invalid-request', '请求失败（详见宿主日志）')
   }
 }

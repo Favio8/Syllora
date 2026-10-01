@@ -1,13 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SessionEventStore, SessionStore, utcTs, studyclawFallbackTitle, normalizeSessionTitle } from '../src/index.ts'
+import { SessionEventStore, SessionStore, utcTs, sylloraFallbackTitle, normalizeSessionTitle } from '../src/index.ts'
 
 describe('title normalization (dsh normalize port)', () => {
   it('derives a CJK-safe fallback within the word/byte caps', () => {
-    expect(studyclawFallbackTitle('帮我复习一下线性代数第三章的特征值分解')).toBe('帮我复习一下线性代数第三章')
-    expect(studyclawFallbackTitle('review chapter 3 eigenvalue decomposition today')).toBe('review chapter 3 eigenvalue decompositio')
-    expect(studyclawFallbackTitle('   ')).toBe('')
+    expect(sylloraFallbackTitle('帮我复习一下线性代数第三章的特征值分解')).toBe('帮我复习一下线性代数第三章')
+    expect(sylloraFallbackTitle('review chapter 3 eigenvalue decomposition today')).toBe('review chapter 3 eigenvalue decompositio')
+    expect(sylloraFallbackTitle('   ')).toBe('')
   })
 
   it('strips terminal escapes and invisible controls', () => {
@@ -19,7 +19,7 @@ describe('title normalization (dsh normalize port)', () => {
 
 describe('SessionStore.applyAutoTitle (DSH title semantics)', () => {
   it('writes the fallback once, upgrades with llm, and pins after a user rename', async () => {
-    const historyDir = await mkdtemp(join(tmpdir(), 'studyclaw-title-store-'))
+    const historyDir = await mkdtemp(join(tmpdir(), 'syllora-title-store-'))
     try {
       const store = new SessionStore(historyDir)
       const events = new SessionEventStore(historyDir)
@@ -27,7 +27,7 @@ describe('SessionStore.applyAutoTitle (DSH title semantics)', () => {
       await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: 'socratic' } })
 
       // 1) 首条消息：fallback 落盘，列表立即显示。
-      expect(await store.applyAutoTitle(sessionId, studyclawFallbackTitle('帮我复习线性代数第三章'), 'fallback')).toBe(true)
+      expect(await store.applyAutoTitle(sessionId, sylloraFallbackTitle('帮我复习线性代数第三章'), 'fallback')).toBe(true)
       expect((await store.listSessions()).find(s => s.id === sessionId)?.title).toBe('帮我复习线性代数第三章')
 
       // 2) fallback 只写一次（第二轮发送不再覆盖）。
@@ -50,7 +50,7 @@ describe('SessionStore.applyAutoTitle (DSH title semantics)', () => {
   })
 
   it('keeps the legacy first-user-input derivation for sessions without title events', async () => {
-    const historyDir = await mkdtemp(join(tmpdir(), 'studyclaw-title-legacy-'))
+    const historyDir = await mkdtemp(join(tmpdir(), 'syllora-title-legacy-'))
     try {
       const store = new SessionStore(historyDir)
       const events = new SessionEventStore(historyDir)

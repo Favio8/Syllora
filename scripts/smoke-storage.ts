@@ -40,7 +40,7 @@ async function assemble(root: string): Promise<Context> {
 }
 
 async function main(): Promise<void> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-smoke-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-smoke-'))
   try {
     {
       const ctx = await assemble(root)

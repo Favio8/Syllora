@@ -22,12 +22,12 @@ import { loadChatConfig } from '../src/config.ts'
 import { unsealCredentials } from '../src/secret-box.ts'
 
 async function setup(): Promise<{ root: string; ws: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-settings-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-settings-'))
   const ws = join(root, 'ws')
   // 隔离 master.key：密封凭据的密钥必须落在测试临时目录而不是真实用户目录。
-  process.env.STUDYCLAW_HOME = join(ws, '.studyclaw')
-  await mkdir(join(ws, '.studyclaw'), { recursive: true })
-  await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+  process.env.SYLLORA_HOME = join(ws, '.syllora')
+  await mkdir(join(ws, '.syllora'), { recursive: true })
+  await writeFile(join(ws, '.syllora', 'config.yaml'), [
     'version: 1',
     'llm:',
     '  provider: mock',
@@ -57,7 +57,7 @@ async function setup(): Promise<{ root: string; ws: string }> {
 
 describe('settings domain', () => {
   afterEach(() => {
-    delete process.env.STUDYCLAW_HOME
+    delete process.env.SYLLORA_HOME
   })
 
   it('resolves credentials saved under the generated apiKeyEnv reference', async () => {
@@ -92,7 +92,7 @@ describe('settings domain', () => {
       models: [{ id: 'gpt-x', name: 'GPT-X', contextWindow: 1000, maxTokens: 500 }],
     })
     expect(payload.providers.map(p => p.id)).toContain('new-provider')
-    const raw = await readFile(join(ws, '.studyclaw', 'config.yaml'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'config.yaml'), 'utf8')
     expect(raw).toContain('new-provider:')
     await rm(root, { recursive: true, force: true })
   })
@@ -100,7 +100,7 @@ describe('settings domain', () => {
   it('setCredential seals credentials.json and backfills api_key_env (P0-2)', async () => {
     const { root, ws } = await setup()
     await setCredential(ws, 'mock', 'sk-test-123')
-    const raw = await readFile(join(ws, '.studyclaw', 'credentials.json'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     // 密文形态：明文 key 不允许再出现在落盘文件里。
     expect(raw).toContain('"sealed": true')
     expect(raw).not.toContain('sk-test-123')
@@ -109,40 +109,40 @@ describe('settings domain', () => {
     const payload = await settingsPayload(ws)
     expect(payload.providers[0]!.apiKeyConfigured).toBe(true)
     expect(payload.providers[0]!.apiKeyEnv).toBe('MOCK_API_KEY')
-    process.env.STUDYCLAW_HOME = ''
-    delete process.env.STUDYCLAW_HOME
+    process.env.SYLLORA_HOME = ''
+    delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
   })
 
   it('legacy 明文凭据在读取时自动迁移为密文（P0-2）', async () => {
     const { root, ws } = await setup()
-    await writeFile(join(ws, '.studyclaw', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
+    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
     const payload = await settingsPayload(ws)
     expect(payload.providers[0]!.apiKeyConfigured).toBe(true)
-    const raw = await readFile(join(ws, '.studyclaw', 'credentials.json'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     expect(raw).toContain('"sealed": true')
     const creds = (await unsealCredentials(raw)).data
     expect(creds['MOCK_KEY']).toBe('sk-legacy')
-    process.env.STUDYCLAW_HOME = ''
-    delete process.env.STUDYCLAW_HOME
+    process.env.SYLLORA_HOME = ''
+    delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
   })
 
   it('RV-17：legacy 明文 + setCredential 不死锁，密封后新 key 生效（迁移写与持锁 RMW 串行）', async () => {
     const { root, ws } = await setup()
-    await writeFile(join(ws, '.studyclaw', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
+    await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: 'sk-legacy' }), 'utf8')
     // setCredential 持 config→credential 锁；若 readCredentials 的迁移写也去取
     // 凭据锁（不可重入的 promise 链），这里会死锁挂起（本用例即回归网）。
     await setCredential(ws, 'mock', 'sk-new')
-    const raw = await readFile(join(ws, '.studyclaw', 'credentials.json'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     const unsealed = await unsealCredentials(raw)
     expect(unsealed.wasPlaintext).toBe(false)
     // 新 key 落盘且配置指向它——迁移写若锁外竞速覆盖，这里会退回 sk-legacy 或丢失。
     expect(unsealed.data['MOCK_API_KEY']).toBe('sk-new')
     const config = await loadChatConfig(ws)
     expect(config.apiKey).toBe('sk-new')
-    process.env.STUDYCLAW_HOME = ''
-    delete process.env.STUDYCLAW_HOME
+    process.env.SYLLORA_HOME = ''
+    delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
   })
 
@@ -152,11 +152,11 @@ describe('settings domain', () => {
     const payload = await deleteProvider(ws, 'mock')
     expect(payload.providers).toHaveLength(0)
     expect(payload.activeProviderId).toBe('')
-    const raw = await readFile(join(ws, '.studyclaw', 'credentials.json'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
     const creds = (await unsealCredentials(raw)).data
     expect(creds['MOCK_API_KEY']).toBeUndefined()
-    process.env.STUDYCLAW_HOME = ''
-    delete process.env.STUDYCLAW_HOME
+    process.env.SYLLORA_HOME = ''
+    delete process.env.SYLLORA_HOME
     await rm(root, { recursive: true, force: true })
   })
 
@@ -183,7 +183,7 @@ describe('settings domain', () => {
   it('projects DSH agent presets, permission presets and plugin degradation state', async () => {
     const { root, ws } = await setup()
     const initial = await settingsPayload(ws)
-    expect(initial.agent.preset).toBe('studyclaw-learning')
+    expect(initial.agent.preset).toBe('syllora-learning')
     expect(initial.permissions.preset).toBe('workspace-write')
     expect(initial.plugins.inventory.find(item => item.id === 'sandbox')).toMatchObject({ enabled: false, reason: '未配置隔离 Provider' })
     const next = await updateSettings(ws, { agentPreset: 'general', permissionPreset: 'read-only', plugins: { sandbox: true } })
@@ -220,10 +220,10 @@ describe('settings domain', () => {
     await expect(discoverModels({ baseUrl: 'file:///etc/passwd' })).rejects.toThrow('只支持 http/https')
     await expect(discoverModels({ baseUrl: 'http://user:pass@example.com/v1' })).rejects.toThrow('不允许内嵌用户名')
     // PATH 不是 API Key 命名：即使配合恶意 URL 也带不出任意环境变量值。
-    process.env.STUDYCLAW_TEST_SECRET_ENV = 'secret-value'
+    process.env.SYLLORA_TEST_SECRET_ENV = 'secret-value'
     await expect(discoverModels({ baseUrl: 'http://127.0.0.1:9/x', apiKeyEnv: 'PATH' }))
       .rejects.toThrow('环境变量名不在允许列表内')
-    delete process.env.STUDYCLAW_TEST_SECRET_ENV
+    delete process.env.SYLLORA_TEST_SECRET_ENV
   })
 
   it('discoverModels 连接失败的报错不回显目标地址（SEC-2 脱敏）', async () => {
@@ -284,7 +284,7 @@ describe('settings domain', () => {
   it('saveProvider merge: hand-edited unknown YAML keys survive a rebuild', async () => {
     const { root, ws } = await setup()
     // 直接手写 config.yaml（模拟用户手工加了自定义字段 custom_field）。
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: unknown-keys',
@@ -306,7 +306,7 @@ describe('settings domain', () => {
       id: 'unknown-keys', name: '改名', model: 'a', baseUrl: null,
       temperature: 0.3, maxConcurrency: 1, models: [], overwrite: true,
     })
-    const rebuilt = await readFile(join(ws, '.studyclaw', 'config.yaml'), 'utf8')
+    const rebuilt = await readFile(join(ws, '.syllora', 'config.yaml'), 'utf8')
     expect(rebuilt).toContain('custom_field: hello')
     await rm(root, { recursive: true, force: true })
   })
@@ -354,7 +354,7 @@ describe('settings domain', () => {
     ])
     const payload = await settingsPayload(ws)
     // llm.temperature 读取时被 provider 段显式值遮蔽（既有语义），直接看落盘。
-    const raw = await readFile(join(ws, '.studyclaw', 'config.yaml'), 'utf8')
+    const raw = await readFile(join(ws, '.syllora', 'config.yaml'), 'utf8')
     expect(raw).toContain('temperature: 0.7')
     expect(payload.providers.find(p => p.id === 'mock')!.apiKeyConfigured).toBe(true)
     const config = await loadChatConfig(ws)

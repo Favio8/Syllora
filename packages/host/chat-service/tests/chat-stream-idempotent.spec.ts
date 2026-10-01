@@ -16,8 +16,8 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chatStream, listSessions } from '../src/service.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
-import { AgentRegistry } from '@studyclaw/agent'
-import { SessionEventStore } from '@studyclaw/session'
+import { AgentRegistry } from '@syllora/agent'
+import { SessionEventStore } from '@syllora/session'
 
 
 
@@ -78,16 +78,16 @@ const mockConfig: ResolvedChatConfig = {
 
 describe('chatStream requestId 幂等（UI-1）', () => {
   it('同一 requestId 第二次调用重放已落盘 turn，不重复 agent.send / 不重复计费', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-idempotent-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-idempotent-'))
     const ws = join(root, 'ws')
     const courseDir = ws
-    await mkdir(join(ws, '.studyclaw'), { recursive: true })
+    await mkdir(join(ws, '.syllora'), { recursive: true })
     await writeFile(join(courseDir, 'overview.md'), '# 多态\n\n重载与覆写。\n', 'utf8')
     await writeFile(join(courseDir, 'syllabus.json'), JSON.stringify({
       course_id: basename(ws), title: '多态', version: '1.0.0',
       chapters: [{ id: 'chap_1', title: '继承', concepts: [{ id: 'c_1', name: '重载与覆写' }] }],
     }), 'utf8')
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: mock',
@@ -155,15 +155,15 @@ describe('chatStream requestId 幂等（UI-1）', () => {
   })
 
   it('不同 requestId 视为新请求，正常 agent.send', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-idempotent2-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-idempotent2-'))
     const ws = join(root, 'ws')
-    await mkdir(join(ws, '.studyclaw'), { recursive: true })
+    await mkdir(join(ws, '.syllora'), { recursive: true })
     await writeFile(join(ws, 'overview.md'), '# 测试\n\n内容。\n', 'utf8')
     await writeFile(join(ws, 'syllabus.json'), JSON.stringify({
       course_id: basename(ws), title: '测试', version: '1.0.0',
       chapters: [{ id: 'chap_1', title: '章', concepts: [{ id: 'c_1', name: '概念' }] }],
     }), 'utf8')
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: mock',
@@ -206,15 +206,15 @@ describe('chatStream requestId 幂等（UI-1）', () => {
   })
 
   it('RV-15：并发同 requestId 重试只新开一个 turn（旧实现双发：重复 user/input + 双倍计费）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-idempotent-race-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-idempotent-race-'))
     const ws = join(root, 'ws')
-    await mkdir(join(ws, '.studyclaw'), { recursive: true })
+    await mkdir(join(ws, '.syllora'), { recursive: true })
     await writeFile(join(ws, 'overview.md'), '# 多态\n\n重载与覆写。\n', 'utf8')
     await writeFile(join(ws, 'syllabus.json'), JSON.stringify({
       course_id: basename(ws), title: '多态', version: '1.0.0',
       chapters: [{ id: 'chap_1', title: '继承', concepts: [{ id: 'c_1', name: '重载与覆写' }] }],
     }), 'utf8')
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: mock',
@@ -242,7 +242,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     // 因此走 chatStream 的 UI-15 新开路径，RV-15 的并发双发竞态在该形态下
     // 真实存在（直接预置比驱动真实取消更确定，不受适配器 abort 语义影响）。
     const sid = '20260927-120000'
-    const seedStore = new SessionEventStore(join(ws, '.studyclaw', 'history'))
+    const seedStore = new SessionEventStore(join(ws, '.syllora', 'history'))
     const ts = (offset: number): string => new Date(Date.UTC(2026, 8, 27, 12, 0, offset)).toISOString()
     await seedStore.append(sid,
       { ts: ts(0), type: 'session/create', payload: { mode: 'socratic', agentId: `study-${sid}` } },
@@ -269,7 +269,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     // 精确断言在事件日志：该 requestId 的 user/input 共 2 条（取消原帖 + 重试
     // 新帖）；input/voided 只补写 1 次（旧实现两个并发都基于同一旧快照通过
     // "未 void" 检查 → 双发双计费 + 双 void）。
-    const rows = await new SessionEventStore(join(ws, '.studyclaw', 'history')).load(sid)
+    const rows = await new SessionEventStore(join(ws, '.syllora', 'history')).load(sid)
     expect(rows.filter(row => row.type === 'user/input' && row.payload['requestId'] === requestId)).toHaveLength(2)
     expect(rows.filter(row => row.type === 'input/voided')).toHaveLength(1)
 
@@ -277,15 +277,15 @@ describe('chatStream requestId 幂等（UI-1）', () => {
   })
 
   it('RV-22：入场即已中止的请求不发起回合（死连接不白跑 LLM）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-idempotent-preabort-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-idempotent-preabort-'))
     const ws = join(root, 'ws')
-    await mkdir(join(ws, '.studyclaw'), { recursive: true })
+    await mkdir(join(ws, '.syllora'), { recursive: true })
     await writeFile(join(ws, 'overview.md'), '# 多态\n\n重载与覆写。\n', 'utf8')
     await writeFile(join(ws, 'syllabus.json'), JSON.stringify({
       course_id: basename(ws), title: '多态', version: '1.0.0',
       chapters: [{ id: 'chap_1', title: '继承', concepts: [{ id: 'c_1', name: '重载与覆写' }] }],
     }), 'utf8')
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: mock',

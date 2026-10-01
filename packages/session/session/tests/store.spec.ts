@@ -10,7 +10,7 @@ import { SessionStore, SessionError } from '../src/store.ts'
 import { chatLine, toolLine } from '../src/models.ts'
 
 async function setup(): Promise<{ root: string; store: SessionStore }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-session-store-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-session-store-'))
   return { root, store: new SessionStore(join(root, 'history')) }
 }
 

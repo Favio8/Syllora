@@ -3,7 +3,7 @@
  * the registry opens. The zod schema is the durable-boundary validator today
  * and the direct source of the RPC wire projection. Ported from dsh-workspace
  * `src/spec.ts` without the session-account fields (M2 adds them back).
- * @module @studyclaw/workspace/src/spec
+ * @module @syllora/workspace/src/spec
  */
 
 import { z } from 'zod'

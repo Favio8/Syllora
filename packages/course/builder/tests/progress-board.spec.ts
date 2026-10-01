@@ -25,7 +25,7 @@ afterEach(async () => {
 })
 
 async function makeBoardPath(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-progress-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-progress-'))
   tmpRoots.push(root)
   return join(root, 'progress.md')
 }

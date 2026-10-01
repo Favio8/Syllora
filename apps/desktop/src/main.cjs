@@ -1,22 +1,34 @@
 // @ts-check
 'use strict'
-// StudyClaw 桌面壳主进程：生命周期 / 单实例 / sidecar 托管 / 窗口 / 菜单。
+// Syllora 桌面壳主进程：生命周期 / 单实例 / sidecar 托管 / 窗口 / 菜单。
 // 业务逻辑全部在 sidecar（Host bundle）里，壳只做进程胶水——见
-// DESKTOP_SHELL_PLAN_studyclaw-next.md 第 4/7 节。
+// apps/desktop/README.md 与 docs/RUNTIME_MIGRATION.md。
 const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron')
 const { spawn } = require('node:child_process')
-const { existsSync, readFileSync, mkdirSync, rmSync } = require('node:fs')
+const { existsSync, readFileSync, mkdirSync, rmSync, appendFileSync } = require('node:fs')
 const { join } = require('node:path')
 
-// 开发联调模式：设置 STUDYCLAW_DESKTOP_DEV_URL 后不拉起 sidecar，
+// 开发联调模式：设置 SYLLORA_DESKTOP_DEV_URL 后不拉起 sidecar，
 // 直接加载外部地址（配合 `pnpm serve` / `next dev` 热更新，plan 3.4）。
-const DEV_URL = process.env.STUDYCLAW_DESKTOP_DEV_URL || ''
+const DEV_URL = process.env.SYLLORA_DESKTOP_DEV_URL || ''
 const isDev = DEV_URL !== ''
+app.setName('Syllora')
+if (process.platform === 'win32') app.setAppUserModelId('ai.syllora.desktop')
 // A9（第三轮审查）：冒烟/测试可精确指定 userData——必须在单实例锁之前
 // 设置（锁文件位于 userData 下），且早于一切 getPath('userData') 消费者。
-if (process.env.STUDYCLAW_DESKTOP_USERDATA) {
-  app.setPath('userData', process.env.STUDYCLAW_DESKTOP_USERDATA)
+if (process.env.SYLLORA_DESKTOP_USERDATA) {
+  app.setPath('userData', process.env.SYLLORA_DESKTOP_USERDATA)
 }
+// Windows GUI executables do not reliably forward stdout to CI. Keep startup
+// diagnostics on disk, without discovery tokens or provider credentials.
+const diagnosticPath = join(app.getPath('userData'), 'desktop.log')
+function diagnostic(message) {
+  try {
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    appendFileSync(diagnosticPath, `${new Date().toISOString()} ${message}\n`)
+  } catch (error) { console.error('[desktop] diagnostic write failed', error.message) }
+}
+diagnostic(`starting platform=${process.platform} packaged=${app.isPackaged}`)
 const START_TIMEOUT_MS = 15_000
 const RESTART_BACKOFF_MS = [1_000, 2_000, 4_000]
 
@@ -34,7 +46,7 @@ let lastRestartWindow = []
 function paths() {
   // userData 是各平台规范的应用数据目录；Host 的全部状态收在 host-home/
   // 子目录里（workspace 注册表、config、加密凭据、host.json、logs），
-  // 不污染用户家目录的 ~/.studyclaw。
+  // 不污染用户家目录的 ~/.syllora。
   hostHome = join(app.getPath('userData'), 'host-home')
   hostJsonPath = join(hostHome, 'host.json')
   // 打包态：process.resourcesPath 已是 <app>/resources（extraResources to:host
@@ -58,6 +70,7 @@ function startHost() {
   if (host !== null) return
   if (restartTimer !== null) { clearTimeout(restartTimer); restartTimer = null }
   const { hostBundle, webDist } = paths()
+  diagnostic(`starting host bundle=${hostBundle}`)
   if (!existsSync(hostBundle)) {
     fatal('缺少 Host 资源 resources/host/bin.js，请先运行 node scripts/assemble-host.mjs')
     return
@@ -75,8 +88,8 @@ function startHost() {
   const env = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
-    STUDYCLAW_HOME: hostHome,
-    STUDYCLAW_WEB_DIST: webDist,
+    SYLLORA_HOME: hostHome,
+    SYLLORA_WEB_DIST: webDist,
     NODE_ENV: 'production',
   }
   host = spawn(process.execPath, [hostBundle, 'serve', '--port', '0'], {
@@ -86,7 +99,10 @@ function startHost() {
   })
   host.stdout?.on('data', d => process.stdout.write(`[host] ${d}`))
   host.stderr?.on('data', d => process.stderr.write(`[host] ${d}`))
+  diagnostic(`host spawned pid=${host.pid}`)
+  host.on('error', e => { diagnostic(`host spawn failed code=${e.code}`); fatal('本地服务进程无法启动，请查看 desktop.log') })
   host.on('exit', (code, signal) => {
+    diagnostic(`host exited code=${code} signal=${signal}`)
     host = null
     if (quitting || isDev) return
     console.error(`[desktop] host exited code=${code} signal=${signal}`)
@@ -187,7 +203,7 @@ async function createMainWindow() {
     minWidth: 1024,
     minHeight: 680,
     backgroundColor: '#F4F3EE',
-    title: 'StudyClaw',
+    title: 'Syllora',
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -210,11 +226,13 @@ async function createMainWindow() {
     if (!allowed) { e.preventDefault(); shell.openExternal(target) }
   })
   await win.loadURL(url)
+  diagnostic('window loaded')
   win.on('closed', () => { win = null })
 }
 
 function fatal(message) {
-  dialog.showErrorBox('StudyClaw 启动失败', message)
+  diagnostic(`fatal: ${message}`)
+  dialog.showErrorBox('Syllora 启动失败', message)
   app.quit()
 }
 
@@ -240,6 +258,7 @@ function buildMenu() {
 
 // 单实例：二次启动聚焦已有窗口（与 Host 的 host.lock 双保险，R8）。
 const gotLock = app.requestSingleInstanceLock()
+diagnostic(`single instance lock=${gotLock}`)
 if (!gotLock) { app.quit() } else {
   app.on('second-instance', () => {
     if (!win) return
@@ -248,6 +267,7 @@ if (!gotLock) { app.quit() } else {
   })
 
   app.whenReady().then(async () => {
+    diagnostic('app ready')
     buildMenu()
     startHost()
     try {
@@ -291,7 +311,7 @@ if (!gotLock) { app.quit() } else {
 // 任一 localhost 页面即可取 token 驱动全部 RPC；preload 注释"桌面壳不额外
 // 注入任何凭据"与实现相反。收敛为 {dev, port}（Web UI 全库不调用该 API，
 // 已 grep 证实，无兼容负担）。
-ipcMain.handle('studyclaw:host-info', () => {
+ipcMain.handle('syllora:host-info', () => {
   if (isDev) return { dev: true }
   const cfg = readHostConfig()
   return { dev: false, port: cfg === null ? null : cfg.port }

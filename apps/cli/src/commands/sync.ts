@@ -1,10 +1,10 @@
 /**
- * `studyclaw sync` — trigger an incremental course build (`courses.sync` →
+ * `syllora sync` — trigger an incremental course build (`courses.sync` →
  * async build job) and poll `jobs.get` until done/failed, printing N/M
  * progress. FL-13/FL-14：此前 CLI 没有任何可触发构建的命令，quiz 的空池提示
- * 「请先运行 studyclaw sync」指向一个不存在的命令（死链指引）——本命令补上
+ * 「请先运行 syllora sync」指向一个不存在的命令（死链指引）——本命令补上
  * 该缺口，使提示链真实可行。
- * @module @studyclaw/cli/commands/sync
+ * @module @syllora/cli/commands/sync
  */
 
 import { hostRpc, type RpcFn } from '../lib/client.ts'
@@ -76,7 +76,7 @@ export async function runSync(deps: SyncDeps, options: SyncOptions): Promise<voi
   throw new UsageError('构建超时（30 分钟仍未完成）')
 }
 
-/** CLI 入口：`studyclaw sync [--course <id>]`。 */
+/** CLI 入口：`syllora sync [--course <id>]`。 */
 export async function syncCommand(args: string[]): Promise<void> {
   const parsed = parseArgs(args)
   await runSync(

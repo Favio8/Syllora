@@ -45,7 +45,7 @@ module.exports = async function afterPack(context) {
   // bin.js 顶层 createRequire('../package.json') 读版本号——resources 层
   // 需要一份 package.json（extraResources 只拷 host/、web/ 子目录）。
   const cliPkg = JSON.parse(readFileSync(resolve(desktopDir, '..', 'cli', 'package.json'), 'utf8'))
-  writeFileSync(join(context.appOutDir, 'resources', 'package.json'), JSON.stringify({ name: 'studyclaw-host-resources', version: cliPkg.version, private: true }, null, 2) + '\n')
+  writeFileSync(join(context.appOutDir, 'resources', 'package.json'), JSON.stringify({ name: 'syllora-host-resources', version: cliPkg.version, private: true }, null, 2) + '\n')
   const totalBytes = listFilesRecursive(destNodeModules).reduce((s, f) => s + statSync(f).size, 0)
   console.log(`[after-pack] host closure → ${destNodeModules} (${natives.length} native binaries, ${(totalBytes / 1024 / 1024).toFixed(1)} MB)`)
   for (const n of natives) console.log('  ·', n.replace(destNodeModules, ''))

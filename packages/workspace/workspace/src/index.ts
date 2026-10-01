@@ -3,7 +3,7 @@
  * records, stable registry order, and rename-conflict enforcement over the
  * storage-domain data form. Ported from dsh-workspace `src/index.ts` without
  * the session-membership half (M2 reintroduces it with the session domain).
- * @module @studyclaw/workspace
+ * @module @syllora/workspace
  */
 
 import { randomUUID } from 'node:crypto'

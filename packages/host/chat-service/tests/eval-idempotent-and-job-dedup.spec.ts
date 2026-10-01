@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { writeTaskPool, type HarnessTask } from '@studyclaw/course-builder'
+import { writeTaskPool, type HarnessTask } from '@syllora/course-builder'
 import { createCourseService, JobManager } from '../src/course.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
@@ -58,7 +58,7 @@ function mcqTask(): HarnessTask {
 }
 
 async function setup(): Promise<{ root: string; ws: string; service: ReturnType<typeof createCourseService>; courseId: string; cleanup: () => Promise<void> }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-eval-idem-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-eval-idem-'))
   const ws = join(root, 'ws')
   await mkdir(ws, { recursive: true })
   const sourcePath = join(root, 'doc.md')
@@ -95,7 +95,7 @@ describe('UI-7：evalSubmit evalId 幂等', () => {
     expect(first.at(-1)?.event).toBe('done')
 
     // 第一次 settle 后的 evals 计数。
-    const progressPath = join(ws, '.studyclaw', 'progress.md')
+    const progressPath = join(ws, '.syllora', 'progress.md')
     const afterFirst = await readFile(progressPath, 'utf8')
     expect(evalsOfCmcq(afterFirst)).toBe(1)
 
@@ -120,7 +120,7 @@ describe('UI-7：evalSubmit evalId 幂等', () => {
     const answer = '连接模型与真实环境的控制系统'
     await collect(service.evalSubmit(ws, courseId, 't_mcq_001', answer, null))
     await collect(service.evalSubmit(ws, courseId, 't_mcq_001', answer, null))
-    const progressPath = join(ws, '.studyclaw', 'progress.md')
+    const progressPath = join(ws, '.syllora', 'progress.md')
     const content = await readFile(progressPath, 'utf8')
     expect(evalsOfCmcq(content)).toBe(2)
     await cleanup()
@@ -131,9 +131,9 @@ describe('UI-7：evalSubmit evalId 幂等', () => {
     const evalId = 'ev_restart_replay_001'
     const answer = '连接模型与真实环境的控制系统'
     await collect(service.evalSubmit(ws, courseId, 't_mcq_001', answer, null, evalId))
-    const progressPath = join(ws, '.studyclaw', 'progress.md')
+    const progressPath = join(ws, '.syllora', 'progress.md')
     expect(evalsOfCmcq(await readFile(progressPath, 'utf8'))).toBe(1)
-    // 账本已持久化到 .studyclaw/eval-ledger/：新实例（模拟宿主重启）同键重试
+    // 账本已持久化到 .syllora/eval-ledger/：新实例（模拟宿主重启）同键重试
     // 直接重放已结算帧，SM-2/progress 不再二次 settle。
     const revived = createCourseService(async () => null)
     const retry = await collect(revived.evalSubmit(ws, courseId, 't_mcq_001', answer, null, evalId))
@@ -148,7 +148,7 @@ describe('H6：sm2 帧携带真实掌握度差值', () => {
   it('masteryDelta 与指数平滑更新一致（旧实现硬编码 ±0.1）', async () => {
     const { root, ws, service, courseId, cleanup } = await setup()
     // 预置 c_mcq 掌握度 50% 的历史记录。
-    await writeFile(join(ws, '.studyclaw', 'progress.md'), [
+    await writeFile(join(ws, '.syllora', 'progress.md'), [
       '# 学习进度', '',
       '- **总体掌握度**：50%', '- **待复习卡片数**：0', '- **最后更新时间**：2026-08-20 10:00', '',
       '| concept_id | name | chapter | mastery | evals | pass_rate | ef | next_review_at | misattribution | streak |',
@@ -168,7 +168,7 @@ describe('H6：sm2 帧携带真实掌握度差值', () => {
 describe('UI-8：JobManager 同课程在途构建去重', () => {
   it('同 courseDir 未完成的构建返回现有 jobId；不同 courseDir 各自新建', async () => {
     const jobs = new JobManager()
-    const emptyDir = await mkdtemp(join(tmpdir(), 'studyclaw-job-dedup-'))
+    const emptyDir = await mkdtemp(join(tmpdir(), 'syllora-job-dedup-'))
     try {
       // 合法 config：requireGenerator 通过；空目录构建异步推进，两次 start
       // 之间事件循环未转，job 保持 queued/running → 去重命中。
@@ -176,7 +176,7 @@ describe('UI-8：JobManager 同课程在途构建去重', () => {
       const idA1 = jobs.start(emptyDir, 'courseA', ctx)
       const idA2 = jobs.start(emptyDir, 'courseA', ctx)
       expect(idA2).toBe(idA1)
-      const dirB = await mkdtemp(join(tmpdir(), 'studyclaw-job-dedup-'))
+      const dirB = await mkdtemp(join(tmpdir(), 'syllora-job-dedup-'))
       try {
         const idB = jobs.start(dirB, 'courseB', ctx)
         expect(idB).not.toBe(idA1)

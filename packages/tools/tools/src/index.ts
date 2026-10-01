@@ -1,7 +1,7 @@
 /**
  * Default registry assembly: all 13 specs registered with file, interactive,
  * and host-injected learning-action handlers.
- * @module @studyclaw/tools
+ * @module @syllora/tools
  */
 
 import {
@@ -43,6 +43,7 @@ export type { ToolContext } from './handlers.ts'
 export type { ToolActions, ToolActionContext, ToolHandlerResult, ToolProviders } from './handlers.ts'
 export { courseSourceRoot, isInplaceCourse, resolveSourceRef, INPLACE_SOURCE_EXCLUDED_DIRS } from './paths.ts'
 export { withCourseLock, parseProgressTable } from './handlers.ts'
+export { workspaceStateDirOf, sylloraHome, migrateLegacyHome } from './runtime-paths.ts'
 
 /** Assemble the default registry over one course. */
 export function defaultToolRegistry(courseDir: string, workspaceRoot: string): ToolRegistry {

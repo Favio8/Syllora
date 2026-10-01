@@ -1,15 +1,15 @@
-# @studyclaw/desktop — StudyClaw 桌面壳
+# @syllora/desktop — Syllora 桌面壳
 
 Electron 桌面壳：把现有「本地 HTTP Host + 静态 Web UI」原样装进桌面应用，
-用户**免装 Node.js**。实施方案见仓库上层文档
-`DESKTOP_SHELL_PLAN_studyclaw-next.md`（架构 / 进程模型 / 风险登记册）。
+用户**免装 Node.js**。数据兼容与命名变化见
+[运行目录与命名迁移](../../docs/RUNTIME_MIGRATION.md)。
 
 ## 运行结构
 
 ```
 Electron 主进程 (src/main.cjs)
  ├─ spawn sidecar：ELECTRON_RUN_AS_NODE=1 electron.exe resources/host/bin.js serve --port 0
- │    注入 STUDYCLAW_HOME=<userData>/host-home、STUDYCLAW_WEB_DIST=resources/web
+ │    注入 SYLLORA_HOME=<userData>/host-home、SYLLORA_WEB_DIST=resources/web
  ├─ 轮询 <userData>/host-home/host.json 拿随机端口
  └─ BrowserWindow → http://127.0.0.1:<port>/（index.html 由静态托管 tap 注入 token）
 ```
@@ -21,13 +21,13 @@ Electron 主进程 (src/main.cjs)
 
 ```powershell
 pnpm install                                   # 安装 electron / electron-builder
-pnpm --filter @studyclaw/desktop check:runtime # 校验 Electron 内嵌 Node ≥ 22.19（硬门槛）
+pnpm --filter @syllora/desktop check:runtime # 校验 Electron 内嵌 Node ≥ 22.19（硬门槛）
 node scripts/assemble-host.mjs --build         # 组装 sidecar 资源（可先重建 CLI bundle + web 导出）
 node scripts/assemble-host.mjs                 # 只组装（要求 apps/cli/lib/bin.js 与 apps/web/out 已存在）
 node scripts/smoke-sidecar.mjs                 # 阶段二冒烟：免装 Node 链路 + token 注入 + 二次启动自愈
 node scripts/smoke-desktop.mjs                 # 阶段三冒烟：真实 electron . 整机验证
-pnpm --filter @studyclaw/desktop dev:desktop   # 开发壳（需组装过资源）
-$env:STUDYCLAW_DESKTOP_DEV_URL='http://127.0.0.1:8080'; electron .   # 联调外部 serve（不拉 sidecar）
+pnpm --filter @syllora/desktop dev:desktop   # 开发壳（需组装过资源）
+$env:SYLLORA_DESKTOP_DEV_URL='http://127.0.0.1:8080'; electron .   # 联调外部 serve（不拉 sidecar）
 node node_modules/electron-builder/cli.js --win --publish never       # Windows NSIS 安装包 → dist/
 ```
 
@@ -45,6 +45,6 @@ node node_modules/electron-builder/cli.js --win --publish never       # Windows 
 
 ## 产物
 
-- `dist2/StudyClaw-<version>-setup.exe`：NSIS 安装包（per-user，免装 Node）。
-- 未签名包：首次运行需在 SmartScreen 选「仍要运行」；签名/公证配置见 plan 4.4。
+- `dist/Syllora-<version>-setup.exe`：NSIS 安装包（per-user，免装 Node）。
+- 当前未配置代码签名与公证，正式分发前需核对目标系统的安装提示。
 - `latest.yml` + `.blockmap`：electron-updater 增量更新元数据（发布时与安装包同传 Release）。

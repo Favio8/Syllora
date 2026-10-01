@@ -6,14 +6,14 @@ import { activateProvider, deleteProvider, saveProvider } from '../src/settings.
 import { loadChatConfig } from '../src/config.ts'
 
 async function readYaml(root: string): Promise<Record<string, unknown>> {
-  const text = await readFile(join(root, '.studyclaw', 'config.yaml'), 'utf8')
+  const text = await readFile(join(root, '.syllora', 'config.yaml'), 'utf8')
   const { default: yaml } = await import('js-yaml')
   return yaml.load(text) as Record<string, unknown>
 }
 
 describe('provider configuration write/read contract', () => {
   it('auto-activates the first serviceable provider on save', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-auto-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-auto-'))
     try {
       const payload = await saveProvider(root, {
         id: 'my-gateway',
@@ -36,7 +36,7 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('does not auto-activate an unserviceable provider (missing default model)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-unserv-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-unserv-'))
     try {
       const payload = await saveProvider(root, {
         id: 'incomplete',
@@ -51,7 +51,7 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('activateProvider refuses an unserviceable profile with the missing field named', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-refuse-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-refuse-'))
     try {
       await saveProvider(root, { id: 'no-model', name: 'No Model', model: '', baseUrl: 'https://gw.example/v1' })
       await expect(activateProvider(root, 'no-model')).rejects.toThrow('未设置默认模型')
@@ -63,7 +63,7 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('falls back an empty display name to the provider id（UI「可选」契约）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-noname-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-noname-'))
     try {
       const payload = await saveProvider(root, {
         id: 'qwen-lab',
@@ -81,7 +81,7 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('loadChatConfig falls back to the first provider when the active pointer dangles', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-fallback-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-fallback-'))
     try {
       await saveProvider(root, { id: 'first', name: 'First', model: 'm1', baseUrl: 'https://one.example/v1/' })
       await saveProvider(root, { id: 'second', name: 'Second', model: 'm2', baseUrl: 'https://two.example/v1' })
@@ -90,7 +90,7 @@ describe('provider configuration write/read contract', () => {
       config['active_provider'] = 'deleted-long-ago'
       const { default: yaml } = await import('js-yaml')
       const { writeFile } = await import('node:fs/promises')
-      await writeFile(join(root, '.studyclaw', 'config.yaml'), yaml.dump(config), 'utf8')
+      await writeFile(join(root, '.syllora', 'config.yaml'), yaml.dump(config), 'utf8')
 
       const resolved = await loadChatConfig(root)
       expect(resolved.providerId).toBe('first')
@@ -102,10 +102,10 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('judge 路由：judge_model/judge_reasoning_effort 解析与非法值兜底（判题提速 A 档）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-judge-route-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-judge-route-'))
     try {
-      await mkdir(join(root, '.studyclaw'), { recursive: true })
-      await writeFile(join(root, '.studyclaw', 'config.yaml'), [
+      await mkdir(join(root, '.syllora'), { recursive: true })
+      await writeFile(join(root, '.syllora', 'config.yaml'), [
         'version: 1',
         'llm:',
         '  provider: mock',
@@ -119,7 +119,7 @@ describe('provider configuration write/read contract', () => {
       expect(resolved.judgeEffort).toBe('off')
 
       // 非法档位兜底为 null（判题路径再缺省 off）。
-      await writeFile(join(root, '.studyclaw', 'config.yaml'), [
+      await writeFile(join(root, '.syllora', 'config.yaml'), [
         'version: 1',
         'llm:',
         '  provider: mock',
@@ -135,7 +135,7 @@ describe('provider configuration write/read contract', () => {
   })
 
   it('deleteProvider falls back to the first remaining provider, never a phantom route', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-provider-delete-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-provider-delete-'))
     try {
       await saveProvider(root, { id: 'alpha', name: 'Alpha', model: 'm1', baseUrl: 'https://a.example/v1' })
       await saveProvider(root, { id: 'beta', name: 'Beta', model: 'm2', baseUrl: 'https://b.example/v1' })

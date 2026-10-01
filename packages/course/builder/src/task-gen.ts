@@ -2,7 +2,7 @@
  * LLM task generator: ConceptChunk → HarnessTask batch via structured calls
  * with error-feedback retries (Python `task_gen.py::LlmTaskGenerator`
  * parity). The client seam is the dsh adapter stream; validation is zod.
- * @module @studyclaw/course-builder/src/task-gen
+ * @module @syllora/course-builder/src/task-gen
  */
 
 import { z } from 'zod'

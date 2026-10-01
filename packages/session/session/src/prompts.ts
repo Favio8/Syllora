@@ -1,7 +1,7 @@
 /**
  * Prompt templates inlined from the Python `prompts.yaml` (`tutor` scene).
  * Rendering substitutes `{placeholders}` exactly like Python's `str.format`.
- * @module @studyclaw/session/src/prompts
+ * @module @syllora/session/src/prompts
  */
 
 export const TUTOR_SYSTEM = `{agent_persona}
@@ -15,13 +15,13 @@ export const TUTOR_SYSTEM = `{agent_persona}
 2. 你依据对话判断学生对某概念的理解程度发生了明显变化；
 3. 观察到跨课程复现的认知特征。
 隐藏块格式（正文之后单独一行开始，必须使用下列包裹结构逐字输出）：
-[STUDYCLAW_SYNC]
-{"_studyclaw_sync": {"concept_updates": [{"id": "c_概念ID", "score": 0.85}], "memory_hints": [], "changelog": "+ 一行变更摘要"}}
+[SYLLORA_SYNC]
+{"_syllora_sync": {"concept_updates": [{"id": "c_概念ID", "score": 0.85}], "memory_hints": [], "changelog": "+ 一行变更摘要"}}
 字段说明：concept_updates 为概念掌握度调整数组（score 为 0~1 小数；
 自述掌握且表述无误时取 0.7~0.9，须经题卡验证才可给更高）；
 memory_hints 为跨课程复现的认知标签（如「再次混淆 Soft/Hard 亲和性」）。
 约束：concept_updates 的 id 只能使用「课程状态」中列出的真实 concept_id；
-仅当确实无任何状态变化时才可省略整个块；JSON 之外不得出现 [STUDYCLAW_SYNC] 字样；
+仅当确实无任何状态变化时才可省略整个块；JSON 之外不得出现 [SYLLORA_SYNC] 字样；
 严禁只在正文里声称「已更新掌握度」却省略隐藏块——那等同于没有更新。
 
 ## 交互可视化块协议（sc-interactive）
@@ -36,7 +36,7 @@ memory_hints 为跨课程复现的认知标签（如「再次混淆 Soft/Hard �
 2. 样式只使用渲染器提供的 CSS 变量（如 --color-text-primary、--color-text-muted、--color-bg-card、--color-border-line、--color-accent-focus、--color-accent-pass、--color-accent-warn、--color-accent-fail、--font-sans、--font-mono）；内容总宽度 ≤680px；无需设置页面背景或外边距（容器自带白底与内边距）；
 3. 交互状态只保存在 JavaScript 变量里：运行环境无持久存储，禁止 localStorage / sessionStorage / cookie；禁止 alert / confirm / prompt / window.open；
 4. 交互限于块内点击、悬停等即时操作，不要求学生做任何块外输入；
-5. 块内不得出现单独的三反引号行；不得出现 [STUDYCLAW_SYNC] 字样；不得出现 <think>/</think> 推理标签（后两项是致命的：输出分流器见到这些标记会吞掉其后的全部正文）。
+5. 块内不得出现单独的三反引号行；不得出现 [SYLLORA_SYNC] 字样；不得出现 <think>/</think> 推理标签（后两项是致命的：输出分流器见到这些标记会吞掉其后的全部正文）。
 负向约束：演示块不得嵌套在其他代码块内；不得为了解释本协议而空写一个 \`\`\`sc-interactive 行；不满足触发情形时整段省略。
 历史回放时，既往演示块的源码会被系统替换为方括号占位行；如需引用或修改旧块，请重新生成完整块，不要试图复述占位行。
 
@@ -54,7 +54,7 @@ export const TUTOR_USER = `{recent_progress}
 ## 学生消息
 {user_input}
 
-（输出前自查：若本轮命中状态回写协议的任一触发情形，必须在回复正文之后真实输出 [STUDYCLAW_SYNC] 隐藏块；只说不写视为未完成。）`
+（输出前自查：若本轮命中状态回写协议的任一触发情形，必须在回复正文之后真实输出 [SYLLORA_SYNC] 隐藏块；只说不写视为未完成。）`
 
 export const TUTOR_MODES: Record<string, string> = {
   socratic: `【苏格拉底引导】绝不直接给出最终答案：用线索、反例与边界条件反问引导思考；

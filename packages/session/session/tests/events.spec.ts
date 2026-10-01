@@ -6,7 +6,7 @@ import { SessionEventStore } from '../src/events.ts'
 
 describe('SessionEventStore', () => {
   it('一行坏数据不再锁死会话：load 容错，append 自愈并备份原件（P0-6）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-durability-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-durability-'))
     const store = new SessionEventStore(root)
     await store.append('s',
       { ts: '2026-08-22T12:00:00.000Z', type: 'turn/start', payload: {} },
@@ -32,7 +32,7 @@ describe('SessionEventStore', () => {
   })
 
   it('拒绝路径注入式 sessionId（SEC-6）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-injection-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-injection-'))
     const store = new SessionEventStore(root)
     for (const evil of ['../../../sources/x', '..\\escape', '/abs/path', 'a/b', '.hidden', '..']) {
       expect(() => store.pathFor(evil)).toThrow('非法会话 ID')
@@ -46,7 +46,7 @@ describe('SessionEventStore', () => {
   })
 
   it('append 行缓存：外部直写后缓存失效，seq 续排不重复（H2）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-cache-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-cache-'))
     const store = new SessionEventStore(root)
     await store.append('s', { ts: '2026-08-22T12:00:00.000Z', type: 'turn/start', payload: {} })
     await store.append('s', { ts: '2026-08-22T12:00:00.004Z', type: 'turn/end', payload: {} })
@@ -64,7 +64,7 @@ describe('SessionEventStore', () => {
   })
 
   it('RV-10：文件尾部丢失换行符时，append 补分隔符而不是把新行拼到末行', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-newline-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-newline-'))
     const store = new SessionEventStore(root)
     await store.append('s',
       { ts: '2026-08-22T12:00:00.000Z', type: 'turn/start', payload: {} },
@@ -87,7 +87,7 @@ describe('SessionEventStore', () => {
   })
 
   it('appends, validates sequence, and projects an agent session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-'))
     const store = new SessionEventStore(root)
     await store.append('s',
       { ts: '2026-08-22T12:00:00.000Z', type: 'session/model', payload: { provider: 'acme', model: 'small' } },
@@ -107,7 +107,7 @@ describe('SessionEventStore', () => {
   })
 
   it('projects tool lifecycle, approval, plan, todo and usage state', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-projection-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-projection-'))
     const store = new SessionEventStore(root)
     await Promise.all([
       store.append('s', { ts: '2026-08-22T12:00:00.000Z', type: 'tool/call', payload: { callId: 'c1', name: 'read_file', args: { path: 'README.md' } } }),
@@ -131,7 +131,7 @@ describe('SessionEventStore', () => {
   })
 
   it('excludes user inputs voided by failed-turn compensation events', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-voided-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-voided-'))
     const store = new SessionEventStore(root)
     await store.append('s',
       { ts: '2026-08-22T12:00:00.000Z', type: 'user/input', payload: { content: '失败的那条' } },
@@ -151,7 +151,7 @@ describe('SessionEventStore', () => {
   })
 
   it('forks event history with lineage and a chat boundary', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-fork-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-fork-'))
     const store = new SessionEventStore(root)
     await store.append('source',
       { ts: '2026-08-22T12:00:00.000Z', type: 'user/input', payload: { content: 'one' } },
@@ -166,7 +166,7 @@ describe('SessionEventStore', () => {
   })
 
   it('projects durable maintenance jobs across queued, running and terminal events', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-maintenance-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-maintenance-'))
     const store = new SessionEventStore(root)
     await store.append('s',
       { ts: '2026-08-22T12:00:00.000Z', type: 'maintenance/queued', payload: { jobId: 'm1', agentId: 'a1', kind: 'compaction', summary: 'trim' } },
@@ -184,7 +184,7 @@ describe('SessionEventStore', () => {
   })
 
   it('projects an immutable Agent runtime configuration snapshot', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-agent-config-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-agent-config-'))
     const store = new SessionEventStore(root)
     await store.append('s', {
       ts: '2026-08-22T12:00:00.000Z',
@@ -194,7 +194,7 @@ describe('SessionEventStore', () => {
     await store.append('s', {
       ts: '2026-08-22T12:00:00.001Z',
       type: 'agent/config',
-      payload: { agentPreset: 'studyclaw-learning', permissionPreset: 'danger-full-access', plugins: { learning: true } },
+      payload: { agentPreset: 'syllora-learning', permissionPreset: 'danger-full-access', plugins: { learning: true } },
     })
     await expect(store.project('s')).resolves.toMatchObject({
       agentConfig: { agentPreset: 'general', permissionPreset: 'read-only', plugins: { learning: false, sandbox: true } },
@@ -203,7 +203,7 @@ describe('SessionEventStore', () => {
   })
 
   it('validates typed first-party event payloads while keeping plugin events open', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-typed-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-typed-'))
     const store = new SessionEventStore(root)
     await expect(store.appendKnown('s', 'turn/cancelled', { reason: '' })).rejects.toThrow()
     expect(await store.load('s')).toEqual([])
@@ -213,7 +213,7 @@ describe('SessionEventStore', () => {
   })
 
   it('projects blocked terminal turns as waiting instead of idle', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-blocked-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-blocked-'))
     const store = new SessionEventStore(root)
     await store.appendKnown('s', 'ask/pending', { question: '继续吗？' })
     await store.appendKnown('s', 'turn/end', { reason: { kind: 'blocked', blockers: ['ask-user'] } })
@@ -222,7 +222,7 @@ describe('SessionEventStore', () => {
   })
 
   it('replays interrupted messages and structured terminal reasons', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-interrupted-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-interrupted-'))
     const store = new SessionEventStore(root)
     await store.appendKnown('s', 'assistant/message', { content: 'partial', interrupted: true })
     await store.appendKnown('s', 'turn/end', { reason: { kind: 'aborted', reason: { kind: 'disposed' } } })
@@ -235,7 +235,7 @@ describe('SessionEventStore', () => {
   })
 
   it('A5: assistant/voided 与 input/voided 对称剔除失败重试的孤儿回复', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-events-assistant-voided-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-events-assistant-voided-'))
     const store = new SessionEventStore(root)
     // 模拟 service.ts 失败重试补写后的日志形态：旧 turn 部分输出 + 终态失败
     // → input/voided + assistant/voided → 新 turn 完整落盘。

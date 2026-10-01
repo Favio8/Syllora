@@ -1,7 +1,7 @@
 /**
- * FL-21/30/35 宿主冒烟（打包形态）：起 serve（临时 STUDYCLAW_HOME），断言
+ * FL-21/30/35 宿主冒烟（打包形态）：起 serve（临时 SYLLORA_HOME），断言
  * ① /api/health 免 token 可达；② /api/* 无 token → 401；③ 带 host.json 的
- * token → 200；④ GET / 返回注入了 __STUDYCLAW__ 的 index.html；⑤ CLI 从
+ * token → 200；④ GET / 返回注入了 __SYLLORA__ 的 index.html；⑤ CLI 从
  * host.json 自动发现端口+token 后 `status` 可用。结束清理临时目录与进程。
  * 用法：node_modules/.bin/tsx --tsconfig tsconfig.base.json scripts/release/smoke-serve.ts
  * @module scripts/release/smoke-serve
@@ -24,10 +24,10 @@ if (!existsSync(join(repoRoot, 'apps', 'web', 'out', 'index.html'))) {
   process.exit(1)
 }
 
-const home = mkdtempSync(join(tmpdir(), 'studyclaw-smoke-'))
+const home = mkdtempSync(join(tmpdir(), 'syllora-smoke-'))
 const port = 18117
 const child = spawn(process.execPath, [binPath, 'serve', '--port', String(port)], {
-  env: { ...process.env, STUDYCLAW_HOME: home },
+  env: { ...process.env, SYLLORA_HOME: home },
   stdio: 'ignore',
 })
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -81,15 +81,15 @@ try {
   // ④ 静态 UI + tap 注入
   const page = await fetchJson('/')
   const html = await page.text()
-  if (!page.ok || !html.includes('window.__STUDYCLAW__') || !html.includes(token)) {
-    fail('index.html 未注入 __STUDYCLAW__ token tap')
+  if (!page.ok || !html.includes('window.__SYLLORA__') || !html.includes(token)) {
+    fail('index.html 未注入 __SYLLORA__ token tap')
   }
   console.log('[smoke-serve] ✓ 同源 Web UI 托管 + token tap 注入')
 
   // ⑤ CLI 自动发现端口+token
   const status = spawnSync(process.execPath, [binPath, 'status'], {
     encoding: 'utf8',
-    env: { ...process.env, STUDYCLAW_HOME: home },
+    env: { ...process.env, SYLLORA_HOME: home },
     timeout: 60_000,
   })
   if (status.status !== 0) fail(`CLI status 失败：\n${status.stdout}\n${status.stderr}`)

@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/course-builder",
+    "name":  "@syllora/course-builder",
     "version":  "0.1.0",
-    "description":  "StudyClaw course build engine: markdown ingest (two-level outline + semantic chunks), SHA-256 checksum incrementality, syllabus merge, task pool, progress seeding, and structured LLM task generation (ported from Python builder.py/ingestor.py/task_gen.py)",
+    "description":  "Syllora course build engine: markdown ingest (two-level outline + semantic chunks), SHA-256 checksum incrementality, syllabus merge, task pool, progress seeding, and structured LLM task generation (ported from Python builder.py/ingestor.py/task_gen.py)",
     "license":  "MIT",
     "type":  "module",
     "exports":  {
@@ -14,7 +14,7 @@
                 },
     "dependencies":  {
                          "@deepseek-ai/dsh-llm":  "workspace:^",
-                         "@studyclaw/tools":  "workspace:^",
+                         "@syllora/tools":  "workspace:^",
                          "js-yaml":  "^4.1.0",
                          "mammoth":  "^1.12.1",
                          "pdf-parse":  "^2.4.5",

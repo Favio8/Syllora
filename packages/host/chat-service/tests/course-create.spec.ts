@@ -11,7 +11,7 @@ import { createCourseService } from '../src/course.ts'
 
 describe('createCourse source archiving', () => {
   it('archives a workspace file given as an absolute backslash path', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-create-course-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-create-course-'))
     try {
       const ws = join(root, 'ws')
       await mkdir(ws, { recursive: true })
@@ -29,7 +29,7 @@ describe('createCourse source archiving', () => {
   })
 
   it('does not count missing files as ingested', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-create-course-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-create-course-'))
     try {
       const ws = join(root, 'ws')
       await mkdir(ws, { recursive: true })
@@ -45,10 +45,10 @@ describe('createCourse source archiving', () => {
 
 describe('RV-16：courses.files 枚举排除目录与数量上限', () => {
   it('node_modules/.git 等被排除，真实资料仍枚举（就地课程根即项目根）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-files-exclude-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-files-exclude-'))
     try {
       // 隔离注册表 home，避免测试污染真实用户目录。
-      process.env.STUDYCLAW_HOME = join(root, 'home')
+      process.env.SYLLORA_HOME = join(root, 'home')
       const ws = join(root, 'ws')
       await mkdir(join(ws, 'docs'), { recursive: true })
       await mkdir(join(ws, 'node_modules', 'pkg'), { recursive: true })
@@ -62,15 +62,15 @@ describe('RV-16：courses.files 枚举排除目录与数量上限', () => {
       const result = await service.files(ws, created.course) as { files: Array<{ relative: string }> }
       expect(result.files.map(file => file.relative).sort()).toEqual(['docs/note.md', 'overview.md'])
     } finally {
-      delete process.env.STUDYCLAW_HOME
+      delete process.env.SYLLORA_HOME
       await rm(root, { recursive: true, force: true })
     }
   })
 
   it('文件数超过 500 时截断，且排除目录不计入（旧实现全量 walk 后 slice，瞬态内存无界）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-files-cap-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-files-cap-'))
     try {
-      process.env.STUDYCLAW_HOME = join(root, 'home')
+      process.env.SYLLORA_HOME = join(root, 'home')
       const ws = join(root, 'ws')
       await mkdir(join(ws, 'node_modules', 'pkg'), { recursive: true })
       for (let i = 0; i < 60; i += 1) {
@@ -85,7 +85,7 @@ describe('RV-16：courses.files 枚举排除目录与数量上限', () => {
       expect(result.files).toHaveLength(500)
       expect(result.files.every(file => !file.relative.startsWith('node_modules/'))).toBe(true)
     } finally {
-      delete process.env.STUDYCLAW_HOME
+      delete process.env.SYLLORA_HOME
       await rm(root, { recursive: true, force: true })
     }
   })

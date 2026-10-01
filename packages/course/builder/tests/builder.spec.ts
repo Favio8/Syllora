@@ -35,7 +35,7 @@ class FakeGenerator implements TaskGenerator {
 const DOC = '# 多态\n\n## 重载与覆写\n\n重载是同名不同参数；覆写是重定义。\n'
 
 async function setup(): Promise<{ root: string; courseDir: string; generator: FakeGenerator }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-builder-'))
   const courseDir = join(root, 'c1')
   await mkdir(join(courseDir, 'sources'), { recursive: true })
   await writeFile(join(courseDir, 'sources', 'a.md'), DOC, 'utf8')
@@ -53,7 +53,7 @@ describe('CourseBuilder', () => {
     expect(pool.length).toBeGreaterThan(0)
     const syllabus = await loadSyllabus(courseDir)
     expect(syllabus.chapters.length).toBeGreaterThan(0)
-    const progress = await readFile(join(courseDir, '.studyclaw', 'progress.md'), 'utf8')
+    const progress = await readFile(join(courseDir, '.syllora', 'progress.md'), 'utf8')
     expect(progress).toContain('concept_id')
     expect(progress).toContain('重载与覆写')
     await rm(root, { recursive: true, force: true })
@@ -125,7 +125,7 @@ describe('CourseBuilder', () => {
     // 重新分配成干净 id，与 a.md 的「概述」撞成同一 concept id（掌握度跨资料
     // 混用），并留下没人再生产的 _2 僵尸行。现在按 source_file 归属为其他资料
     // 预留 id，变更文件稳定复得自己的 _2 后缀。
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     await writeFile(join(courseDir, 'sources', 'a.md'), '# 讲义A\n\n## 概述\n\nA 的概述内容。\n', 'utf8')
@@ -153,7 +153,7 @@ describe('CourseBuilder', () => {
   })
 
   it('A1/T-20 迁移面：源文件删除后其章节一并清理（id 归还、无僵尸行）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     await writeFile(join(courseDir, 'sources', 'a.md'), '# 讲义A\n\n## 概述\n\nA 的概述内容。\n', 'utf8')
@@ -177,13 +177,13 @@ describe('CourseBuilder', () => {
   })
 
   it('A1/T-20 迁移面：旧版无来源标记的章节保守保留并给出迁移提示', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     await writeFile(join(courseDir, 'sources', 'a.md'), '# 讲义A\n\n## 概述\n\nA 的概述内容。\n', 'utf8')
     await new CourseBuilder(courseDir, new FakeGenerator()).build(1)
     // 模拟 T-20 之前构建的课程：抹掉 source_file 标记。
-    const syllabusPath = join(courseDir, '.studyclaw', 'syllabus.json')
+    const syllabusPath = join(courseDir, '.syllora', 'syllabus.json')
     const legacy = JSON.parse(await readFile(syllabusPath, 'utf8')) as { chapters: Array<Record<string, unknown>> }
     for (const chapter of legacy.chapters) delete chapter.source_file
     await writeFile(syllabusPath, JSON.stringify(legacy, null, 2), 'utf8')
@@ -202,7 +202,7 @@ describe('CourseBuilder', () => {
     await builder.build(1)
     const poolBefore = await loadTaskPool(courseDir)
     expect(poolBefore.length).toBeGreaterThan(0)
-    const checksumsBefore = await readFile(join(courseDir, '.studyclaw', '.checksums'), 'utf8')
+    const checksumsBefore = await readFile(join(courseDir, '.syllora', '.checksums'), 'utf8')
     // 修改文件触发重建，但生成器抛错（模拟 LLM 故障/限流）。
     await writeFile(join(courseDir, 'sources', 'a.md'), DOC.replace('重载是同名不同参数', 'Java 中重载是同名不同参数'), 'utf8')
     generator.calls = -1 // 下次调用抛错
@@ -211,7 +211,7 @@ describe('CourseBuilder', () => {
     // 旧卡未被删除；checksums 未更新 → 下次构建仍会把 a.md 视为 modified 重试。
     const poolAfter = await loadTaskPool(courseDir)
     expect(poolAfter).toHaveLength(poolBefore.length)
-    expect(await readFile(join(courseDir, '.studyclaw', '.checksums'), 'utf8')).toBe(checksumsBefore)
+    expect(await readFile(join(courseDir, '.syllora', '.checksums'), 'utf8')).toBe(checksumsBefore)
     await rm(root, { recursive: true, force: true })
   })
 
@@ -226,13 +226,13 @@ describe('CourseBuilder', () => {
     expect(syllabus.granularity).toBe('coarse')
     expect(syllabus.chapters.length).toBeGreaterThan(0)
     // 无临时文件残留（旧实现竞态下 rename 失败会留下 .tmp）。
-    const stateFiles = await readdir(join(courseDir, '.studyclaw'))
+    const stateFiles = await readdir(join(courseDir, '.syllora'))
     expect(stateFiles.some(name => name.includes('.tmp'))).toBe(false)
     await rm(root, { recursive: true, force: true })
   })
 
   it('T-6：批量生成首个失败即停止认领（在途单元结算后不再起新 LLM 调用）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-failfast-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-failfast-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     // 三个切片 → 三个生成单元；并发 2。第 2 个调用早失败，成功的调用慢——
@@ -272,7 +272,7 @@ describe('CourseBuilder', () => {
   })
 
   it('T-7：超过大小上限的源文件被跳过并进 degraded（构建内存守卫）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-bigfile-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-bigfile-'))
     const courseDir = join(root, 'c1')
     await mkdir(join(courseDir, 'sources'), { recursive: true })
     await writeFile(join(courseDir, 'sources', 'a.md'), DOC, 'utf8')
@@ -287,14 +287,14 @@ describe('CourseBuilder', () => {
   })
 
   it('T-10：布局迁移 rename 失败时不写 marker（半迁移不永久化，下次重试）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-halfmigrate-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-halfmigrate-'))
     const courseDir = join(root, 'c1')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
     await writeFile(join(courseDir, 'progress.md'), '# 旧布局看板\n', 'utf8')
     // 注入必失败的 move（模拟占用/杀软锁定导致的 EPERM/EBUSY）。
     await migrateLegacyLayout(courseDir, async () => { throw new Error('EPERM simulated') })
     // marker 未落 → 下次启动会重试迁移（旧实现吞错后写 marker，半迁移被洗白）。
-    const marker = join(courseDir, '.studyclaw', '.layout-v2')
+    const marker = join(courseDir, '.syllora', '.layout-v2')
     await expect(readFile(marker, 'utf8')).rejects.toThrow()
     // 根目录遗留原样未动。
     await expect(readFile(join(courseDir, 'progress.md'), 'utf8')).resolves.toContain('旧布局看板')
@@ -302,14 +302,14 @@ describe('CourseBuilder', () => {
   })
 
   it('T-10：迁移成功时 marker 落盘且幂等（二次调用直接返回）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-builder-migrate-ok-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-builder-migrate-ok-'))
     const courseDir = join(root, 'c1')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
     await writeFile(join(courseDir, 'progress.md'), '# 旧布局看板\n', 'utf8')
     await migrateLegacyLayout(courseDir)
-    const marker = join(courseDir, '.studyclaw', '.layout-v2')
+    const marker = join(courseDir, '.syllora', '.layout-v2')
     await expect(readFile(marker, 'utf8')).resolves.toBe('v2\n')
-    await expect(readFile(join(courseDir, '.studyclaw', 'progress.md'), 'utf8')).resolves.toContain('旧布局看板')
+    await expect(readFile(join(courseDir, '.syllora', 'progress.md'), 'utf8')).resolves.toContain('旧布局看板')
     // 幂等：二次调用不重复迁移、不抛错。
     await migrateLegacyLayout(courseDir)
     await rm(root, { recursive: true, force: true })

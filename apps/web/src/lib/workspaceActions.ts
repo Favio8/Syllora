@@ -14,7 +14,7 @@ import { modeLabel } from "@/src/lib/modes";
 import { useAppStore } from "@/src/store/useAppStore";
 import type { OpenWorkspaceResponse } from "@/src/types/api";
 
-export const LAST_WORKSPACE_KEY = "studyclaw:last-workspace";
+export const LAST_WORKSPACE_KEY = "syllora:last-workspace";
 
 export function recordLastWorkspace(path: string): void {
   try {

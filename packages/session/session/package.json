@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/session",
+    "name":  "@syllora/session",
     "version":  "0.1.0",
-    "description":  "StudyClaw session domain: JSONL store, stream splitters, context assembly, and the four-mode tutor chat loop (ported from Python core/session.py)",
+    "description":  "Syllora session domain: JSONL store, stream splitters, context assembly, and the four-mode tutor chat loop (ported from Python core/session.py)",
     "license":  "MIT",
     "type":  "module",
     "exports":  {
@@ -13,10 +13,10 @@
                     "./package.json":  "./package.json"
                 },
     "dependencies":  {
-                         "@studyclaw/tools":  "workspace:^",
+                         "@syllora/tools":  "workspace:^",
                          "zod":  "^4.4.3"
                      },
     "devDependencies":  {
-                            "@studyclaw/tools":  "workspace:^"
+                            "@syllora/tools":  "workspace:^"
                         }
 }

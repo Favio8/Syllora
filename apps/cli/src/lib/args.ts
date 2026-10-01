@@ -1,7 +1,7 @@
 /**
  * Minimal CLI argv parser: `--flag value` / `--flag` / positionals.
  * Kept dependency-free to match the existing hand-rolled dispatch.
- * @module @studyclaw/cli/lib/args
+ * @module @syllora/cli/lib/args
  */
 
 export interface ParsedArgs {

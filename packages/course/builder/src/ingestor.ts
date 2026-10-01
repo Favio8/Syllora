@@ -3,7 +3,7 @@
  * paragraph-boundary chunking with size caps, slug id generation (Chinese
  * falls back to md5 prefix), and concept typing. Ported from Python
  * `ingestor.py::MarkdownIngestor`.
- * @module @studyclaw/course-builder/src/ingestor
+ * @module @syllora/course-builder/src/ingestor
  */
 
 import { createHash } from 'node:crypto'

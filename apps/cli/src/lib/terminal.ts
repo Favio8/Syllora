@@ -2,8 +2,8 @@
  * Terminal rendering helpers for the interactive CLI: dependency-free ANSI
  * colors (disabled when not a TTY), readline prompt (EOF/Ctrl-C → EndOfInput),
  * and the text-based panel conventions aligned with the Python CLI
- * (STUDYCLAW // 标题、星级、[HIT]/[MISS]、√/×）。
- * @module @studyclaw/cli/lib/terminal
+ * (SYLLORA // 标题、星级、[HIT]/[MISS]、√/×）。
+ * @module @syllora/cli/lib/terminal
  */
 
 export class EndOfInput extends Error {
@@ -34,7 +34,7 @@ export interface Terminal extends TextSink {
   red(text: string): string
   yellow(text: string): string
   dim(text: string): string
-  /** `STUDYCLAW // <标题>` 样式头部。 */
+  /** `SYLLORA // <标题>` 样式头部。 */
   title(text: string): void
   /** 分隔线。 */
   hr(): void
@@ -76,7 +76,7 @@ export function makeTerminal(options: TerminalOptions = {}): Terminal {
     dim: text => paint('dim', text),
     title: text => {
       sink.line('─'.repeat(44))
-      sink.line(`${paint('cyan', 'STUDYCLAW //')} ${paint('bold', text)}`)
+      sink.line(`${paint('cyan', 'SYLLORA //')} ${paint('bold', text)}`)
       sink.line('─'.repeat(44))
     },
     hr: () => sink.line('─'.repeat(44)),
@@ -155,7 +155,7 @@ function wireStdin(): void {
   ;(process.stdin as { unref?: () => void }).unref?.()
 }
 
-/** 管道整体灌入时的行数上限——无上界会让 `type big.txt | studyclaw quiz`
+/** 管道整体灌入时的行数上限——无上界会让 `type big.txt | syllora quiz`
  *  把整个文件常驻内存（C-8）。超出部分丢弃并告警（每轮超限只告警一次）。 */
 const STDIN_QUEUE_MAX_LINES = 1000
 let stdinQueueWarned = false
@@ -170,7 +170,7 @@ function deliverLine(line: string): void {
   if (stdinQueued.length >= STDIN_QUEUE_MAX_LINES) {
     if (!stdinQueueWarned) {
       stdinQueueWarned = true
-      process.stderr.write(`[studyclaw] 管道输入超过 ${STDIN_QUEUE_MAX_LINES} 行上限，多余内容已丢弃\n`)
+      process.stderr.write(`[syllora] 管道输入超过 ${STDIN_QUEUE_MAX_LINES} 行上限，多余内容已丢弃\n`)
     }
     return
   }

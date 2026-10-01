@@ -57,7 +57,7 @@ export default function Console() {
   const effectiveDetailsWidth = rightPanelCollapsed ? 0 : detailsWidth;
   const [dragging, setDragging] = useState<null | "sidebar" | "details">(null);
   // FL-22：宿主心跳。旧版 api.workspaces() 失败被静默吞掉且"左栏错误横幅"
-  // 根本不存在——用户只起了 next dev 忘了起 studyclaw serve 时，三栏空壳、
+  // 根本不存在——用户只起了 next dev 忘了起 syllora serve 时，三栏空壳、
   // 零报错零引导，30 秒内判定"这软件是坏的"。null = 探测中。
   const [hostUp, setHostUp] = useState<boolean | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -254,7 +254,7 @@ export default function Console() {
           <CircleAlert size={15} strokeWidth={1.8} aria-hidden />
           <span>
             后端未启动：请在终端运行{" "}
-            <code className="rounded bg-red-100 px-1.5 py-0.5 font-mono text-[12px]">studyclaw serve</code>
+            <code className="rounded bg-red-100 px-1.5 py-0.5 font-mono text-[12px]">syllora serve</code>
             （默认 127.0.0.1:8080），启动后本横幅会自动消失。
           </span>
         </div>

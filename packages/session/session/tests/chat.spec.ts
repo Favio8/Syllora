@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TutorSession, type ToolCall, type ToolLlmClient } from '../src/session.ts'
-import { defaultToolRegistry } from '@studyclaw/tools'
+import { defaultToolRegistry } from '@syllora/tools'
 import { SessionStore, utcTs } from '../src/store.ts'
 import { SessionEventStore } from '../src/events.ts'
 
@@ -41,7 +41,7 @@ async function seedCourse(root: string): Promise<{ courseDir: string; wsRoot: st
   const wsRoot = join(root, 'workspace')
   // 项目即课程：状态/资料就地位于项目根。
   const courseDir = wsRoot
-  await mkdir(join(wsRoot, '.studyclaw'), { recursive: true })
+  await mkdir(join(wsRoot, '.syllora'), { recursive: true })
   await writeFile(join(courseDir, 'syllabus.json'), JSON.stringify({
     course_id: 'c1', title: '多态基础', version: '1.0.0',
     chapters: [{ id: 'chap_1', title: '继承', concepts: [{ id: 'c_1', name: '重载与覆写' }] }],
@@ -53,14 +53,14 @@ async function seedCourse(root: string): Promise<{ courseDir: string; wsRoot: st
     '|---|---|---|---|---|---|---|---|---|',
     '| c_1 | 重载与覆写 | 继承 | 30% | 1 | 0% | 2.5 | 2026-08-25 | none |', '',
   ].join('\n'), 'utf8')
-  await writeFile(join(wsRoot, '.studyclaw', 'Agent.md'), '你是资深 Java 导师。', 'utf8')
-  await writeFile(join(wsRoot, '.studyclaw', 'Memory.md'), '学生擅长 K8s，对 OOP 抽象薄弱。', 'utf8')
+  await writeFile(join(wsRoot, '.syllora', 'Agent.md'), '你是资深 Java 导师。', 'utf8')
+  await writeFile(join(wsRoot, '.syllora', 'Memory.md'), '学生擅长 K8s，对 OOP 抽象薄弱。', 'utf8')
   await writeFile(join(courseDir, 'overview.md'), '# 多态\n\n## 重载与覆写\n\n重载是同一类中同名不同参数；覆写是子类重定义父类方法。\n', 'utf8')
   return { courseDir, wsRoot }
 }
 
 async function setup(): Promise<{ root: string; courseDir: string; wsRoot: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-chat-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-chat-'))
   const seeded = await seedCourse(root)
   return { root, ...seeded }
 }
@@ -170,7 +170,7 @@ describe('TutorSession chat loop', () => {
     const { root, courseDir, wsRoot } = await setup()
     const session = makeSession(courseDir, wsRoot, {
       rounds: [{
-        text: `讲解完成。${'[STUDYCLAW_SYNC]'}{"_studyclaw_sync":{"concept_updates":[{"id":"c_1","score":0.7}],"memory_hints":["混淆了重载与覆写"],"changelog":"+ 攻克覆写"}}`,
+        text: `讲解完成。${'[SYLLORA_SYNC]'}{"_syllora_sync":{"concept_updates":[{"id":"c_1","score":0.7}],"memory_hints":["混淆了重载与覆写"],"changelog":"+ 攻克覆写"}}`,
       }],
     }, { new: true, mode: 'socratic' })
     await session.init()
@@ -197,7 +197,7 @@ describe('TutorSession chat loop', () => {
     let lockCalls = 0
     const session = makeSession(courseDir, wsRoot, {
       rounds: [{
-        text: `讲解完成。${'[STUDYCLAW_SYNC]'}{"_studyclaw_sync":{"concept_updates":[{"id":"c_1","score":0.7}],"memory_hints":[],"changelog":"+ 攻克覆写"}}`,
+        text: `讲解完成。${'[SYLLORA_SYNC]'}{"_syllora_sync":{"concept_updates":[{"id":"c_1","score":0.7}],"memory_hints":[],"changelog":"+ 攻克覆写"}}`,
       }],
     }, {
       new: true,
@@ -312,7 +312,7 @@ describe('TutorSession chat loop', () => {
   })
 
   it('init 优先事件日志：运行时子 Agent 的不透明 id 不被 legacy 正则拒绝（H1）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-chat-child-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-chat-child-'))
     const { courseDir, wsRoot } = await seedCourse(root)
     const eventStore = new SessionEventStore(join(courseDir, 'history'))
     // createLearningAgent 的子会话 id 形如 `<parent>-child-<ts>`，不满足

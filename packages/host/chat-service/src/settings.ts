@@ -1,15 +1,16 @@
 /**
- * Settings domain: full read/write over the workspace's `.studyclaw/config.yaml`
+ * Settings domain: full read/write over the workspace's `.syllora/config.yaml`
  * (Python parity) plus credentials, the built-in provider catalog, model
  * discovery, and provider CRUD/activation. Wire shapes mirror the Python
  * `_settings_payload` / `ProviderModelPayload` projections.
- * @module @studyclaw/chat-service/src/settings
+ * @module @syllora/chat-service/src/settings
  */
 
 import { createHash } from 'node:crypto'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
+import { workspaceStateDirOf } from '@syllora/tools'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
 
 export interface ProviderModelPayload {
@@ -102,7 +103,7 @@ interface ConfigYaml {
 }
 
 const AGENT_PRESETS: AgentPresetPayload[] = [
-  { id: 'studyclaw-learning', name: 'StudyClaw 学习导师', description: '课程上下文与学习工具 preset' },
+  { id: 'syllora-learning', name: 'Syllora 学习导师', description: '课程上下文与学习工具 preset' },
   { id: 'general', name: '通用 Agent', description: '不注入课程专属上下文' },
 ]
 
@@ -123,11 +124,11 @@ function pluginInventory(config: ConfigYaml): PluginInventoryPayload[] {
 }
 
 function configPath(workspaceRoot: string): string {
-  return join(workspaceRoot, '.studyclaw', 'config.yaml')
+  return join(workspaceStateDirOf(workspaceRoot), 'config.yaml')
 }
 
 function credentialsPath(workspaceRoot: string): string {
-  return join(workspaceRoot, '.studyclaw', 'credentials.json')
+  return join(workspaceStateDirOf(workspaceRoot), 'credentials.json')
 }
 
 async function readConfig(workspaceRoot: string): Promise<ConfigYaml> {
@@ -140,7 +141,7 @@ async function readConfig(workspaceRoot: string): Promise<ConfigYaml> {
 async function writeConfig(workspaceRoot: string, config: ConfigYaml): Promise<void> {
   const path = configPath(workspaceRoot)
   const { mkdir } = await import('node:fs/promises')
-  await mkdir(join(workspaceRoot, '.studyclaw'), { recursive: true })
+  await mkdir(workspaceStateDirOf(workspaceRoot), { recursive: true })
   const tmp = path + '.tmp'
   const text = yaml.dump(config, { sortKeys: false, noRefs: true })
   await writeFile(tmp, text, 'utf8')
@@ -181,7 +182,7 @@ async function withConfigLock<T>(workspaceRoot: string, fn: () => Promise<T>): P
 }
 
 /**
- * Read `.studyclaw/credentials.json` without the legacy re-seal migration.
+ * Read `.syllora/credentials.json` without the legacy re-seal migration.
  * Callers that already hold the credential lock (setCredential / deleteProvider
  * must use this variant: their own writeCredentials seals the file anyway, and
  * taking the non-reentrant lock again from inside it would deadlock (RV-17).
@@ -200,7 +201,7 @@ async function readCredentialsRaw(workspaceRoot: string): Promise<Awaited<Return
 }
 
 /**
- * Read `.studyclaw/credentials.json`. Legacy plaintext files are transparently
+ * Read `.syllora/credentials.json`. Legacy plaintext files are transparently
  * re-sealed on first successful read so the migration needs no explicit step.
  * RV-17：迁移写必须在凭据锁内——锁外全量写回会与持锁 setCredential 的 RMW
  * 竞争，用旧快照覆盖刚落地的 key（config.yaml 指向 api_key_env 但
@@ -287,7 +288,7 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
     },
     providers,
     ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'socratic' },
-    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'studyclaw-learning', presets: AGENT_PRESETS },
+    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning', presets: AGENT_PRESETS },
     permissions: { preset: PERMISSION_PRESETS.some(item => item.id === config.permissions?.preset) ? config.permissions!.preset! : 'workspace-write', presets: PERMISSION_PRESETS },
     plugins: { inventory: pluginInventory(config) },
   }
@@ -360,7 +361,7 @@ export function parseModelsPayload(payload: unknown): ProviderModelPayload[] {
  * first-class use case, and cross-site browser callers are already blocked
  * by the serve 入口的 Origin 门禁.
  */
-const API_KEY_ENV_RE = /^(?:DEEPSEEK|OPENAI|ANTHROPIC|GOOGLE|GEMINI|DASHSCOPE|MOONSHOT|ZHIPU|SENSENOVA|OPENROUTER|SILICONFLOW|CUSTOM|STUDYCLAW)_[A-Z0-9_]+$|^[A-Z][A-Z0-9_]*_(?:API_KEY|API_TOKEN)$/
+const API_KEY_ENV_RE = /^(?:DEEPSEEK|OPENAI|ANTHROPIC|GOOGLE|GEMINI|DASHSCOPE|MOONSHOT|ZHIPU|SENSENOVA|OPENROUTER|SILICONFLOW|CUSTOM|SYLLORA)_[A-Z0-9_]+$|^[A-Z][A-Z0-9_]*_(?:API_KEY|API_TOKEN)$/
 
 /** Validate and normalize a user-supplied model endpoint base URL. */
 export function validateModelBaseUrl(rawUrl: string): string {
@@ -561,7 +562,7 @@ export async function activateProvider(workspaceRoot: string, providerId: string
   })
 }
 
-/** Store one provider's API key into `.studyclaw/credentials.json`. */
+/** Store one provider's API key into `.syllora/credentials.json`. */
 export async function setCredential(workspaceRoot: string, providerId: string, apiKey: string): Promise<SettingsPayload> {
   // M3：config 段与凭据段同锁序（config → credential）串行，与并发保存的
   // provider 编辑互不丢更新。

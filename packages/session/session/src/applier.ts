@@ -1,10 +1,11 @@
+import { workspaceStateDirOf } from '@syllora/tools'
 /**
- * SyncApplier: applies the hidden `[STUDYCLAW_SYNC]` payload — concept
+ * SyncApplier: applies the hidden `[SYLLORA_SYNC]` payload — concept
  * mastery updates rewrite `progress.md` (atomic), memory hints produce a
  * course-evidence audit line (dual-track global promotion is a M2
  * simplification: hints stay course-scoped). Ported from Python
  * `session.py::SyncApplier` / `memory.py::MemoryEngine.register` (reduced).
- * @module @studyclaw/session/src/applier
+ * @module @syllora/session/src/applier
  */
 
 import { readFile, rename, stat, writeFile } from 'node:fs/promises'
@@ -17,17 +18,17 @@ const EVIDENCE_PREFIX = 'hints: '
 
 /**
  * progress.md 落盘路径：跟随既有文件的所在布局——v2 文件存在则写 v2，
- * 否则沿用根目录旧看板；两者都缺时新建到 `.studyclaw/`（该目录已存在）
+ * 否则沿用根目录旧看板；两者都缺时新建到 `.syllora/`（该目录已存在）
  * 或退回根目录，绝不与 builder 的 stateDirOf 写成两份。
  */
 async function progressBoardPath(courseDir: string): Promise<string> {
-  const v2 = join(courseDir, '.studyclaw', 'progress.md')
+  const v2 = join(workspaceStateDirOf(courseDir), 'progress.md')
   const legacy = join(courseDir, 'progress.md')
   const hasV2 = (await stat(v2).catch(() => null))?.isFile() ?? false
   if (hasV2) return v2
   const hasLegacy = (await stat(legacy).catch(() => null))?.isFile() ?? false
   if (hasLegacy) return legacy
-  const hasStateDir = (await stat(join(courseDir, '.studyclaw')).catch(() => null))?.isDirectory() ?? false
+  const hasStateDir = (await stat(workspaceStateDirOf(courseDir)).catch(() => null))?.isDirectory() ?? false
   return hasStateDir ? v2 : legacy
 }
 
@@ -108,8 +109,8 @@ export class SyncApplier {
   }
 
   private async conceptFacts(): Promise<Map<string, { name: string; chapter: string }>> {
-    // 大纲在 v2 布局下位于 .studyclaw/syllabus.json；旧布局根目录兜底。
-    const v2 = join(this.courseDir, '.studyclaw', 'syllabus.json')
+    // 大纲在 v2 布局下位于 .syllora/syllabus.json；旧布局根目录兜底。
+    const v2 = join(workspaceStateDirOf(this.courseDir), 'syllabus.json')
     const legacy = join(this.courseDir, 'syllabus.json')
     let raw: string | null = null
     for (const path of [v2, legacy]) {

@@ -1,5 +1,5 @@
 /**
- * StudyClaw native directory picker — cross-platform tiered subset of the dsh
+ * Syllora native directory picker — cross-platform tiered subset of the dsh
  * `directory-picker-native` backend (MIT). FL-45：不再只保留 Win32 一层——
  * macOS 走 `osascript choose folder`，Linux 走 `zenity`（缺则回落 `kdialog`），
  * Windows 保留 koffi 驱动的 `IFileOpenDialog` 子进程（前台激活语义见
@@ -60,7 +60,7 @@ function throwIfDialogUnavailable(error: unknown): void {
 /**
  * Open the platform directory picker.
  * @param signal - caller/connection lifetime; abort closes the dialog or
- *   terminates the native command. When omitted (the StudyClaw host path,
+ *   terminates the native command. When omitted (the Syllora host path,
  *   which has no signal plumbing through `dispatch`), a fresh controller with
  *   a 240 s timeout stands in so a forgotten dialog cannot dangle the RPC.
  * @param internals - platform, runner and dialog hooks for deterministic tests.

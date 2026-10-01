@@ -1,7 +1,7 @@
 /**
  * P1-6 回归：withCourseLock 必须真正串行化同 key 的临界区，且单个临界区
  * 抛错不能卡死后续等待者。
- * FL-36：锁现在含跨进程文件层（`<课程>/.studyclaw/course.lock`），key 必须
+ * FL-36：锁现在含跨进程文件层（`<课程>/.syllora/course.lock`），key 必须
  * 是真实目录——用 os.tmpdir 下的独立目录，避免污染仓库工作目录。
  */
 
@@ -14,7 +14,7 @@ import { withCourseLock } from '../src/handlers.ts'
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 async function makeCourseDir(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'studyclaw-lock-'))
+  return mkdtemp(join(tmpdir(), 'syllora-lock-'))
 }
 
 describe('withCourseLock', () => {
@@ -86,7 +86,7 @@ describe('withCourseLock', () => {
     try {
       // 模拟一个崩溃进程留下的锁：pid 写成不可能存活的 2^22 以上的大数
       //（多数 OS 的 pid 上限远小于此），isPidAlive 判死 → 锁应被抢走。
-      const lockDir = join(dir, '.studyclaw')
+      const lockDir = join(dir, '.syllora')
       await mkdir(lockDir, { recursive: true })
       await writeFile(join(lockDir, 'course.lock'), '999999999', 'utf8')
       const result = await withCourseLock(dir, async () => 'acquired')
@@ -101,7 +101,7 @@ describe('withCourseLock', () => {
   it('NEW-001 回归：pid:nonce 格式的陈旧锁同样被自愈抢走且临界区后清理', async () => {
     const dir = await makeCourseDir()
     try {
-      const lockDir = join(dir, '.studyclaw')
+      const lockDir = join(dir, '.syllora')
       await mkdir(lockDir, { recursive: true })
       await writeFile(join(lockDir, 'course.lock'), '999999999:deadbeefdeadbeef', 'utf8')
       const result = await withCourseLock(dir, async () => 'acquired')
@@ -117,7 +117,7 @@ describe('withCourseLock', () => {
     try {
       let content = ''
       await withCourseLock(dir, async () => {
-        content = await readFile(join(dir, '.studyclaw', 'course.lock'), 'utf8')
+        content = await readFile(join(dir, '.syllora', 'course.lock'), 'utf8')
       })
       // 令牌 = `pid:nonce`：确认窗口以内容精确比对锁归属，纯 pid 会被回收复用。
       expect(content.trim().startsWith(`${process.pid}:`)).toBe(true)

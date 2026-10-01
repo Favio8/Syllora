@@ -2,26 +2,24 @@
  * Workspace credential sealing (P0-2 / SEC-7).
  *
  * Threat model: the workspace folder itself gets zipped/shared — so the API
- * keys must not survive in plaintext inside `.studyclaw/credentials.json`.
+ * keys must not survive in plaintext inside `.syllora/credentials.json`.
  * The AES-256-GCM master key lives OUTSIDE any workspace, under
- * `$STUDYCLAW_HOME` or `~/.studyclaw/master.key` (0600), making key theft
+ * `$SYLLORA_HOME` or `~/.syllora/master.key` (0600), making key theft
  * require stealing a file from the user's home directory as well.
  * Plaintext files written by older builds are detected on read and migrated
  * to sealed form by the settings layer.
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { homedir } from 'node:os'
-import { join, dirname, resolve } from 'node:path'
+import { join, dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { migrateLegacyHome } from '@syllora/tools'
 const KEY_BYTES = 32
 
 export function masterKeyPath(): string {
   // NEW-007 对齐：env 覆盖与 bin.ts 的 hostHome 同一取法（resolve 成绝对路径），
   // 否则相对路径下宿主侧与密钥侧各自锚定不同 cwd，master.key 与密文错位。
-  const override = process.env.STUDYCLAW_HOME
-  const home = override !== undefined && override.trim() !== '' ? resolve(override.trim()) : join(homedir(), '.studyclaw')
-  return join(home, 'master.key')
+  return join(migrateLegacyHome(), 'master.key')
 }
 
 /** Load or lazily create the per-user master key (hex-encoded 256-bit). */

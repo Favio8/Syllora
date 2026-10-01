@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/acp",
+    "name":  "@syllora/acp",
     "version":  "0.1.0",
-    "description":  "DSH-compatible Agent Client Protocol JSON-RPC contracts for StudyClaw",
+    "description":  "DSH-compatible Agent Client Protocol JSON-RPC contracts for Syllora",
     "license":  "MIT",
     "type":  "module",
     "exports":  {

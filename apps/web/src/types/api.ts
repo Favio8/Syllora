@@ -1,5 +1,5 @@
 /**
- * StudyClaw API 传输类型（api_spec v1.2，T3.x）。
+ * Syllora API 传输类型（api_spec v1.2，T3.x）。
  *
  * 与 `types/index.ts`（Pydantic 对拍契约）分离：本文件只描述 HTTP
  * 响应负载形态（服务层组装的 camelCase 视图模型），不参与 parity 对拍。

@@ -13,7 +13,7 @@ import {
   dueRecords,
   reviewSchedule,
   updateEf,
-} from '@studyclaw/course-builder'
+} from '@syllora/course-builder'
 import { heatmap } from '../src/index.ts'
 
 const BOARD_TEXT = [
@@ -31,7 +31,7 @@ const BOARD_TEXT = [
 
 describe('progress board', () => {
   it('loads, updates, and round-trips the 9-column contract', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-progress-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-progress-'))
     const path = join(root, 'progress.md')
     await writeFile(path, BOARD_TEXT, 'utf8')
     const board = await loadProgressBoard(path)
@@ -78,10 +78,10 @@ describe('progress board', () => {
 
 describe('heatmap metrics', () => {
   it('aggregates chat/eval/weak-cleared per day', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-metrics-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-metrics-'))
     const ws = join(root, 'ws')
-    // P1-7：历史目录与写入侧一致，位于 <工作区根>/.studyclaw/history。
-    const historyDir = join(ws, '.studyclaw', 'history')
+    // P1-7：历史目录与写入侧一致，位于 <工作区根>/.syllora/history。
+    const historyDir = join(ws, '.syllora', 'history')
     await mkdir(historyDir, { recursive: true })
     // F-13：行内 ts 为 ISO（UTC），分桶按本地时区归日——夹具用正午 UTC
     // 保证在任何时区都落在"今天"。
@@ -103,9 +103,9 @@ describe('heatmap metrics', () => {
   })
 
   it('事件日志口径：user/input 计聊天轮，input/voided 剔除（H3）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-metrics-events-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-metrics-events-'))
     const ws = join(root, 'ws')
-    const historyDir = join(ws, '.studyclaw', 'history')
+    const historyDir = join(ws, '.syllora', 'history')
     await mkdir(historyDir, { recursive: true })
     const today = new Date()
     const noon = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12))

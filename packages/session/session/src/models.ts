@@ -4,7 +4,7 @@
  * SyncBlock / ConceptScoreUpdate / LearningMode). Field names stay snake_case
  * on the wire (file contract §4.4); zod validates every line at the
  * durable boundary.
- * @module @studyclaw/session/src/models
+ * @module @syllora/session/src/models
  */
 
 import { z } from 'zod'
@@ -75,7 +75,7 @@ export const conceptScoreUpdate = z.object({
 })
 export type ConceptScoreUpdate = z.infer<typeof conceptScoreUpdate>
 
-/** The [STUDYCLAW_SYNC] payload shape (schema-validated before apply). */
+/** The [SYLLORA_SYNC] payload shape (schema-validated before apply). */
 export const syncBlock = z.object({
   concept_updates: z.array(conceptScoreUpdate).default([]),
   memory_hints: z.array(z.string()).default([]),

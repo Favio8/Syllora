@@ -1,7 +1,7 @@
 /**
  * serve 主循环集成覆盖（历史缺口：bin.ts 的 HTTP 边界此前只有单测，无任何
  * 集成用例触达）。以子进程起真实 serve（tsx 源码形态，--port 0 随机端口，
- * 临时 STUDYCLAW_HOME + STUDYCLAW_WEB_DIST），断言：
+ * 临时 SYLLORA_HOME + SYLLORA_WEB_DIST），断言：
  *   1. /api/health 免 token 可达；
  *   2. RPC 无 token / 错 token → 401，正确 token → 200（门禁顺序）；
  *   3. 恶意 Origin → 403（先于 token 判定）；
@@ -47,7 +47,7 @@ interface HostHandle {
 const homes: string[] = [];
 
 async function startHost(reuseHome?: string): Promise<HostHandle> {
-  const home = reuseHome ?? mkdtempSync(join(tmpdir(), "studyclaw-serve-it-"));
+  const home = reuseHome ?? mkdtempSync(join(tmpdir(), "syllora-serve-it-"));
   if (reuseHome === undefined) homes.push(home);
   const dist = join(home, "dist");
   mkdirSync(dist, { recursive: true });
@@ -61,7 +61,7 @@ async function startHost(reuseHome?: string): Promise<HostHandle> {
   // 轮询立刻读到陈旧端口/token——先删掉，只认新实例写的那份。
   rmSync(join(home, "host.json"), { force: true });
   const child = spawn(process.execPath, [tsxCli, "--tsconfig", baseTsconfig, binTs, "serve", "--port", "0"], {
-    env: { ...process.env, STUDYCLAW_HOME: home, STUDYCLAW_WEB_DIST: dist },
+    env: { ...process.env, SYLLORA_HOME: home, SYLLORA_WEB_DIST: dist },
     stdio: ["ignore", "pipe", "pipe"],
     // POSIX：serve 自成进程组，后续才能整组收信号（见文件头说明）。
     ...(isWin ? {} : { detached: true }),
@@ -242,7 +242,7 @@ describe("serve HTTP 边界（集成）", () => {
     const page = await fetch(`${base()}/`, { signal: AbortSignal.timeout(8_000) });
     expect(page.status).toBe(200);
     const html = await page.text();
-    expect(html).toContain("window.__STUDYCLAW__");
+    expect(html).toContain("window.__SYLLORA__");
     expect(html).toContain(host!.token);
 
     const spa = await fetch(`${base()}/some/deep/route`, { signal: AbortSignal.timeout(8_000) });

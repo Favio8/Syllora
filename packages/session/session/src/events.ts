@@ -4,7 +4,7 @@
  * The envelope is deliberately small and provider-neutral. Agent/runtime
  * packages own event names and payloads; this package owns sequence ordering,
  * durable validation, replay, and atomic append semantics.
- * @module @studyclaw/session/events
+ * @module @syllora/session/events
  */
 
 import { mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises'
@@ -468,7 +468,7 @@ export class SessionEventStore {
         const permission = payload['permissionPreset']
         const plugins = payload['plugins']
         agentConfig = {
-          agentPreset: payload['agentPreset'] === 'general' ? 'general' : 'studyclaw-learning',
+          agentPreset: payload['agentPreset'] === 'general' ? 'general' : 'syllora-learning',
           permissionPreset: permission === 'read-only' || permission === 'danger-full-access' ? permission : 'workspace-write',
           plugins: typeof plugins === 'object' && plugins !== null
             ? Object.fromEntries(Object.entries(plugins).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'))

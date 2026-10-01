@@ -1,9 +1,9 @@
 /**
- * StudyClaw session domain: JSONL session store, streaming splitters,
+ * Syllora session domain: JSONL session store, streaming splitters,
  * context assembly, and the tutor chat loop (ported from Python
  * `core/session.py`). M2 scope: four-mode chat with tool loop and sync
  * application; the task pool / evaluator backends land at M3/M4.
- * @module @studyclaw/session
+ * @module @syllora/session
  */
 
 export {
@@ -16,7 +16,7 @@ export {
   normalizeSessionTitle,
   fallbackSessionTitle,
   truncateTitleUtf8,
-  studyclawFallbackTitle,
+  sylloraFallbackTitle,
   FALLBACK_TITLE_MAX_WORDS,
   FALLBACK_TITLE_MAX_BYTES,
 } from './title.ts'
