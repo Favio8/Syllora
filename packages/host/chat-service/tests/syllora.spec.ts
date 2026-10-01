@@ -211,12 +211,14 @@ describe('Syllora persistence and boundaries',()=>{
       const value=n++===0?{points:[{chapter:'矩阵',name:'单位矩阵',sourceIds:[sourceId]}]}:{valid:true,reason:'ok'};
       yield {type:'text-delta',text:JSON.stringify(value)};
     }};
-    const now=Date.UTC(2026,9,1);const root=await mkdtemp(join(tmpdir(),'syllora-test-'));roots.push(root);
+    let now=Date.UTC(2026,9,1);const root=await mkdtemp(join(tmpdir(),'syllora-test-'));roots.push(root);
     const svc=new SylloraService(root,{now:()=>now,config:async()=>config,client:()=>client});
     const courseId=await create(svc);await svc.handle('preferences',{consent:true,callLimit:5});
     await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'});let state=await waitJob(svc);
     const pointId=state.courses[0].points[0].id;
     await expect(svc.handle('plan',{courseId,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0,deadline:'2026-09-30'})).rejects.toThrow('目标日期已过');
+    for (const deadline of ['2027-02-30','2027-13-01','2027-00-15','2027-04-31']) await expect(svc.handle('plan',{courseId,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0,deadline})).rejects.toThrow('有效');
+    await expect(svc.handle('plan',{courseId,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0,deadline:'2028-01-01'})).rejects.toThrow('366 天');
     await svc.handle('plan',{courseId,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0,deadline:'2026-10-02',estimates:{[pointId]:35}});
     let draft=(await svc.handle('state') as any).courses[0].draft;
     expect(draft.deadline).toBe('2026-10-02');expect(draft.estimates).toEqual({[pointId]:35});expect(draft.tasks[0].minutes).toBe(35);expect(draft.tasks[0].date).toBe('2026-10-01');expect(draft.feasible).toBe(true);
@@ -224,6 +226,9 @@ describe('Syllora persistence and boundaries',()=>{
     await svc.handle('plan',{courseId,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0,deadline:'2026-10-02',estimates:{[pointId]:25}});
     await expect(svc.handle('confirmPlan',{courseId,baseVersion:0,draftId:staleId})).rejects.toThrow('另一页面更新了草案');
     draft=(await svc.handle('state') as any).courses[0].draft;
+    now=Date.UTC(2026,9,3);
+    await expect(svc.handle('confirmPlan',{courseId,baseVersion:0,draftId:draft.id})).rejects.toThrow('目标日期已过');
+    now=Date.UTC(2026,9,1);
     await svc.handle('confirmPlan',{courseId,baseVersion:0,draftId:draft.id});
     state=await svc.handle('state') as any;const plan=state.courses[0].plan;
     expect(plan.version).toBe(1);expect(plan.tasks[0].minutes).toBe(25);expect(plan.tasks[0].slots).toBe(2);expect(plan.deadline).toBe('2026-10-02')
