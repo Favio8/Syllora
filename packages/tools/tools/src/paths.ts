@@ -1,9 +1,10 @@
+import { workspaceStateDirOf } from './runtime-paths.ts'
 /**
  * Course path facts for the tools layer: the source-root canon (`.source-root.json`
  * binding for in-place courses, the project root otherwise) and the in-place
  * exclusion set. Ported from Python `workspace.py`; project-folder-as-course
  * layout makes every course "in place".
- * @module @studyclaw/tools/src/paths
+ * @module @syllora/tools/src/paths
  */
 
 import { readFile, stat } from 'node:fs/promises'
@@ -16,7 +17,10 @@ export const SOURCE_ROOT_BINDING_NAME = '.source-root.json'
  *  project-folder-as-course state directories). */
 export const INPLACE_SOURCE_EXCLUDED_DIRS = new Set([
   '.git',
+  '.syllora',
   '.studyclaw',
+  '.syllora-home',
+  '.syllora-data',
   'courses',
   'node_modules',
   '__pycache__',
@@ -28,7 +32,7 @@ export const INPLACE_SOURCE_EXCLUDED_DIRS = new Set([
 ])
 
 /** State file names skipped by material scans (value mirrors
- *  `@studyclaw/course-builder`'s COURSE_STATE_FILES; kept local to avoid a
+ *  `@syllora/course-builder`'s COURSE_STATE_FILES; kept local to avoid a
  *  dependency cycle — tools ↔ builder). */
 export const SOURCE_EXCLUDED_FILES = new Set([
   'syllabus.json',
@@ -39,9 +43,9 @@ export const SOURCE_EXCLUDED_FILES = new Set([
 ])
 
 /**
- * Windows 8.3 短名别名形态（如 `.studyclaw` → `STUDYC~1`）：NTFS 为长名自动
+ * Windows 8.3 短名别名形态（如 `.syllora` → `SYLLOR~1`）：NTFS 为长名自动
  * 生成短名，Node 的 realpath **不展开**短名，字符串 containment 会放行——
- * 模型可用 `STUDYC~1/progress.md` 之类引用绕过点目录/状态目录排除，直读课程
+ * 模型可用 `SYLLOR~1/progress.md` 之类引用绕过点目录/状态目录排除，直读课程
  * 状态文件（题池含答案键、progress 等）。只拒绝以 `~数字` 结尾的段：合法名
  * `backup~1.txt`（扩展名在后）不受影响；极少数以 `~数字` 结尾的真备份名
  * （`notes~2`）被误伤，属可接受的 fail-closed（安全边界不猜意图）。
@@ -86,11 +90,11 @@ export async function isInplaceCourse(courseDir: string): Promise<boolean> {
 
 /**
  * 状态文件路径（v2 布局优先）：新布局下 syllabus.json / progress.md 等
- * 收在 `<root>/.studyclaw/` 内；仅当 v2 文件不存在而旧布局根目录文件存在时
+ * 收在 `<root>/.syllora/` 内；仅当 v2 文件不存在而旧布局根目录文件存在时
  * 才回退到根目录，保证历史工作区仍可读。
  */
 export async function resolveStateFile(courseDir: string, name: string): Promise<string> {
-  const v2 = join(courseDir, '.studyclaw', name)
+  const v2 = join(workspaceStateDirOf(courseDir), name)
   if ((await stat(v2).catch(() => null))?.isFile()) return v2
   return join(courseDir, name)
 }
@@ -105,7 +109,7 @@ export async function resolveStateFile(courseDir: string, name: string): Promise
 export async function resolveSourceRef(courseDir: string, ref: string): Promise<string> {
   const root = resolve(await courseSourceRoot(courseDir))
   if (!(await stat(root).catch(() => null))?.isDirectory()) {
-    throw new ToolRejected('课程资料根目录不存在（先运行 studyclaw build）')
+    throw new ToolRejected('课程资料根目录不存在（先运行 syllora build）')
   }
   if (typeof ref !== 'string' || ref.trim() === '') {
     throw new ToolRejected('path 不能为空')
@@ -118,10 +122,10 @@ export async function resolveSourceRef(courseDir: string, ref: string): Promise<
   if (parts.length === 0 || parts.some(part => part === '.' || part === '..')) {
     throw new ToolRejected(`非法的 path: ${ref}`)
   }
-  // T-1：8.3 短名别名（STUDYC~1）不展开且字符串 containment 放行——拒绝以
-  // `~数字` 结尾的段，堵住经短名引用 `.studyclaw` 等被排除目录的绕过。
+  // T-1：8.3 短名别名（SYLLOR~1）不展开且字符串 containment 放行——拒绝以
+  // `~数字` 结尾的段，堵住经短名引用 `.syllora` 等被排除目录的绕过。
   if (parts.some(isEightDotThreeSegment)) {
-    throw new ToolRejected('路径段疑似 Windows 8.3 短名别名（如 STUDYC~1），已拒绝')
+    throw new ToolRejected('路径段疑似 Windows 8.3 短名别名（如 SYLLOR~1），已拒绝')
   }
   const excluded = (await isInplaceCourse(courseDir)) ? INPLACE_SOURCE_EXCLUDED_DIRS : new Set<string>()
   if (parts.some(part => part.startsWith('.') || excluded.has(part))) {

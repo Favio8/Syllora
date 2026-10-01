@@ -8,8 +8,7 @@
  *
  * Pass --build to also run the CLI bundle build and web export first.
  * 本机适配：corepack 已损坏、pnpm 不在 PATH——构建命令直接调用各包本地
- * 依赖入口（与 AGENTS_studyclaw-next.md 的「统一改用仓库根 node_modules 直调」
- * 约定一致），不再经由 pnpm --filter。
+ * 依赖入口，独立克隆无需访问仓库外的文档或绝对路径。
  */
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -96,7 +95,7 @@ cpSync(bundle, join(hostOut, 'bin.js'))
 // bin.js 顶层还会 createRequire('../package.json') 读取版本号（bundle 内联），
 // 因此 host/ 的上一级（resources/）也需要一份含 version 的 package.json。
 const cliPkg = JSON.parse(readFileSync(join(repoRoot, 'apps', 'cli', 'package.json'), 'utf8'))
-writeFileSync(join(resources, 'package.json'), JSON.stringify({ name: 'studyclaw-host-resources', version: cliPkg.version, private: true }, null, 2) + '\n')
+writeFileSync(join(resources, 'package.json'), JSON.stringify({ name: 'syllora-host-resources', version: cliPkg.version, private: true }, null, 2) + '\n')
 writeFileSync(join(hostOut, 'package.json'), JSON.stringify({ type: 'module', private: true }, null, 2) + '\n')
 
 // 3) external runtime closure (koffi / pdf-parse + their platform native packages)

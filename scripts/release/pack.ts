@@ -3,7 +3,7 @@
  *
  * 1. 构建 CLI 自包含 bundle（tsc -b + tsdown → apps/cli/lib/bin.js）与
  *    Web 静态导出（next build → apps/web/out，由 serve 托管）；
- * 2. 合成发布清单——已打包形态下 @studyclaw/* / @deepseek-ai/* 闭包已进
+ * 2. 合成发布清单——已打包形态下 @syllora/* / @deepseek-ai/* 闭包已进
  *    bundle，清单只声明真正的 npm 外部依赖（koffi / pdf-parse）；
  * 3. 在 staging 目录里 `npm pack`，产物落入 artifacts/。
  *
@@ -68,6 +68,8 @@ cpSync(join(cliDir, 'lib', 'bin.js'), join(stageDir, 'lib', 'bin.js'))
 for (const name of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) {
   cpSync(join(repoRoot, name), join(stageDir, name))
 }
+mkdirSync(join(stageDir, 'docs'), { recursive: true })
+cpSync(join(repoRoot, 'docs', 'RUNTIME_MIGRATION.md'), join(stageDir, 'docs', 'RUNTIME_MIGRATION.md'))
 
 /** FL-20：发布清单只保留 npm 可解析的外部依赖；workspace 闭包已全部入包。 */
 const publishManifest = {

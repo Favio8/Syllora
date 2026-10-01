@@ -1,7 +1,7 @@
 /**
  * Course build engine: markdown ingest, checksum incrementality, syllabus
  * merge, task pool, progress seeding, and structured LLM task generation.
- * @module @studyclaw/course-builder
+ * @module @syllora/course-builder
  */
 
 export { MarkdownIngestor, slug, conceptTypeOf, IngestError, DEFAULT_MAX_CHUNK_CHARS } from './ingestor.ts'
@@ -59,7 +59,7 @@ export type {
   DependencyBatch,
 } from './models.ts'
 export { TASK_GENERATOR_SYSTEM, EVALUATOR_SYSTEM, DYNAMIC_CARD_SYSTEM, DEP_INFER_SYSTEM, taskGeneratorUser, evaluatorUser, dynamicCardUser, depInferUser } from './prompts.ts'
-export { buildDefaultSpecs } from '@studyclaw/tools'
+export { buildDefaultSpecs } from '@syllora/tools'
 export { generationTargets, type GenerationTarget } from './task-gen.ts'
 export { checkTaskQuality, enforceTaskQuality, answerPositionSkewWarning } from './quality.ts'
 export {

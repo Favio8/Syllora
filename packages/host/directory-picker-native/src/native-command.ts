@@ -3,7 +3,7 @@
  * `packages/util/native-command` 同语义的本地实现)——utf8 stdio capture,
  * abort propagation, Windows console hide. Native pickers never invoke a
  * shell (no injection surface).
- * @module @studyclaw/directory-picker-native/native-command
+ * @module @syllora/directory-picker-native/native-command
  */
 
 import { execFile } from 'node:child_process'

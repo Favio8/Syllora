@@ -2,10 +2,10 @@
  * Title text normalization and UTF-8-safe truncation.
  *
  * Vendored from deepseek-harness (dsh) `packages/session/session-title/src/normalize.ts`
- * (MIT License, Copyright (c) DeepSeek AI). Adapted for StudyClaw: the regexes are
+ * (MIT License, Copyright (c) DeepSeek AI). Adapted for Syllora: the regexes are
  * built at runtime from code points so the source stays free of raw control
- * characters, with StudyClaw's fallback title policy layered on top.
- * @module @studyclaw/session/src/title
+ * characters, with Syllora's fallback title policy layered on top.
+ * @module @syllora/session/src/title
  */
 
 function cp(code: number): string {
@@ -94,11 +94,11 @@ export function fallbackSessionTitle(input: string, maxWords: number, maxBytes: 
   return truncateTitleUtf8(words.join(' '), maxBytes).trimEnd()
 }
 
-/** StudyClaw fallback policy: dsh production caps (5 words / 40 bytes) fit the sidebar row. */
+/** Syllora fallback policy: dsh production caps (5 words / 40 bytes) fit the sidebar row. */
 export const FALLBACK_TITLE_MAX_WORDS = 5
 export const FALLBACK_TITLE_MAX_BYTES = 40
 
-/** Convenience wrapper applying StudyClaw's fallback policy to a first user message. */
-export function studyclawFallbackTitle(input: string): string {
+/** Convenience wrapper applying Syllora's fallback policy to a first user message. */
+export function sylloraFallbackTitle(input: string): string {
   return fallbackSessionTitle(input, FALLBACK_TITLE_MAX_WORDS, FALLBACK_TITLE_MAX_BYTES)
 }

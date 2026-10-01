@@ -1,6 +1,6 @@
 /**
  * Path canonicalization for workspace identity.
- * @module @studyclaw/workspace/src/paths
+ * @module @syllora/workspace/src/paths
  */
 
 import { realpath } from 'node:fs/promises'

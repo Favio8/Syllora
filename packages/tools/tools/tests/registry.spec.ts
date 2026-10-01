@@ -10,16 +10,16 @@ import { join } from 'node:path'
 import { agentToolRegistry, buildDefaultSpecs, buildGenericSpecs, defaultToolRegistry, ToolRejected, ToolRegistry, ToolRuntime, type ToolActions } from '../src/index.ts'
 
 async function setup(): Promise<{ root: string; courseDir: string; wsRoot: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-tools-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-tools-'))
   const wsRoot = join(root, 'ws')
   // 项目即课程：状态/资料就地位于项目根。
   const courseDir = wsRoot
   await mkdir(join(courseDir, 'docs'), { recursive: true })
-  await mkdir(join(wsRoot, '.studyclaw'), { recursive: true })
+  await mkdir(join(wsRoot, '.syllora'), { recursive: true })
   await writeFile(join(courseDir, 'docs', 'a.md'), '# 标题\n第一行内容。\n第二行。\n第三行。\n', 'utf8')
   await writeFile(join(courseDir, '.hidden.md'), '隐藏\n', 'utf8')
   await writeFile(join(courseDir, 'docs', 'b.txt'), '关键字在这里\n另一行\n', 'utf8')
-  await writeFile(join(wsRoot, '.studyclaw', 'Memory.md'), '全局画像：OOP 薄弱。\n', 'utf8')
+  await writeFile(join(wsRoot, '.syllora', 'Memory.md'), '全局画像：OOP 薄弱。\n', 'utf8')
   await writeFile(join(courseDir, 'syllabus.json'), JSON.stringify({
     course_id: 'c1', title: 'OOP', version: '1.0.0',
     chapters: [{ id: 'chap_1', title: '封装', concepts: [{ id: 'c_1', name: '封装的意义' }] }],

@@ -3,7 +3,7 @@
  * （id/name/type/章节标题 + 内容摘要），structured call 输出
  * 每概念 prerequisites；输出经 sanitize（未知 id/自引用/去重）与
  * 环剔除后写回 syllabus（Python schemas.py 无环硬约束 parity）。
- * @module @studyclaw/course-builder/src/dep-infer
+ * @module @syllora/course-builder/src/dep-infer
  */
 
 import { createUserMessage, type GenerateOptions } from '@deepseek-ai/dsh-llm'

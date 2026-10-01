@@ -181,7 +181,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
 
   const workspaceName = workspacePath
     ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? workspacePath
-    : "StudyClaw";
+    : "Syllora";
 
   /** 注册表 + 各项目课程并行装载（并列树的唯一数据源）。 */
   const refreshWorkspaces = useCallback(async () => {
@@ -570,7 +570,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
   /** 品牌行显示当前项目名（DSH SidebarRoot 语义），不再用带引号的占位符。 */
   const currentProjectLabel = courses.find((course) => course.id === activeCourseId)?.title
     ?? wsItems.find((item) => item.path === workspacePath)?.title
-    ?? "StudyClaw";
+    ?? "Syllora";
 
   const sessionsByCourse = useMemo(() => {
     const next: Record<string, SessionSummary[]> = { ...courseSessions };
@@ -1115,7 +1115,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
           title={workspacePath ? "设置" : "请先添加/打开一个项目，再打开设置"}
           className="mt-auto flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-card hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-focus"
           onClick={() => {
-            // FL-03：未打开工作区时设置会写到宿主进程 cwd 的游离 `.studyclaw/`
+            // FL-03：未打开工作区时设置会写到宿主进程 cwd 的游离 `.syllora/`
             //（UI 报"已保存"，重启即失忆）——入口直接拦截并引导先建项目。
             if (!workspacePath) {
               flashStatusBanner("⚠ 请先添加/打开一个项目，再打开设置（配置需要项目目录落盘）");

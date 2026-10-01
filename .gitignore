@@ -26,6 +26,8 @@ verify_tmp/
 .smoke-*
 
 # 本地运行时产物（host 注册表 / E2E 工作区，勿提交）
+.syllora/
+# Legacy runtime data stays private until migrated or backed up.
 .studyclaw/
 e2e-workspace/
 

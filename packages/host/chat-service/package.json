@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/chat-service",
+    "name":  "@syllora/chat-service",
     "version":  "0.1.0",
-    "description":  "StudyClaw chat host: config.yaml/credentials resolution, dsh DeepSeekAdapter tool-client adapter, and the session/stream service wired to TutorSession",
+    "description":  "Syllora chat host: config.yaml/credentials resolution, dsh DeepSeekAdapter tool-client adapter, and the session/stream service wired to TutorSession",
     "license":  "MIT",
     "type":  "module",
     "exports":  {
@@ -13,15 +13,15 @@
                     "./package.json":  "./package.json"
                 },
     "dependencies":  {
-                         "@studyclaw/agent":  "workspace:^",
+                         "@syllora/agent":  "workspace:^",
                          "@deepseek-ai/dsh-credentials":  "workspace:^",
                          "@deepseek-ai/dsh-llm":  "workspace:^",
                          "@deepseek-ai/dsh-llm-deepseek":  "workspace:^",
-                         "@studyclaw/session":  "workspace:^",
-                         "@studyclaw/tools":  "workspace:^",
+                         "@syllora/session":  "workspace:^",
+                         "@syllora/tools":  "workspace:^",
                          "js-yaml":  "^4.1.0",
-                         "@studyclaw/course-builder":  "workspace:^",
-                         "@studyclaw/learning":  "workspace:^"
+                         "@syllora/course-builder":  "workspace:^",
+                         "@syllora/learning":  "workspace:^"
                      },
     "peerDependencies":  {
                              "@deepseek-ai/cordis":  "workspace:^"

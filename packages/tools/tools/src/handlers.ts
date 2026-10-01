@@ -1,7 +1,8 @@
+import { workspaceStateDirOf } from './runtime-paths.ts'
 /**
  * Tool handlers for filesystem, interactive, and host-injected learning
  * actions. Ported from Python `agent_tools.py` handlers.
- * @module @studyclaw/tools/src/handlers
+ * @module @syllora/tools/src/handlers
  */
 
 import { randomBytes } from 'node:crypto'
@@ -18,7 +19,7 @@ const courseLocks = new Map<string, Promise<void>>()
 
 /** FL-36：跨进程文件锁。进程内 Promise 链在"桌面端 + 用户另开 CLI/第二个
  * 宿主"的跨进程并发下完全失效（progress.md 丢更新复发），所以在进程内链的
- * 临界区里再套一层 `<课程>/.studyclaw/course.lock` 文件锁：`wx` 独占创建 +
+ * 临界区里再套一层 `<课程>/.syllora/course.lock` 文件锁：`wx` 独占创建 +
  * 写入 pid，持有者死亡后由后来者自愈抢走。
  * BUG-003/NEW-001：锁令牌改为 `pid:nonce` 并在获取后读回确认——`wx` 成功到
  * 写入之间锁文件为空，可能被后来者判"陈旧"抢走；nonce 让确认比对可精确判定
@@ -55,8 +56,8 @@ async function canStealCourseLock(lockPath: string): Promise<boolean> {
 }
 
 async function withCourseFileLock<T>(courseDir: string, fn: () => Promise<T>): Promise<T> {
-  const lockPath = join(courseDir, '.studyclaw', 'course.lock')
-  await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
+  const lockPath = join(workspaceStateDirOf(courseDir), 'course.lock')
+  await mkdir(workspaceStateDirOf(courseDir), { recursive: true })
   const deadline = Date.now() + COURSE_LOCK_TIMEOUT_MS
   const token = newCourseLockToken()
   let backoff = COURSE_LOCK_POLL_MS
@@ -78,7 +79,7 @@ async function withCourseFileLock<T>(courseDir: string, fn: () => Promise<T>): P
           continue
         }
         if (Date.now() > deadline) {
-          throw new Error(`课程正被其他 StudyClaw 进程占用（${lockPath}），请稍后重试；若确认无其他实例运行可手动删除该锁文件`)
+          throw new Error(`课程正被其他 Syllora 进程占用（${lockPath}），请稍后重试；若确认无其他实例运行可手动删除该锁文件`)
         }
         await contend()
         continue
@@ -181,10 +182,10 @@ function workspacePath(ctx: ToolContext, value: string): string {
   // `relative('C:\\ws', 'D:\\x')` 返回 'D:\\x'（绝对形态），不以 '../' 开头，
   // 旧判定放行 → 跨盘逃逸（现有调用方被后续 realpath 层兜住，但原语本身不安全）。
   if (relPath === '' || isAbsolute(relPath) || relPath === '..' || relPath.startsWith('../') || relPath.startsWith('..\\')) throw new ToolRejected('路径必须位于工作区内')
-  // T-1：8.3 短名（如 STUDYC~1 ↔ .studyclaw）realpath 不展开、字符串
+  // T-1：8.3 短名（如 SYLLOR~1 ↔ .syllora）realpath 不展开、字符串
   // containment 放行——通用文件工具同样拒绝，与 resolveSourceRef 同口径。
   if (relPath.split(/[\\/]/).some(isEightDotThreeSegment)) {
-    throw new ToolRejected('路径段疑似 Windows 8.3 短名别名（如 STUDYC~1），已拒绝')
+    throw new ToolRejected('路径段疑似 Windows 8.3 短名别名（如 SYLLOR~1），已拒绝')
   }
   return target
 }
@@ -677,7 +678,7 @@ export async function handlerGetCourseState(ctx: ToolContext, _args: Record<stri
 
 /** `get_memory`: global profile (Memory.md) + course pool note (M2 simplified). */
 export async function handlerGetMemory(ctx: ToolContext, _args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
-  const memoryPath = join(ctx.workspaceRoot, '.studyclaw', 'Memory.md')
+  const memoryPath = join(workspaceStateDirOf(ctx.workspaceRoot), 'Memory.md')
   const memory = await readFile(memoryPath, 'utf8').catch(() => null)
   if (memory === null || memory.trim() === '') {
     return ['（尚无沉淀）', { global: '', course: [] }]

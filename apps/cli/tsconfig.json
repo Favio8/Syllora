@@ -37,6 +37,9 @@
     },
     {
       "path": "../../packages/host/directory-picker-native"
+    },
+    {
+      "path": "../../packages/tools/tools"
     }
   ]
 }

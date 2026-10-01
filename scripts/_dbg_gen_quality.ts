@@ -13,11 +13,11 @@ import { createDeepSeekToolClient } from '../packages/host/chat-service/src/adap
 const sourceWs = process.argv[2]
 if (sourceWs === undefined) throw new Error('用法：npx tsx scripts/_dbg_gen_quality.ts <已配置的工作区路径>')
 
-const tempWs = await mkdtemp(join(tmpdir(), 'studyclaw-gen-quality-'))
-await mkdir(join(tempWs, '.studyclaw'), { recursive: true })
+const tempWs = await mkdtemp(join(tmpdir(), 'syllora-gen-quality-'))
+await mkdir(join(tempWs, '.syllora'), { recursive: true })
 // 复用源工作区的 provider/模型/密钥引用配置（密文凭据 + 用户级 master.key 可解密）
-await writeFile(join(tempWs, '.studyclaw', 'config.yaml'), await readFile(join(sourceWs, '.studyclaw', 'config.yaml'), 'utf8'))
-try { await writeFile(join(tempWs, '.studyclaw', 'credentials.json'), await readFile(join(sourceWs, '.studyclaw', 'credentials.json'), 'utf8')) } catch {}
+await writeFile(join(tempWs, '.syllora', 'config.yaml'), await readFile(join(sourceWs, '.syllora', 'config.yaml'), 'utf8'))
+try { await writeFile(join(tempWs, '.syllora', 'credentials.json'), await readFile(join(sourceWs, '.syllora', 'credentials.json'), 'utf8')) } catch {}
 await writeFile(join(tempWs, 'doc.md'), [
   '# Agent Harness 讲义（节选）',
   '',
@@ -30,7 +30,7 @@ await writeFile(join(tempWs, 'doc.md'), [
 
 const config = await loadChatConfig(tempWs)
 const client = createDeepSeekToolClient(config)
-const generator = new LlmTaskGenerator(client, { model: config.model, provider: config.providerId || 'studyclaw', temperature: 0.4 })
+const generator = new LlmTaskGenerator(client, { model: config.model, provider: config.providerId || 'syllora', temperature: 0.4 })
 
 const chunk = {
   chunk_id: 'chunk_001', chapter_id: 'chap_001', concept_id: 'c_loop',

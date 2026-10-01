@@ -24,10 +24,10 @@ async function seedBoard(boardPath: string): Promise<void> {
 
 describe('SyncApplier', () => {
   it('更新概念行后重算表头汇总并写 emoji 单元格（H5/L9）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-applier-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-applier-'))
     const courseDir = join(root, 'course')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
-    const boardPath = join(courseDir, '.studyclaw', 'progress.md')
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
+    const boardPath = join(courseDir, '.syllora', 'progress.md')
     await seedBoard(boardPath)
     const applier = new SyncApplier(courseDir, courseDir)
     const summary = await applier.apply(
@@ -47,10 +47,10 @@ describe('SyncApplier', () => {
   })
 
   it('转义单元格行不错位（F-11 家族）：名字含 \\| 的行 mastery 仍正确回写', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-applier-esc-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-applier-esc-'))
     const courseDir = join(root, 'course')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
-    const boardPath = join(courseDir, '.studyclaw', 'progress.md')
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
+    const boardPath = join(courseDir, '.syllora', 'progress.md')
     await writeFile(boardPath, [
       '# 学习进度', '',
       '- **总体掌握度**：0%', '- **待复习卡片数**：0', '- **最后更新时间**：2026-08-20 10:00', '',
@@ -68,10 +68,10 @@ describe('SyncApplier', () => {
   })
 
   it('RV-12：串行 apply 不丢更新、不留临时文件（宿主经 courseLock 串行的生产形态）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-applier-serial-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-applier-serial-'))
     const courseDir = join(root, 'course')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
-    const boardPath = join(courseDir, '.studyclaw', 'progress.md')
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
+    const boardPath = join(courseDir, '.syllora', 'progress.md')
     await seedBoard(boardPath)
     const applier = new SyncApplier(courseDir, courseDir)
     // 生产形态：宿主给 TutorSession 注入 withCourseLock，两个 sync 写段串行
@@ -86,7 +86,7 @@ describe('SyncApplier', () => {
     expect(c1Row).toContain('🟢 100%')
     expect(c2Row).toContain('🟡 50%')
     // 无临时文件残留。
-    const files = await readdir(join(courseDir, '.studyclaw'))
+    const files = await readdir(join(courseDir, '.syllora'))
     expect(files.some(file => file.includes('.tmp'))).toBe(false)
     await rm(root, { recursive: true, force: true })
   })

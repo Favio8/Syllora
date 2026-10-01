@@ -43,7 +43,7 @@ export interface Win32DialogInternals {
 }
 
 /** The dialog title every host shows. */
-export const DIALOG_TITLE = '选择 StudyClaw 工作区目录'
+export const DIALOG_TITLE = '选择 Syllora 工作区目录'
 
 /** `WM_CLOSE` re-post cadence while an abort waits for the worker to unwind. */
 const CLOSE_RETRY_MS = 150

@@ -1,96 +1,47 @@
-# StudyClaw 发布 Runbook（v0.1.0-beta 及以后）
+# Syllora 发布操作说明
 
-> 本文把「CI 已验证、需要人按开关」的发布动作固化为可复现步骤。
-> CI 侧（ci.yml / desktop.yml / release.yml）已全绿；本文只覆盖**本地手动**部分。
+用途：2026-10-01 更新自有命名后的发布步骤。状态：流程已配置；不代表已发布。
 
-## 0. 前置检查（每次发布前）
+所有命令从独立克隆的 Syllora 仓库执行。正式发布前确认版本、目标提交、
+npm `@syllora` 组织权限与 `NPM_TOKEN`，以及签名、许可和未关闭阻塞。
 
-```bash
-# 以下命令都在仓库根目录（clone 下来的 studyclaw-next/）执行
-git status --porcelain          # 必须为空
-git log --oneline -3            # 确认 HEAD 是待发布提交
-node_modules/.bin/tsc.cmd -b tsconfig.json   # 0 错误
-node_modules/.bin/vitest.cmd run             # 全绿（apps/web 单独一份）
-cd apps/web && node_modules/.bin/vitest.cmd run
+## 验证
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm --dir apps/web test
+pnpm release:pack
+pnpm release:verify
+pnpm release:publint
 ```
 
-## 1. npm 发布 @studyclaw/cli
+`release:pack` 生成自包含 CLI 与静态 Web，并把 `@syllora/cli` 打包到
+`artifacts/syllora-cli-<version>.tgz`。`release:verify` 在隔离目录安装并运行
+新命令；`publint` 校验 npm 发布结构。桌面构建与严格冒烟见
+[桌面说明](../apps/desktop/README.md)。只有实际执行成功才能记录通过。
 
-**状态**：CI 的 npm job 已 dry-run 验证（NPM_TOKEN 未配置时自动降级）；本地
-`release:pack → verify → publint → publish --dry-run` 全通过。二选一：
+## 发布
 
-### 方式 A：本机发布（快）
+`.github/workflows/release.yml` 仅在 `v*` tag 推送时执行。维护者先同步
+根目录、CLI 与桌面清单版本，确认 CI 和评审通过，再对具体版本创建并推送 tag。
+不要为了测试命名修复推送发布 tag。
 
-```bash
-# ① 确认 registry 是 npmjs（本机默认可能指向 npmmirror！）
-npm config get registry
-npm config set registry https://registry.npmjs.org/
+流水线先通过类型与测试门禁，再并行执行三平台桌面出包与 npm 打包验证。
+`NPM_TOKEN` 可用时发布到 `@syllora/cli`；没有 token 时只执行 dry-run。
+预发布版本使用 `beta` dist-tag。两组作业完成后创建本仓库 GitHub Release。
+更新地址为 `https://github.com/Favio8/Syllora/releases/latest/download/`。
 
-# ② 登录
-npm login
+如采用本机发布，使用明确的 npm registry 与已验证的 tarball；版本和权限确认后
+执行 `npm publish <tarball> --registry https://registry.npmjs.org/ --access public`，
+预发布加 `--tag beta`。不要更改全局 registry 来完成一次发布。
 
-# ③ 发布（artifacts/ 下的 tgz 由 release:pack 产出）
-cd artifacts
-npm publish studyclaw-cli-0.1.0-beta.tgz --tag beta --access public --cache .npm-cache
+## 发布后检查与恢复
 
-# ④ 恢复镜像（国内后续安装更快）
-npm config set registry https://registry.npmmirror.com/
-```
+核对 npm 包名、CLI `syllora --help`、安装器名称 Syllora、Release 资产及
+`latest*.yml` 下载地址。实际安装后按 README 执行主流程并记录结果。
 
-### 方式 B：CI 发布（推荐，环境干净）
-
-仓库 Settings → Secrets and variables → Actions 添加 `NPM_TOKEN`（Granular
-token，仅限 `@studyclaw` scope 的 read/write），然后：
-
-```bash
-gh run list --workflow=release.yml --limit 5      # 先取 run id（不是 job id）
-gh run rerun <run-id> --failed                    # 只重跑失败的 job
-```
-
-release.yml 的实际顺序：`gate`（typecheck + 测试）通过后，**npm 发布与三平台
-桌面打包并行**，两者都成功后 `github-release` job 才创建 Release 并上传全部
-产物。也就是说 npm 包通常比 GitHub Release 更早可安装——排障时别把"Release
-还没出现"当成"npm 没发"。
-
-### 发布后验证
-
-```bash
-npm view @studyclaw/cli dist-tags        # 应见 beta: 0.1.0-beta
-npm view @studyclaw/cli versions --json | tail -5
-```
-
-## 2. GitHub Release（桌面壳 + 便携版）
-
-tag 触发（release.yml 自动完成三平台打包 + 上传）：
-
-```bash
-git tag v0.1.0-beta
-git push origin v0.1.0-beta
-```
-
-手动补资产时（便携版 zip 在 artifacts/）：
-
-```bash
-gh release upload v0.1.0-beta artifacts/StudyClaw-0.1.0-portable-win-x64.zip --clobber
-```
-
-## 3. 仓库可见性
-
-- studyclaw-next：**已公开**（2026-09-27）
-- studyclaw（旧 Python 版）：**已归档**（read-only），README 有重定向声明
-
-## 4. 回滚
-
-- npm：`npm unpublish @studyclaw/cli@0.1.0-beta --force`（72 小时内）或
-  `npm deprecate @studyclaw/cli@0.1.0-beta "reason"`
-- GitHub Release：`gh release delete v0.1.0-beta --yes`（tag 需另删）
-
-## 5. 已知注意事项
-
-- Windows 本机 `dist/win-unpacked.tmp` 可能被索引器锁死，出包用
-  `-c.directories.output=dist5` 绕过（CI fresh runner 无此问题）
-- 本机直连 GitHub 超时时，Electron 下载设
-  `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
-- 发布**前**：release.yml 的 npm job 自己会跑一遍 pack → verify（真装一遍并
-  运行）→ publint，任一步失败就不会发布；ci.yml 的 release-gate 在每次
-  push/PR 也跑同一套门禁，问题更早现形
+发现回归时先停止继续分发，记录影响版本与数据兼容性，优先发布修复版本；
+撤回包、删除 Release 或改写 tag 是独立外部操作，按具体授权执行。
+运行目录恢复方法见 [RUNTIME_MIGRATION.md](RUNTIME_MIGRATION.md)。

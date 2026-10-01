@@ -1,5 +1,5 @@
 /**
- * `studyclaw chat` 命令测试（对齐 Python test_cli_chat 断言语义）：
+ * `syllora chat` 命令测试（对齐 Python test_cli_chat 断言语义）：
  * REPL 流式直打、<think> 零泄漏（仅一行 [思考中…]）、ask 应答续流、
  * /exit 退出提示、--turns/单发、最近会话恢复、tool 摘要、非法 mode。
  */
@@ -60,7 +60,7 @@ describe('chat', () => {
     })
 
     const text = cap.text()
-    expect(text).toContain('STUDYCLAW // TUTOR SESSION')
+    expect(text).toContain('SYLLORA // TUTOR SESSION')
     expect(text).toContain('[思考中…]')
     expect(text).toContain('你好！有什么想问？')
     expect(text).not.toContain('不该出现的思考内容')

@@ -1,7 +1,7 @@
 /**
- * StudyClaw 前端类型契约 (T0.3).
+ * Syllora 前端类型契约 (T0.3).
  *
- * 与后端 `src/studyclaw/core/schemas.py`（Pydantic v2）**1:1 对齐**：
+ * 与后端 `src/syllora/core/schemas.py`（Pydantic v2）**1:1 对齐**：
  * - 字段名 = API 线上的 camelCase alias（pydantic `to_camel` 生成，见 api_spec.md §1）；
  * - 枚举值与 Python Enum 的 value 完全一致；
  * - 任何一侧新增/改名字段，必须同步另一侧并通过 `scripts/check_types.mjs` 对拍。
@@ -274,7 +274,7 @@ export interface AskLine {
 export type HistoryLine = SessionMetaLine | ChatLine | EvalLine | SyncLine | ToolLine | AskLine;
 
 // ---------------------------------------------------------------------------
-// [STUDYCLAW_SYNC] 回写协议载荷（file_contracts §4.2，Agent 隐藏块）
+// [SYLLORA_SYNC] 回写协议载荷（file_contracts §4.2，Agent 隐藏块）
 // ---------------------------------------------------------------------------
 
 export interface ConceptScoreUpdate {
@@ -290,7 +290,7 @@ export interface SyncBlock {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace config — .studyclaw/config.yaml（file_contracts §2.1）
+// Workspace config — .syllora/config.yaml（file_contracts §2.1）
 // ---------------------------------------------------------------------------
 
 export interface LlmConfig {
@@ -315,7 +315,7 @@ export interface UiConfig {
   defaultMode: LearningMode;
 }
 
-export interface StudyClawConfig {
+export interface SylloraConfig {
   version: number;
   llm: LlmConfig;
   providers: Record<string, ProviderProfile>;

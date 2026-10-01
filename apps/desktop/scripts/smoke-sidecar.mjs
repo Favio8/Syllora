@@ -5,7 +5,7 @@
  *   ELECTRON_RUN_AS_NODE=1 + 本机 electron.exe 作为纯 Node，
  *   拉起 resources/host/bin.js serve --port 0（免装 Node 链路）：
  *   1. 15s 内写出 host.json {pid, port, token, ...}
- *   2. GET /      → 200 且 index.html 已 tap 注入 window.__STUDYCLAW__
+ *   2. GET /      → 200 且 index.html 已 tap 注入 window.__SYLLORA__
  *   3. GET /api/health → 200 {ok:true}
  *   4. GET /icon.svg   → 200（静态资源 MIME）
  *   5. 杀进程树后 host.json 被清理（残留锁检测）
@@ -42,8 +42,8 @@ const child = spawn(electron, [binJs, 'serve', '--port', '0'], {
   env: {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
-    STUDYCLAW_HOME: home,
-    STUDYCLAW_WEB_DIST: webDist,
+    SYLLORA_HOME: home,
+    SYLLORA_WEB_DIST: webDist,
     NODE_ENV: 'production',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -68,7 +68,7 @@ try {
 
   const root = await fetch(`http://127.0.0.1:${cfg.port}/`)
   const html = await root.text()
-  const injected = html.includes('__STUDYCLAW__')
+  const injected = html.includes('__SYLLORA__')
   console.log('[smoke] GET /          →', root.status, 'token-injected:', injected)
 
   const health = await fetch(`http://127.0.0.1:${cfg.port}/api/health`)
@@ -98,8 +98,8 @@ try {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
-      STUDYCLAW_HOME: home,
-      STUDYCLAW_WEB_DIST: webDist,
+      SYLLORA_HOME: home,
+      SYLLORA_WEB_DIST: webDist,
       NODE_ENV: 'production',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

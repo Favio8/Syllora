@@ -2,7 +2,7 @@
  * Default tool specification set (all 13 tools from Python
  * `agent_tools.py::build_default_specs`). Handlers are registered in
  * `index.ts`; host-side learning actions are supplied through ToolContext.
- * @module @studyclaw/tools/src/specs
+ * @module @syllora/tools/src/specs
  */
 
 export type ToolPolicy = 'read' | 'action' | 'write' | 'interactive'

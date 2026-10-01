@@ -3,7 +3,7 @@
   // configs point here). NEVER add include/files to this file: it would leak
   // into every extending package project and narrow the facade's match-all
   // scope. Copied from dsh with the paths map trimmed to the copied packages;
-  // every new @studyclaw package appends its entry here.
+  // every new @syllora package appends its entry here.
   "compilerOptions": {
     "target": "es2024",
     "module": "esnext",
@@ -54,17 +54,17 @@
       "@deepseek-ai/dsh-launch-environment": ["./packages/util/launch-environment/src"],
       "@deepseek-ai/dsh-timeout": ["./packages/util/timeout/src"],
       "@deepseek-ai/dsh-home-paths": ["./packages/util/home-paths/src"],
-      "@studyclaw/workspace": ["./packages/workspace/workspace/src"],
-      "@studyclaw/course-summary": ["./packages/course/summary/src"],
-      "@studyclaw/apiproxy": ["./packages/host/apiproxy/src"],
-      "@studyclaw/directory-picker-native": ["./packages/host/directory-picker-native/src"],
-      "@studyclaw/tools": ["./packages/tools/tools/src"],
-      "@studyclaw/session": ["./packages/session/session/src"],
-      "@studyclaw/chat-service": ["./packages/host/chat-service/src"],
-      "@studyclaw/course-builder": ["./packages/course/builder/src"],
-      "@studyclaw/learning": ["./packages/learning/learning/src"]
-      ,"@studyclaw/agent": ["./packages/agent/agent/src"]
-      ,"@studyclaw/acp": ["./packages/acp/acp/src"]
+      "@syllora/workspace": ["./packages/workspace/workspace/src"],
+      "@syllora/course-summary": ["./packages/course/summary/src"],
+      "@syllora/apiproxy": ["./packages/host/apiproxy/src"],
+      "@syllora/directory-picker-native": ["./packages/host/directory-picker-native/src"],
+      "@syllora/tools": ["./packages/tools/tools/src"],
+      "@syllora/session": ["./packages/session/session/src"],
+      "@syllora/chat-service": ["./packages/host/chat-service/src"],
+      "@syllora/course-builder": ["./packages/course/builder/src"],
+      "@syllora/learning": ["./packages/learning/learning/src"]
+      ,"@syllora/agent": ["./packages/agent/agent/src"]
+      ,"@syllora/acp": ["./packages/acp/acp/src"]
     }
   }
 }

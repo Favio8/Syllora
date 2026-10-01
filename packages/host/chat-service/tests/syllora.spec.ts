@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SylloraService } from '../src/syllora.ts'
 import { buildPlan, duePointIds, evidence, HOUR, noteChange, planDiff, proposeReviews, publicCourse, recommend, recordNext, refreshNotice, restoreNotice, type Course, type Question } from '../src/syllora-domain.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
-import type { StructuredCallClient } from '@studyclaw/course-builder'
+import type { StructuredCallClient } from '@syllora/course-builder'
 
 const roots:string[]=[]
 afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})))})

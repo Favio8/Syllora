@@ -12,7 +12,7 @@ import { basename,  join } from 'node:path'
 import { createDeepSeekToolClient } from '../src/adapter.ts'
 import { chatStream, listSessions, searchSessions } from '../src/service.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
-import type { ToolCall } from '@studyclaw/session'
+import type { ToolCall } from '@syllora/session'
 
 /** Stream one OpenAI chat.completion.chunk sequence over the response. */
 function sse(res: import('node:http').ServerResponse, chunks: string[]): void {
@@ -108,16 +108,16 @@ describe('DeepSeekAdapter tool client (mock OpenAI server)', () => {
 
 describe('chatStream e2e (config + tools + persistence)', () => {
   it('runs a full tool-loop turn and lists the session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-chat-e2e-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-chat-e2e-'))
     const ws = join(root, 'ws')
     const courseDir = ws
-    await mkdir(join(ws, '.studyclaw'), { recursive: true })
+    await mkdir(join(ws, '.syllora'), { recursive: true })
     await writeFile(join(courseDir, 'overview.md'), '# 多态\n\n## 重载与覆写\n\n重载是同名不同参数；覆写是重定义。\n', 'utf8')
     await writeFile(join(courseDir, 'syllabus.json'), JSON.stringify({
       course_id: basename(ws), title: '多态', version: '1.0.0',
       chapters: [{ id: 'chap_1', title: '继承', concepts: [{ id: 'c_1', name: '重载与覆写' }] }],
     }), 'utf8')
-    await writeFile(join(ws, '.studyclaw', 'config.yaml'), [
+    await writeFile(join(ws, '.syllora', 'config.yaml'), [
       'version: 1',
       'llm:',
       '  provider: mock',

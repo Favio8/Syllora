@@ -1,14 +1,14 @@
 /**
- * `studyclaw review` — due-only review rounds: thin wrapper over `runQuiz`
+ * `syllora review` — due-only review rounds: thin wrapper over `runQuiz`
  * with mode=review (the `courses.quiz` review mode returns SM-2 due cards
  * only, no new-card fill), defaulting to 50 cards like the Python CLI.
- * @module @studyclaw/cli/commands/review
+ * @module @syllora/cli/commands/review
  */
 
 import { parseArgs, UsageError } from '../lib/args.ts'
 import { makeQuizDeps, runQuiz } from './quiz.ts'
 
-/** `studyclaw review [count] [--course <id>] [--concept <id>]` */
+/** `syllora review [count] [--course <id>] [--concept <id>]` */
 export async function reviewCommand(argv: string[]): Promise<void> {
   const parsed = parseArgs(argv)
   const positionalCount = parsed.positionals[0]

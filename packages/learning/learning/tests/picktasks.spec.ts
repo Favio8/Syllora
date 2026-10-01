@@ -9,8 +9,8 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadProgressBoard, saveProgressBoard, upsertProgressRecord, writeTaskPool } from '@studyclaw/course-builder'
-import type { HarnessTask } from '@studyclaw/course-builder'
+import { loadProgressBoard, saveProgressBoard, upsertProgressRecord, writeTaskPool } from '@syllora/course-builder'
+import type { HarnessTask } from '@syllora/course-builder'
 import { pickTasks } from '../src/index.ts'
 
 const tmpRoots: string[] = []
@@ -25,12 +25,12 @@ afterEach(async () => {
  * @param cEvals - 概念 c_c 的评测次数（进度板口径）。
  */
 async function makeCourse(cEvals = 0): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-pick-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-pick-'))
   tmpRoots.push(root)
   const course = join(root, 'demo')
-  await mkdir(join(course, '.studyclaw'), { recursive: true })
+  await mkdir(join(course, '.syllora'), { recursive: true })
   // 进度板：c_a 已到期（昨日），c_b/c_c 为新播种概念（nextReviewAt=null）。
-  // P1-7：板与写入侧一致，存放在 <课程根>/.studyclaw/progress.md。
+  // P1-7：板与写入侧一致，存放在 <课程根>/.syllora/progress.md。
   let board = {
     overallMastery: 0,
     dueCount: 0,
@@ -49,7 +49,7 @@ async function makeCourse(cEvals = 0): Promise<string> {
     conceptId: 'c_c', name: '概念C', chapter: '章一', mastery: 0, evals: cEvals,
     passRate: 0, streak: 0, ef: 2.5, nextReviewAt: null, misattribution: 'none',
   })
-  await saveProgressBoard(join(course, '.studyclaw', 'progress.md'), board)
+  await saveProgressBoard(join(course, '.syllora', 'progress.md'), board)
   return course
 }
 
@@ -115,7 +115,7 @@ describe('pickTasks', () => {
   it('FL-24 回归：到期卡按进度板的真实评测次数升序出卡', async () => {
     const course = await makeCourse()
     // 让 c_c 也到期，且评测次数（5）多于 c_a（1）。
-    const boardPath = join(course, '.studyclaw', 'progress.md')
+    const boardPath = join(course, '.syllora', 'progress.md')
     let board = await loadProgressBoard(boardPath)
     board = upsertProgressRecord(board, {
       conceptId: 'c_c', name: '概念C', chapter: '章一', mastery: 0.4, evals: 5,
@@ -178,7 +178,7 @@ describe('pickTasks', () => {
   it('T-4：到期挑选按概念去重（count 内不全是同一概念），不足时同概念补位', async () => {
     const course = await makeCourse()
     // 让 c_a 与 c_c 都到期；c_a 有两张到期卡。
-    const boardPath = join(course, '.studyclaw', 'progress.md')
+    const boardPath = join(course, '.syllora', 'progress.md')
     let board = await loadProgressBoard(boardPath)
     board = upsertProgressRecord(board, {
       conceptId: 'c_c', name: '概念C', chapter: '章一', mastery: 0.4, evals: 5,

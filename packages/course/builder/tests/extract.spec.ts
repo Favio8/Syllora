@@ -21,13 +21,13 @@ afterEach(async () => {
 })
 
 async function tmpDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-extract-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-extract-'))
   tmpRoots.push(root)
   return root
 }
 
 async function makeCourse(files: Record<string, string | Buffer>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-extract-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-extract-'))
   tmpRoots.push(root)
   const course = join(root, 'demo')
   await mkdir(join(course, 'sources'), { recursive: true })
@@ -183,7 +183,7 @@ describe('CourseBuilder with extracted documents', () => {
     expect(report.tasksGenerated).toBe(4)
     expect(gen.calls).toBe(2)
 
-    const syllabus = JSON.parse(await readFile(join(course, '.studyclaw', 'syllabus.json'), 'utf8'))
+    const syllabus = JSON.parse(await readFile(join(course, '.syllora', 'syllabus.json'), 'utf8'))
     const conceptNames = syllabus.chapters.flatMap((ch: { concepts: { name: string }[] }) => ch.concepts.map((c: { name: string }) => c.name))
     expect(conceptNames).toEqual(['Filter and Score', 'Preemption'])
 
@@ -193,7 +193,7 @@ describe('CourseBuilder with extracted documents', () => {
     expect(report2.added).toEqual([])
     expect(report2.unchanged).toEqual(['guide.pdf'])
     expect(gen.calls).toBe(callsBefore)
-    const checksums = JSON.parse(await readFile(join(course, '.studyclaw', '.checksums'), 'utf8'))
+    const checksums = JSON.parse(await readFile(join(course, '.syllora', '.checksums'), 'utf8'))
     expect(Object.keys(checksums)).toEqual(['guide.pdf'])
   })
 
@@ -211,7 +211,7 @@ describe('CourseBuilder with extracted documents', () => {
     expect([...report.added].sort()).toEqual(['broken.pdf', 'good.md'])
     expect(report.tasksGenerated).toBe(2)
     expect(gen.calls).toBe(1)
-    expect(await readFile(join(course, '.studyclaw', 'syllabus.json'), 'utf8')).toContain('CNI')
+    expect(await readFile(join(course, '.syllora', 'syllabus.json'), 'utf8')).toContain('CNI')
 
     const callsBefore = gen.calls
     const report2 = await builder.build()
@@ -233,7 +233,7 @@ describe('CourseBuilder with extracted documents', () => {
     expect(report.degraded).toEqual([])
     expect(report.added.sort()).toEqual(['manual.html', 'metrics.xlsx', 'note.docx'])
     expect(gen.calls).toBe(3)
-    const syllabus = JSON.parse(await readFile(join(course, '.studyclaw', 'syllabus.json'), 'utf8'))
+    const syllabus = JSON.parse(await readFile(join(course, '.syllora', 'syllabus.json'), 'utf8'))
     const concepts = syllabus.chapters.flatMap((ch: { concepts: { name: string }[] }) => ch.concepts.map((c: { name: string }) => c.name))
     expect(concepts.sort()).toEqual(['Docx Chapter', 'Html Chapter', 'Sheet1'])
   })

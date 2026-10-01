@@ -3,8 +3,8 @@
  * precedence; otherwise the only course is picked automatically; multiple
  * courses show a numbered menu. Errors are friendly Chinese CliErrors
  * (workspace not opened / no courses / unknown course id).
- * Also hosts the top-level `studyclaw course` command (list/show).
- * @module @studyclaw/cli/commands/course
+ * Also hosts the top-level `syllora course` command (list/show).
+ * @module @syllora/cli/commands/course
  */
 
 import { CliError, hostRpc, type RpcFn } from '../lib/client.ts'
@@ -31,11 +31,11 @@ interface CoursesResult {
 export async function resolveCourse(deps: CourseDeps, explicitId: string | null): Promise<CourseSummary> {
   const workspaces = await deps.rpc<WorkspacesResult>('workspaces.list', {})
   if (workspaces.current === null || workspaces.current === '') {
-    throw new CliError('workspace-not-found', '尚未打开工作区：请先运行 studyclaw serve 并在 Web 界面打开/选择一个工作区')
+    throw new CliError('workspace-not-found', '尚未打开工作区：请先运行 syllora serve 并在 Web 界面打开/选择一个工作区')
   }
   const { courses, missing } = await deps.rpc<CoursesResult>('workspaces.courses', { path: workspaces.current })
   if (missing || courses.length === 0) {
-    throw new CliError('course-not-found', '当前工作区没有课程：请先创建或导入课程（Web 端「＋ 新项目」/ studyclaw init）')
+    throw new CliError('course-not-found', '当前工作区没有课程：请先创建或导入课程（Web 端「＋ 新项目」/ syllora init）')
   }
   if (explicitId !== null) {
     const found = courses.find(course => course.id === explicitId)
@@ -85,16 +85,16 @@ function renderCourse(terminal: Terminal, course: CourseSummary, detailed: boole
 }
 
 /**
- * `studyclaw course list` — 列出当前工作区的全部课程（ID/标题/掌握度/今日到期）。
+ * `syllora course list` — 列出当前工作区的全部课程（ID/标题/掌握度/今日到期）。
  */
 export async function courseListCommand(deps: CourseDeps): Promise<void> {
   const workspaces = await deps.rpc<WorkspacesResult>('workspaces.list', {})
   if (workspaces.current === null || workspaces.current === '') {
-    throw new CliError('workspace-not-found', '尚未打开工作区：请先运行 studyclaw serve 并在 Web 界面打开/选择一个工作区')
+    throw new CliError('workspace-not-found', '尚未打开工作区：请先运行 syllora serve 并在 Web 界面打开/选择一个工作区')
   }
   const { courses, missing } = await deps.rpc<CoursesResult>('workspaces.courses', { path: workspaces.current })
   if (missing || courses.length === 0) {
-    throw new CliError('course-not-found', '当前工作区没有课程：请先创建或导入课程（Web 端「＋ 新项目」/ studyclaw sync）')
+    throw new CliError('course-not-found', '当前工作区没有课程：请先创建或导入课程（Web 端「＋ 新项目」/ syllora sync）')
   }
   deps.terminal.title('COURSES')
   for (const course of courses) renderCourse(deps.terminal, course, false)
@@ -102,7 +102,7 @@ export async function courseListCommand(deps: CourseDeps): Promise<void> {
 }
 
 /**
- * `studyclaw course show [<id>]` — 显示课程概要；省略 id 时多课程走交互选择
+ * `syllora course show [<id>]` — 显示课程概要；省略 id 时多课程走交互选择
  * （复用 quiz/review 的 resolveCourse 语义）。
  */
 export async function courseShowCommand(deps: CourseDeps, explicitId: string | null): Promise<void> {
@@ -110,10 +110,10 @@ export async function courseShowCommand(deps: CourseDeps, explicitId: string | n
   renderCourse(deps.terminal, course, true)
 }
 
-/** `studyclaw course <list|show> [<id>]` 的分发（bin.ts main() 接线）。 */
+/** `syllora course <list|show> [<id>]` 的分发（bin.ts main() 接线）。 */
 export async function courseCommand(argv: string[]): Promise<void> {
   const sub = argv[0] ?? 'list'
   if (sub === 'list') await courseListCommand(makeCourseDeps())
   else if (sub === 'show') await courseShowCommand(makeCourseDeps(), argv[1] ?? null)
-  else throw new UsageError(`未知子命令「${sub}」：用法 studyclaw course <list|show> [<courseId>]`)
+  else throw new UsageError(`未知子命令「${sub}」：用法 syllora course <list|show> [<courseId>]`)
 }

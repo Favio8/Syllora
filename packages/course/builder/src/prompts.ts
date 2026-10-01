@@ -1,10 +1,10 @@
 /**
  * Prompt templates for the builder/learning LLM calls (inlined from the
  * Python `prompts.yaml`: task_generator / evaluator / dynamic_task_generator).
- * @module @studyclaw/course-builder/src/prompts
+ * @module @syllora/course-builder/src/prompts
  */
 
-export const TASK_GENERATOR_SYSTEM = `你是 StudyClaw 的 Harness 出题引擎，职责是把知识切片转化为可严格判定的验证题卡。
+export const TASK_GENERATOR_SYSTEM = `你是 Syllora 的 Harness 出题引擎，职责是把知识切片转化为可严格判定的验证题卡。
 硬性要求：
 1. 每张题卡的 type 必须三选一：concept（概念辨析）/ scenario（场景决策）/ debug_edge（边界与排错）；
 2. evaluation_criteria.rubric 必须给出 2~4 条**互斥**的采分点，每条是一个可独立二元判定（Hit/Miss）的逻辑要点，禁止互相蕴含或重复；
@@ -49,7 +49,7 @@ export function taskGeneratorUser(
   ].join('\n')
 }
 
-export const EVALUATOR_SYSTEM = `你是 StudyClaw 的 Rubric 判题官，执行二元命中判定（Binary Hit Check），不做主观打分、不放水。
+export const EVALUATOR_SYSTEM = `你是 Syllora 的 Rubric 判题官，执行二元命中判定（Binary Hit Check），不做主观打分、不放水。
 硬性要求：
 1. judgements 逐条对应 Rubric：顺序与原文完全一致，一条不少、一条不多；
 2. hit=true 仅当作答明确覆盖该要点；含糊带过、只提关键词未展开、或与要点相悖，一律 hit=false；
@@ -78,14 +78,14 @@ export function evaluatorUser(
   ].join('\n')
 }
 
-export const DYNAMIC_CARD_SYSTEM = `你是 StudyClaw 的动态靶向题生成器：基于源题卡与暴露出的误区，生成反例/变体题卡（F5）。
+export const DYNAMIC_CARD_SYSTEM = `你是 Syllora 的动态靶向题生成器：基于源题卡与暴露出的误区，生成反例/变体题卡（F5）。
 硬性要求：
 1. type 必须三选一：concept / scenario / debug_edge；
 2. rubric 2~4 条互斥采分点；difficulty 1~5；
 3. 题干必须针对 {misconception} 设计变体或反例，禁止与源题重复；
 4. 只输出符合给定 Schema 的结构化 JSON，不输出任何解释文字。`
 
-export const DEP_INFER_SYSTEM = `你是 StudyClaw 的课程先修关系标注器，依据概念清单（名称、类型、所属章节与内容摘要）推断概念级学习先修关系。
+export const DEP_INFER_SYSTEM = `你是 Syllora 的课程先修关系标注器，依据概念清单（名称、类型、所属章节与内容摘要）推断概念级学习先修关系。
 硬性要求：
 1. 只允许引用清单中出现的 conceptId，禁止引用清单之外的 id；
 2. 先修关系必须语义明确：学习 B 之前应先掌握 A，才把 A 写入 B 的 prerequisites（A == B 自引用一律禁止）；

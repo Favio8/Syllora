@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { generateDynamicCards, type EvaluatorOptions } from '../src/index.ts'
-import { harnessTask, type HarnessTask, type StructuredCallClient } from '@studyclaw/course-builder'
+import { harnessTask, type HarnessTask, type StructuredCallClient } from '@syllora/course-builder'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 
 /** 以 _emit_structured 工具调用形态喂一个固定批次的假客户端。 */

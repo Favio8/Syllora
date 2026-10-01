@@ -4,14 +4,26 @@ import { basename,  join } from 'node:path'
 import { createSession, selectSessionModel, sessionModels } from '../src/service.ts'
 import { configForSession } from '../src/course.ts'
 import { LearningAgentService } from '../src/service.ts'
-import { AgentRegistry } from '@studyclaw/agent'
-import { SessionEventStore, SessionStore, sessionModelLine, utcTs } from '@studyclaw/session'
+import { AgentRegistry } from '@syllora/agent'
+import { SessionEventStore, SessionStore, sessionModelLine, utcTs } from '@syllora/session'
 import { activateProvider, saveProvider, setCredential } from '../src/settings.ts'
+import { afterEach, beforeEach, vi } from 'vitest'
+
+let isolatedHome: string
+beforeEach(async () => {
+  isolatedHome = await mkdtemp(join(tmpdir(), 'syllora-model-home-'))
+  vi.stubEnv('SYLLORA_HOME', isolatedHome)
+  vi.stubEnv('STUDYCLAW_HOME', '')
+})
+afterEach(async () => {
+  vi.unstubAllEnvs()
+  await rm(isolatedHome, { recursive: true, force: true })
+})
 
 async function setup(): Promise<{ root: string; sessionId: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-model-selection-'))
-  await mkdir(join(root, '.studyclaw', 'history'), { recursive: true })
-  await writeFile(join(root, '.studyclaw-placeholder'), '', 'utf8')
+  const root = await mkdtemp(join(tmpdir(), 'syllora-model-selection-'))
+  await mkdir(join(root, '.syllora', 'history'), { recursive: true })
+  await writeFile(join(root, '.syllora-placeholder'), '', 'utf8')
   const saved = await saveProvider(root, {
     id: 'acme', name: 'Acme', model: 'acme-small', baseUrl: 'https://acme.example/v1',
     temperature: 0.3, maxConcurrency: 1,
@@ -39,10 +51,10 @@ describe('session model directory', () => {
     await selectSessionModel(root, basename(root), sessionId, { provider: 'acme', model: 'acme-large', effort: 'high' })
     const next = await sessionModels(root, basename(root), sessionId)
     expect(next.current).toEqual({ provider: 'acme', model: 'acme-large', effort: 'high' })
-    const history = await readFile(join(root, '.studyclaw', 'history', `session_${sessionId}.jsonl`), 'utf8')
+    const history = await readFile(join(root, '.syllora', 'history', `session_${sessionId}.jsonl`), 'utf8')
     expect(history).toContain('"type":"session_model"')
     // 会话创建即登记事件日志后，选模走事件日志（运行时的事实来源），遗留 jsonl 只留创建时的默认模型行。
-    const events = await readFile(join(root, '.studyclaw', 'history', `session_${sessionId}.events.jsonl`), 'utf8')
+    const events = await readFile(join(root, '.syllora', 'history', `session_${sessionId}.events.jsonl`), 'utf8')
     expect(events).toContain('"type":"session/model"')
     expect(events).toContain('"effort":"high"')
     await rm(root, { recursive: true, force: true })
@@ -59,8 +71,8 @@ describe('session model directory', () => {
   })
 
   it('does not expose obsolete DeepSeek defaults and reports an unroutable empty setup', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-model-empty-'))
-    await mkdir(join(root, '.studyclaw', 'history'), { recursive: true })
+    const root = await mkdtemp(join(tmpdir(), 'syllora-model-empty-'))
+    await mkdir(join(root, '.syllora', 'history'), { recursive: true })
     const created = await createSession(root, basename(root), 'socratic', null)
     const directory = await sessionModels(root, basename(root), created.sessionId)
     expect(directory.current).toBeNull()
@@ -83,12 +95,12 @@ describe('session model directory', () => {
 
   it('resolves learning actions from the event-log model selection', async () => {
     const { root, sessionId } = await setup()
-    const events = new SessionEventStore(join(root, '.studyclaw', 'history'))
+    const events = new SessionEventStore(join(root, '.syllora', 'history'))
     await events.append(sessionId,
       { ts: utcTs(), type: 'session/create', payload: { mode: 'socratic' } },
       { ts: utcTs(), type: 'session/model', payload: { provider: 'acme', model: 'acme-large' } },
     )
-    await new SessionStore(join(root, '.studyclaw', 'history')).append(sessionId,
+    await new SessionStore(join(root, '.syllora', 'history')).append(sessionId,
       sessionModelLine.parse({ type: 'session_model', ts: utcTs(), provider: 'acme', model: 'acme-small' }),
     )
     const directory = await sessionModels(root, basename(root), sessionId)

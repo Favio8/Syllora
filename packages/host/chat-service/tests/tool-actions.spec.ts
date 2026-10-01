@@ -3,8 +3,8 @@ import { createToolActions } from '../src/service.ts'
 import type { CourseService } from '../src/course.ts'
 
 const ctx = {
-  courseDir: '/tmp/studyclaw/courses/demo',
-  workspaceRoot: '/tmp/studyclaw',
+  courseDir: '/tmp/syllora/courses/demo',
+  workspaceRoot: '/tmp/syllora',
 }
 
 async function* evalFrames(): AsyncGenerator<Record<string, unknown>> {

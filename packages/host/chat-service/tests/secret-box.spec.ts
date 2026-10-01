@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { sealCredentials, unsealCredentials } from '../src/secret-box.ts'
 
-const home = await mkdtemp(join(tmpdir(), 'studyclaw-secretbox-'))
+const home = await mkdtemp(join(tmpdir(), 'syllora-secretbox-'))
 
 afterAll(() => rm(home, { recursive: true, force: true }))
 
@@ -26,7 +26,7 @@ describe('unsealCredentials 密封判定', () => {
   })
 
   it('密封信封往返：seal → unseal 恢复原始键值', async () => {
-    process.env.STUDYCLAW_HOME = home
+    process.env.SYLLORA_HOME = home
     try {
       const credentials = { deepseek: 'sk-test-abc123', openai: 'sk-xyz' }
       const sealed = await sealCredentials(credentials)
@@ -34,17 +34,17 @@ describe('unsealCredentials 密封判定', () => {
       expect(result.wasPlaintext).toBe(false)
       expect(result.data).toEqual(credentials)
     } finally {
-      delete process.env.STUDYCLAW_HOME
+      delete process.env.SYLLORA_HOME
     }
   })
 
   it('RV-5：sealed=true 但缺 iv/tag/ciphertext 的信封响亮报错（不误当明文返回垃圾键值）', async () => {
-    process.env.STUDYCLAW_HOME = home
+    process.env.SYLLORA_HOME = home
     try {
       const broken = JSON.stringify({ version: 1, sealed: true, alg: 'A256GCM' })
       await expect(unsealCredentials(broken)).rejects.toThrow('凭据信封缺少字段')
     } finally {
-      delete process.env.STUDYCLAW_HOME
+      delete process.env.SYLLORA_HOME
     }
   })
 })

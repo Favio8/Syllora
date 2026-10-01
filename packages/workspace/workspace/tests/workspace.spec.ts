@@ -27,7 +27,7 @@ interface Harness {
 }
 
 async function setup(root?: string): Promise<Harness> {
-  const resolved = root ?? await mkdtemp(join(tmpdir(), 'studyclaw-workspace-'))
+  const resolved = root ?? await mkdtemp(join(tmpdir(), 'syllora-workspace-'))
   const ctx = new Context()
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root: resolved })
@@ -211,7 +211,7 @@ describe('WorkspaceRegistry', () => {
     // Fabricate the divergence by writing directly through the domain: an
     // orphaned table row plus a stale global.
     const ctx = new Context()
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-workspace-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-workspace-'))
     await ctx.plugin(Storage)
     await ctx.plugin(StorageJson, { root })
     await ctx.plugin(StorageDomain, { backend: 'json' })

@@ -3,7 +3,7 @@
   "version": "0.1.1-beta",
   "private": true,
   "type": "module",
-  "description": "Syllora local AI learning workspace, built on the StudyClaw TypeScript monorepo",
+  "description": "Syllora local AI learning workspace, built on the Syllora TypeScript monorepo",
   "license": "MIT",
   "packageManager": "pnpm@11.7.0",
   "engines": {

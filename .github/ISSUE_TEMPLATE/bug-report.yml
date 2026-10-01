@@ -1,12 +1,12 @@
 name: 🐛 Bug 报告
-description: 报告 StudyClaw 的功能异常或崩溃
-labels: ["bug", "triage"]
+description: 报告 Syllora 的功能异常或崩溃
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
         感谢反馈！请先确认：
-        - 已看过 [README 的 FAQ](../README.md#faq)（端口占用、corepack/pnpm、测试超时等常见问题）
+        - 已看过 [README 的启动与开发说明](https://github.com/Favio8/Syllora#启动)
         - 环境类疑问建议先到 [Discussions](../../discussions) 提问
         - **日志与截图请先脱敏**：不要粘贴 API Key、令牌或不想公开的个人资料内容
 
@@ -73,7 +73,7 @@ body:
       label: 安装 / 运行方式
       options:
         - 从源码运行（pnpm serve）
-        - npm 全局安装（studyclaw serve）
+        - npm 全局安装（syllora serve）
         - 开发模式（两个终端 + next dev）
     validations:
       required: true
@@ -81,8 +81,8 @@ body:
   - type: textarea
     id: status-output
     attributes:
-      label: "`studyclaw status` 输出"
-      description: 在项目目录下运行 `studyclaw status`（或 `pnpm --silent -- tsx apps/cli/src/bin.ts status`），粘贴输出
+      label: "`syllora status` 输出"
+      description: 在项目目录下运行 `syllora status`（或 `pnpm --silent -- tsx apps/cli/src/bin.ts status`），粘贴输出
     validations:
       required: false
 
@@ -98,7 +98,7 @@ body:
     id: logs
     attributes:
       label: 相关日志
-      description: "`~/.studyclaw/logs/` 下当日日志的相关片段（请先脱敏）"
+      description: "`~/.syllora/logs/` 下当日日志的相关片段（请先脱敏）"
       render: shell
     validations:
       required: false

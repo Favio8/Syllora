@@ -12,7 +12,7 @@ import { agentEventToFrame } from '../src/service.ts'
 // 导入 agentEventToFrame（此前两处内联 if 链缺 turn/cancelled → TURN_CANCELLED，
 // 取消回合被 done 帧错误闭环为成功）。此导入锁定入口导出不被删除。
 import { agentEventToFrame as agentEventToFrameFromEntry } from '../src/index.ts'
-import type { AgentEvent } from '@studyclaw/agent'
+import type { AgentEvent } from '@syllora/agent'
 
 function ev(type: string, payload: Record<string, unknown> = {}): AgentEvent {
   return { agentId: 'study-s1', sessionId: 's1', turnId: 't1', type, payload, seq: 1 }

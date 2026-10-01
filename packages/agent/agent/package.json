@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/agent",
+    "name":  "@syllora/agent",
     "version":  "0.1.0",
-    "description":  "DSH-style StudyClaw Agent lifecycle, turn queue, cancellation, and event projection",
+    "description":  "DSH-style Syllora Agent lifecycle, turn queue, cancellation, and event projection",
     "license":  "MIT",
     "type":  "module",
     "exports":  {
@@ -13,9 +13,9 @@
                     "./package.json":  "./package.json"
                 },
     "dependencies":  {
-                         "@studyclaw/session":  "workspace:^"
+                         "@syllora/session":  "workspace:^"
                      },
     "devDependencies":  {
-                            "@studyclaw/session":  "workspace:^"
+                            "@syllora/session":  "workspace:^"
                         }
 }

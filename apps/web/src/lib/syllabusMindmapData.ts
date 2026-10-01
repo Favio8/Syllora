@@ -3,7 +3,7 @@
  * 课程根 → 章节分支（章节色板）→ 概念叶子（掌握度/先修角标）。
  *
  * 节点 HTML 只承载语义结构（class + data-status），全部视觉样式
- * 由 `app/globals.css` 中 `.studyclaw-mindmap` 作用域规则提供
+ * 由 `app/globals.css` 中 `.syllora-mindmap` 作用域规则提供
  * （设计 token 驱动，禁止内联样式与硬编码色值）。
  */
 

@@ -1,5 +1,5 @@
 /**
- * `studyclaw quiz` 命令测试（对齐 Python test_cli_quiz 断言语义）：
+ * `syllora quiz` 命令测试（对齐 Python test_cli_quiz 断言语义）：
  * Q 序号/[HIT]/[MISS]/PASSED/FAILED/得分/EF/下次复习/结算表头；空作答短路
  * 不触发评测；review 到期清空与 new 空池提示；多课程菜单；非法 mode。
  */
@@ -36,7 +36,7 @@ describe('quiz', () => {
     await runQuiz({ ...deps, terminal: deps.terminal }, { mode: 'new', count: 5 })
 
     const text = cap.text()
-    expect(text).toContain('STUDYCLAW // QUIZ')
+    expect(text).toContain('SYLLORA // QUIZ')
     expect(text).toContain('Q1/1')
     expect(text).toContain('什么是 Filter？')
     expect(text).toContain('[HIT]')
@@ -108,7 +108,7 @@ describe('quiz', () => {
     const { deps, cap } = makeDeps(handlers)
     await runQuiz({ ...deps, terminal: deps.terminal }, { mode: 'new', count: 5 })
     expect(cap.text()).toContain('题卡池为空')
-    expect(cap.text()).toContain('studyclaw sync')
+    expect(cap.text()).toContain('syllora sync')
   })
 
   it('多课程：编号菜单选择第二门课', async () => {

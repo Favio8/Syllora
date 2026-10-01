@@ -1,13 +1,13 @@
 /**
- * DSH-style Agent runtime for StudyClaw.
+ * DSH-style Agent runtime for Syllora.
  *
  * The runtime owns lifecycle, queueing, cancellation, durable event emission,
  * and replay projection. Domain behavior is supplied by a runner so learning,
  * generic tools, ACP, CLI, and Web all share the same orchestration contract.
- * @module @studyclaw/agent
+ * @module @syllora/agent
  */
 
-import { SessionEventStore, utcTs, type SessionEventEnvelope, type SessionProjection, type TurnEndReason } from '@studyclaw/session'
+import { SessionEventStore, utcTs, type SessionEventEnvelope, type SessionProjection, type TurnEndReason } from '@syllora/session'
 import {
   createAgentRuntimeState,
   type AgentCapability,
@@ -1215,4 +1215,4 @@ export class AgentRegistry {
  */
 export class AgentLoop extends Agent {}
 
-export type { SessionEventStore, SessionEventEnvelope, SessionProjection } from '@studyclaw/session'
+export type { SessionEventStore, SessionEventEnvelope, SessionProjection } from '@syllora/session'

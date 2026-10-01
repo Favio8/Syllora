@@ -35,12 +35,12 @@ notices are retained in the copied files and directories.
 
 ---
 
-## Fork provenance（StudyClaw-Next 整仓改名说明，ENG-4）
+## Fork provenance（StudyClaw-Next 上游历史，ENG-4）
 
 - **基线**：fork 自 `github.com/deepseek-ai/deepseek-harness` 的
   `0.1.0-rc.8` 快照；此后按 StudyClaw 产品形态做增量改造。
 - **许可**：全部沿用 MIT；各 `package.json` 的 license 字段与上游一致。
-- **包名现状**：仓库内 26 个 workspace 包处于两套命名并存的过渡态——
+- **上游当时的包名**：StudyClaw-Next 的 workspace 包处于两套命名并存的过渡态——
   新增/改造的包用 `@studyclaw/*`，沿用的上游基础包保留 `@deepseek-ai/dsh-*`
   原名。**两套名字指向同一实现且互相依赖**，运行时无歧义：
 
@@ -52,10 +52,21 @@ notices are retained in the copied files and directories.
 | dsh-timeout / invariants / launch-environment / anonymous-user-id | 基础设施 |
 | attachment / brand / home-paths | 上游直拷组件 |
 
-- **是否改名**：评估结论是"暂不改"。15 个包改名会波及 import/peerDeps/
+- **上游当时的决定**：评估结论是"暂不改"。15 个包改名会波及 import/peerDeps/
   lockfile，纯机械收益低；本节即作为 provenance 记录存在。后续若启用
   npm 发布再统一迁移。
 
 - **编码纪律**：全部 workspace `package.json` 已去除 UTF-8 BOM
   （历史 PowerShell 批量重写引入；BOM 会破坏严格 JSON 工具链，
   与审查报告 P2-5 同源的 Windows 编码问题）。
+
+## Syllora provenance（2026-10-01）
+
+- 直接复用来源：[StudyClaw-Next](https://github.com/Favio8/studyclaw-next)，MIT。
+- Syllora 自有包、CLI、IPC、浏览器引导及发布产物已统一使用
+  `@syllora/*` / `syllora` / `SYLLORA_*`；原 `@deepseek-ai/*` 基础包与
+  `vendor/` 保持上游名称及原始许可，不冒充 Syllora 原创。
+- `LICENSE` 中的 StudyClaw authors 著作权声明与
+  `docs/upstream/StudyClaw-README.md` 原文保留。新命名不改变许可和归属。
+- `.studyclaw` 与 `STUDYCLAW_HOME` 仅在迁移或资料排除逻辑中保留，
+  迁移规则见 [运行目录与命名迁移](docs/RUNTIME_MIGRATION.md)。

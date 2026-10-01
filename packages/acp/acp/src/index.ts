@@ -4,7 +4,7 @@
  * The Host owns Agent composition and persistence. This package owns only
  * request validation, method aliases, stable error codes, and update framing
  * so Web, CLI and stdio adapters cannot drift apart.
- * @module @studyclaw/acp
+ * @module @syllora/acp
  */
 
 export const ACP_PROTOCOL_VERSION = 1 as const
@@ -168,7 +168,7 @@ export class AcpRouter {
       if (request.method === 'initialize' || request.method === 'protocol.initialize') {
         const result = await this.host.initialize?.() ?? {
           protocolVersion: ACP_PROTOCOL_VERSION,
-          serverInfo: { name: 'studyclaw', version: '0.1.0' },
+          serverInfo: { name: 'syllora', version: '0.1.0' },
           capabilities: { sessions: true, prompt: true, replay: true, cancellation: true, approvals: true, models: true },
         }
         return { jsonrpc: '2.0', id, result }

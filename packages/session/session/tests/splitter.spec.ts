@@ -18,7 +18,7 @@ const FULL_REPLY = [
   PREFACE,
   '所以正确写法是覆写。',
   SYNC_MARKER,
-  '{"_studyclaw_sync": {"concept_updates": [{"id": "c_1", "score": 0.6}], "memory_hints": ["再次混淆重载与覆写"], "changelog": "+ 攻克抽象类"}}',
+  '{"_syllora_sync": {"concept_updates": [{"id": "c_1", "score": 0.6}], "memory_hints": ["再次混淆重载与覆写"], "changelog": "+ 攻克抽象类"}}',
   '',
 ].join('')
 
@@ -68,7 +68,7 @@ describe('streamSplit', () => {
     expect(visible).toBe('正文。')
     expect(payload).toBeNull()
 
-    const bad = `正文。${SYNC_MARKER}${JSON.stringify({ _studyclaw_sync: { concept_updates: [{ id: 'c_x', score: 5 }] } })}`
+    const bad = `正文。${SYNC_MARKER}${JSON.stringify({ _syllora_sync: { concept_updates: [{ id: 'c_x', score: 5 }] } })}`
     expect(() => extractSync(bad)).toThrow(SessionError)
   })
 
@@ -90,7 +90,7 @@ describe('streamSplit', () => {
   })
 
   it('sync content after the marker never reaches the visible stream', () => {
-    const raw = `前文。${SYNC_MARKER}{"_studyclaw_sync":{"concept_updates":[],"memory_hints":[]}}\n尾巴也屏蔽`
+    const raw = `前文。${SYNC_MARKER}{"_syllora_sync":{"concept_updates":[],"memory_hints":[]}}\n尾巴也屏蔽`
     const events = [...streamSplit([raw])]
     const text = events.filter(e => e.kind === 'text').map(e => e.delta).join('')
     expect(text).toBe('前文。')

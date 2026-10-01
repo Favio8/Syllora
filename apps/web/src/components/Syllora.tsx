@@ -9,7 +9,7 @@ import { editDraft, hydrateCourse, markSaved, rememberServer, type DraftCache } 
 import './syllora.css';
 
 async function rpc<T = unknown>(action:string,payload:unknown={}):Promise<T> {
-  const boot = (window as unknown as {__STUDYCLAW__?:{token?:string}}).__STUDYCLAW__;
+  const boot = (window as unknown as {__SYLLORA__?:{token?:string}}).__SYLLORA__;
   const response = await fetch(`/api/syllora/${action}`,{method:'POST',headers:{'Content-Type':'application/json',...(boot?.token?{Authorization:`Bearer ${boot.token}`}:{})},body:JSON.stringify({payload})});
   const body = await response.json();
   if(body.error) throw new Error(body.error.message);
@@ -177,6 +177,6 @@ export default function Syllora() {
       </>}
     </div></aside>}
     {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{course?.materials.find(m=>m.id===source.materialId)?.name} · {source.anchor}</p><pre className="sy-source-text">{source.text}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
-    {settings&&<div className="sy-overlay"><section className="sy-modal sy-settings" role="dialog" aria-modal="true" aria-label="模型与设置"><header><h2>模型与设置</h2><button aria-label="关闭设置" onClick={()=>setSettings(false)}><X size={19}/></button></header><p className="sy-muted">复用 StudyClaw 的模型连接与加密凭据存储。密钥仅保存在本机，不进入前端构建产物。</p><ModelsSection initial={null}/><hr/><h3>外部调用与配额</h3><p>生成大纲、回答和题目时，将向所选模型服务发送相关资料片段、问题和题目。供应商的数据留存规则以其实际政策为准。</p><label className="sy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>允许向已配置模型发送以上内容</label><label>累计模型调用上限（0 表示暂停）<input type="number" min={0} max={10000} value={limit} onChange={e=>setLimit(Number(e.target.value))}/></label><p className="sy-muted">已调用 {data?.settings.calls??0} 次。每道题含生成与复核两次调用。金额费用未知；调用次数限制不等同于金额预算。</p><button className="sy-primary" disabled={busy} onClick={async()=>{if(await run('preferences',{consent,callLimit:limit}))setSettings(false)}}>保存授权与配额</button></section></div>}
+    {settings&&<div className="sy-overlay"><section className="sy-modal sy-settings" role="dialog" aria-modal="true" aria-label="模型与设置"><header><h2>模型与设置</h2><button aria-label="关闭设置" onClick={()=>setSettings(false)}><X size={19}/></button></header><p className="sy-muted">模型配置与加密凭据保存在本机。密钥仅保存在本机，不进入前端构建产物。</p><ModelsSection initial={null}/><hr/><h3>外部调用与配额</h3><p>生成大纲、回答和题目时，将向所选模型服务发送相关资料片段、问题和题目。供应商的数据留存规则以其实际政策为准。</p><label className="sy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>允许向已配置模型发送以上内容</label><label>累计模型调用上限（0 表示暂停）<input type="number" min={0} max={10000} value={limit} onChange={e=>setLimit(Number(e.target.value))}/></label><p className="sy-muted">已调用 {data?.settings.calls??0} 次。每道题含生成与复核两次调用。金额费用未知；调用次数限制不等同于金额预算。</p><button className="sy-primary" disabled={busy} onClick={async()=>{if(await run('preferences',{consent,callLimit:limit}))setSettings(false)}}>保存授权与配额</button></section></div>}
   </div>
 }

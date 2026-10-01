@@ -1,5 +1,5 @@
 /**
- * `studyclaw review` 命令测试：due-only 语义（mode=review）、默认 count 50、
+ * `syllora review` 命令测试：due-only 语义（mode=review）、默认 count 50、
  * REVIEW 头部、到期清空提示、非法 count 用法错误。
  */
 
@@ -31,7 +31,7 @@ describe('review', () => {
       { rpc: fakeRpc(handlers), evalStream: evalFake.stream, terminal: testTerminal(['答案'], cap) },
       { mode: 'review', count: 50, headline: 'REVIEW' },
     )
-    expect(cap.text()).toContain('STUDYCLAW // REVIEW')
+    expect(cap.text()).toContain('SYLLORA // REVIEW')
     expect(capturedQuizPayload.mode).toBe('review')
     expect(capturedQuizPayload.count).toBe(50)
     expect(cap.text()).toContain('Q1/1')

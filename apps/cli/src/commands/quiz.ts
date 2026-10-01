@@ -1,11 +1,11 @@
 /**
- * `studyclaw quiz` — review/new-mode question rounds with rubric evaluation:
+ * `syllora quiz` — review/new-mode question rounds with rubric evaluation:
  * pull tasks via `courses.quiz` (zero-leak quizView), prompt the user for an
  * answer, consume the six eval frames (scan/rubric×N/result/sm2/done from
  * `/api/eval.submit`), then render the verdict and a round summary. An empty
  * answer is locally short-circuited as 0%/FAILED without touching the server
  * (eval.submit rejects empty answers).
- * @module @studyclaw/cli/commands/quiz
+ * @module @syllora/cli/commands/quiz
  */
 
 import { CliError, hostRpc, streamEval, type RpcFn, type SseFrame } from '../lib/client.ts'
@@ -70,7 +70,7 @@ export async function runQuiz(deps: QuizDeps, options: QuizOptions): Promise<voi
   if (tasks.length === 0) {
     // 空态分支与 Python CLI 一致：到期清空 vs 题卡池为空两个提示。
     if (options.mode === 'review') t.warn('今日到期队列已清空（可用 --mode new 解锁新题）')
-    else t.warn('题卡池为空：请先运行 studyclaw sync 生成题卡')
+    else t.warn('题卡池为空：请先运行 syllora sync 生成题卡')
     return
   }
 
@@ -181,7 +181,7 @@ function fmtDelta(value: number): string {
   return `${pct >= 0 ? '+' : '−'}${Math.abs(pct)}%`
 }
 
-/** `studyclaw quiz [count] [--mode new|review] [--course <id>] [--concept <id>]` */
+/** `syllora quiz [count] [--mode new|review] [--course <id>] [--concept <id>]` */
 export async function quizCommand(argv: string[]): Promise<void> {
   const parsed = parseArgs(argv)
   const modeRaw = parsed.options.mode

@@ -6,7 +6,7 @@ import { defineConfig } from 'tsdown'
  * `lib/bin.js`——`files: ["lib/*.js"]` 的 glob 从此必然命中，`bin` 指向的
  * 入口及其依赖一起进 tarball，npm 安装即可运行）。
  *
- * - alwaysBundle：@studyclaw/* / @deepseek-ai/*（npm 上不存在，必须打进
+ * - alwaysBundle：@syllora/* / @deepseek-ai/*（npm 上不存在，必须打进
  *   bundle——`workspace:^` 发布即坏的问题就此消失）+ 其余纯 JS 运行时依赖
  *   （xlsx/mammoth/turndown/zod/js-yaml/busboy 一并入包，安装不依赖它们）。
  * - neverBundle：koffi（win32 目录选择器的原生模块，无法打包进 JS）与
@@ -24,7 +24,7 @@ export default defineConfig({
   dts: false,
   clean: false,
   deps: {
-    alwaysBundle: [/^@studyclaw\//, /^@deepseek-ai\//, 'busboy', 'js-yaml', 'mammoth', 'turndown', 'xlsx', 'zod'],
+    alwaysBundle: [/^@syllora\//, /^@deepseek-ai\//, 'busboy', 'js-yaml', 'mammoth', 'turndown', 'xlsx', 'zod'],
     neverBundle: ['koffi', 'pdf-parse'],
   },
 })

@@ -4,7 +4,7 @@
  * 观测性是售后刚需。做法：tee 式接管 console.log/warn/error——业务代码里
  * 已有的 21 处 console.* 无需逐个改造，全部同步落盘到
  * `<hostHome>/logs/host-<date>.log`（按天轮转，启动时清理保留窗口之外的旧文件）。
- * @module @studyclaw/cli/lib/host-logger
+ * @module @syllora/cli/lib/host-logger
  */
 
 import { appendFile, mkdir, readdir, stat, unlink } from 'node:fs/promises'

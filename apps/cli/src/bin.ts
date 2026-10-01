@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * StudyClaw CLI entry (M1): `studyclaw serve` runs the host — cordis
+ * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
  * dispatches the RPC method table over `POST /api/<method>`.
  *
@@ -10,22 +10,23 @@
 
 import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join, dirname, resolve } from 'node:path'
 import { mkdir, readFile, realpath, stat } from 'node:fs/promises'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
+import { migrateLegacyHome } from '@syllora/tools'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
-import WorkspaceRegistry from '@studyclaw/workspace'
-import { AcpProtocolError, AcpRouter, parseAcpRequest, type AcpHost, type AcpNotification, type AcpRequest, type AcpUpdate } from '@studyclaw/acp'
-import { listCourseSummaries } from '@studyclaw/course-summary'
-import { migrateLegacyLayout, stateDirOf, extractPdfPages } from '@studyclaw/course-builder'
-import { SylloraService, SylloraError } from '@studyclaw/chat-service'
-import { dispatch, type HostServices, type SessionSearchResultView } from '@studyclaw/apiproxy'
-import { pickNativeDirectory } from '@studyclaw/directory-picker-native'
+import WorkspaceRegistry from '@syllora/workspace'
+import { AcpProtocolError, AcpRouter, parseAcpRequest, type AcpHost, type AcpNotification, type AcpRequest, type AcpUpdate } from '@syllora/acp'
+import { listCourseSummaries } from '@syllora/course-summary'
+import { migrateLegacyLayout, stateDirOf, extractPdfPages } from '@syllora/course-builder'
+import { SylloraService, SylloraError } from '@syllora/chat-service'
+import { dispatch, type HostServices, type SessionSearchResultView } from '@syllora/apiproxy'
+import { pickNativeDirectory } from '@syllora/directory-picker-native'
 import {
   activateProvider,
   archiveSession,
@@ -50,11 +51,11 @@ import {
   updateSettings,
   agentEventToFrame,
   LearningAgentService,
-} from '@studyclaw/chat-service'
-import { migrateLegacySession } from '@studyclaw/session'
-import type { LearningMode } from '@studyclaw/session'
-import { createCourseService } from '@studyclaw/chat-service'
-import { AgentRegistry } from '@studyclaw/agent'
+} from '@syllora/chat-service'
+import { migrateLegacySession } from '@syllora/session'
+import type { LearningMode } from '@syllora/session'
+import { createCourseService } from '@syllora/chat-service'
+import { AgentRegistry } from '@syllora/agent'
 import { hostRpc, authHeaders, defaultClientDeps } from './lib/client.ts'
 import { UsageError } from './lib/args.ts'
 import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
@@ -70,13 +71,11 @@ import { courseCommand } from './commands/course.ts'
 function hostHome(): string {
   // NEW-007：env 覆盖先 resolve 成绝对路径（相对路径以进程 cwd 锚定），
   // 避免宿主与 CLI/桌面端 cwd 不同时，配置与锁文件落到不可预期的位置。
-  const override = process.env.STUDYCLAW_HOME
-  if (override !== undefined && override.trim() !== '') return resolve(override.trim())
-  return join(homedir(), '.studyclaw')
+  return migrateLegacyHome()
 }
 
 /** FL-03：设置读写以 lastOpenedPath 为根；未打开工作区时配置会写到宿主进程
- * cwd 的游离 `.studyclaw/`（假成功 + 重启失忆）。落盘前必须先有工作区。 */
+ * cwd 的游离 `.syllora/`（假成功 + 重启失忆）。落盘前必须先有工作区。 */
 function requireWorkspaceRootForSettings(root: string, action: string): void {
   if (root === '') {
     throw new Error(`请先在左栏添加/打开一个项目，再${action}（当前没有已打开的工作区，配置无处落盘）`)
@@ -117,7 +116,7 @@ async function acquireHostInstanceLock(port: number): Promise<HostInstanceLock> 
       }
       const pid = Number(holder.pid)
       if (Number.isInteger(pid) && pid > 0 && pid !== process.pid && isAlive(pid)) {
-        throw new Error(`已有 StudyClaw 宿主实例在运行（PID ${pid}${holder.port === undefined ? '' : `，端口 ${holder.port}`}）。请勿多开实例；确认没有实例在运行后可删除 ${lockPath} 再试。`)
+        throw new Error(`已有 Syllora 宿主实例在运行（PID ${pid}${holder.port === undefined ? '' : `，端口 ${holder.port}`}）。请勿多开实例；确认没有实例在运行后可删除 ${lockPath} 再试。`)
       }
       await rm(lockPath, { force: true })
       continue
@@ -183,11 +182,11 @@ function tokenMatches(presented: string, expected: string): boolean {
   )
 }
 
-/** 从请求提取 token：`Authorization: Bearer` / `x-studyclaw-token` / `?token=`。 */
+/** 从请求提取 token：`Authorization: Bearer` / `x-syllora-token` / `?token=`。 */
 function requestToken(request: import('node:http').IncomingMessage, url: URL): string {
   const auth = request.headers.authorization ?? ''
   if (auth.startsWith('Bearer ')) return auth.slice(7).trim()
-  const header = request.headers['x-studyclaw-token']
+  const header = request.headers['x-syllora-token']
   if (typeof header === 'string' && header.trim() !== '') return header.trim()
   return url.searchParams.get('token')?.trim() ?? ''
 }
@@ -367,7 +366,7 @@ async function healStartupRegistry(registry: StartupRegistry): Promise<void> {
       drop = true
     }
     if (drop) {
-      console.warn(`[studyclaw] 启动自愈：lastOpenedPath 指向临时/失效目录（${last}），已清空`)
+      console.warn(`[syllora] 启动自愈：lastOpenedPath 指向临时/失效目录（${last}），已清空`)
       await registry.setLastOpenedPath('')
     }
   }
@@ -385,7 +384,7 @@ async function healStartupRegistry(registry: StartupRegistry): Promise<void> {
       try {
         if (await registry.resolveByPath(path) !== undefined) continue
         await registry.create(path, name)
-        console.log(`[studyclaw] 迁移历史项目记录: ${path}`)
+        console.log(`[syllora] 迁移历史项目记录: ${path}`)
       } catch {
         // 目录已不存在的记录跳过（realpath 抛错）。
       }
@@ -399,12 +398,12 @@ async function healStartupRegistry(registry: StartupRegistry): Promise<void> {
 }
 
 function usage(): void {
-  console.log('usage: studyclaw serve [--port <n>] [--open] [--insecure-no-token] | status | course <list|show> [<courseId>] | sync [--course <id>] | session migrate [<sessionId>] | quiz [count] [--mode new|review] [--course <id>] [--concept <id>] | review [count] [--course <id>] [--concept <id>] | chat [message] [--mode socratic|quick|feynman|debug] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N] | agent <create|resume|prompt|send|answer|status|cancel|whenIdle|maintenance|maintenance-jobs|dispose> | approvals <list|resolve> | plan <get|update> | todo <get|update> | acp')
+  console.log('usage: syllora serve [--port <n>] [--open] [--insecure-no-token] | status | course <list|show> [<courseId>] | sync [--course <id>] | session migrate [<sessionId>] | quiz [count] [--mode new|review] [--course <id>] [--concept <id>] | review [count] [--course <id>] [--concept <id>] | chat [message] [--mode socratic|quick|feynman|debug] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N] | agent <create|resume|prompt|send|answer|status|cancel|whenIdle|maintenance|maintenance-jobs|dispose> | approvals <list|resolve> | plan <get|update> | todo <get|update> | acp')
 }
 
 function hostUrl(): string {
   // FL-35：显式 env 最高优先；否则随 client.ts 从 host.json 自动发现实际端口。
-  if (process.env.STUDYCLAW_HOST_URL !== undefined) return process.env.STUDYCLAW_HOST_URL.replace(/\/$/, '')
+  if (process.env.SYLLORA_HOST_URL !== undefined) return process.env.SYLLORA_HOST_URL.replace(/\/$/, '')
   return defaultClientDeps().baseUrl
 }
 
@@ -429,7 +428,7 @@ async function agentCommand(argv: string[]): Promise<void> {
     const courseId = argv[2]
     const sessionId = action === 'send' ? argv[3] : undefined
     const message = argv.slice(action === 'send' ? 4 : 3).join(' ').trim()
-    if (courseId === undefined || message === '') throw new Error(`用法：studyclaw agent ${action} <courseId>${action === 'send' ? ' <sessionId>' : ''} <message>`)
+    if (courseId === undefined || message === '') throw new Error(`用法：syllora agent ${action} <courseId>${action === 'send' ? ' <sessionId>' : ''} <message>`)
     result = await acpRpc('session.prompt', {
       courseId,
       message,
@@ -440,7 +439,7 @@ async function agentCommand(argv: string[]): Promise<void> {
   else if (action === 'status' || action === 'cancel' || action === 'whenIdle' || action === 'maintenance' || action === 'dispose') {
     const method = `agents.${action}`
     result = await hostRpc(method, { agentId: argv[2], ...(action === 'cancel' ? { keepInbox: argv[3] === 'true' } : {}), ...(action === 'maintenance' ? { kind: argv[3] ?? 'checkpoint' } : {}) })
-  } else throw new Error('用法：studyclaw agent create <courseId> [mode] [title] | resume <courseId> <sessionId> | prompt <courseId> <message> | send <courseId> <sessionId> <message> | answer <agentId> <text> | status|cancel|whenIdle|maintenance|maintenance-jobs|dispose <agentId>')
+  } else throw new Error('用法：syllora agent create <courseId> [mode] [title] | resume <courseId> <sessionId> | prompt <courseId> <message> | send <courseId> <sessionId> <message> | answer <agentId> <text> | status|cancel|whenIdle|maintenance|maintenance-jobs|dispose <agentId>')
   console.log(JSON.stringify(result, null, 2))
 }
 
@@ -448,7 +447,7 @@ async function approvalsCommand(argv: string[]): Promise<void> {
   const action = argv[1]
   if (action === 'list') console.log(JSON.stringify(await hostRpc('approvals.list', argv[2] ? { agentId: argv[2] } : {}), null, 2))
   else if (action === 'resolve') console.log(JSON.stringify(await hostRpc('approvals.resolve', { requestId: argv[2], decision: argv[3] ?? 'deny' }), null, 2))
-  else throw new Error('用法：studyclaw approvals list [agentId] | resolve <requestId> <allow|deny|cancel>')
+  else throw new Error('用法：syllora approvals list [agentId] | resolve <requestId> <allow|deny|cancel>')
 }
 
 async function planTodoCommand(kind: 'plan' | 'todo', argv: string[]): Promise<void> {
@@ -460,7 +459,7 @@ async function planTodoCommand(kind: 'plan' | 'todo', argv: string[]): Promise<v
     const key = kind === 'plan' ? 'steps' : 'items'
     if (!Array.isArray(value)) throw new Error(`${key} 必须是 JSON 数组`)
     console.log(JSON.stringify(await hostRpc(`${kind}s.update`, { agentId, [key]: value }), null, 2))
-  } else throw new Error(`用法：studyclaw ${kind} get|update <agentId> [JSON array]`)
+  } else throw new Error(`用法：syllora ${kind} get|update <agentId> [JSON array]`)
 }
 
 async function acpStdio(): Promise<void> {
@@ -507,7 +506,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   // 显式逃生口（host.json 的 token 记 null，便于排查）。
   const token = options.insecureNoToken === true ? null : randomBytes(24).toString('hex')
   // FL-21：同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
-  // 纯 API 行为。token 经 index tap 注入同源页面（window.__STUDYCLAW__）。
+  // 纯 API 行为。token 经 index tap 注入同源页面（window.__SYLLORA__）。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
     bootstrap: token === null ? null : { token },
@@ -534,7 +533,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   if (registry.lastOpenedPath !== '') await agentService.recover(registry.lastOpenedPath)
   const acpRequests = new Map<string, AbortController>()
 
-  const configFacts = async (): Promise<import('@studyclaw/chat-service').ResolvedChatConfig | null> =>
+  const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     registry.lastOpenedPath === '' ? null : await loadChatConfig(registry.lastOpenedPath).catch(() => null)
   const syllora = new SylloraService(registry.lastOpenedPath || join(hostHome(), 'syllora'), { pdf: extractPdfPages })
 
@@ -555,7 +554,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       createCards: async (courseId, payload) => courseService.createCards(activeRoot(), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
       dynamicCards: async (courseId, payload) => courseService.dynamicCards(activeRoot(), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
       // M4：evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
-      // 在这里静默丢参导致磁盘幂等账本（.studyclaw/eval-ledger/）永不写入。
+      // 在这里静默丢参导致磁盘幂等账本（.syllora/eval-ledger/）永不写入。
       evalSubmit: (courseId, taskId, answer, sessionId, evalId) => courseService.evalSubmit(activeRoot(), courseId, taskId, answer, sessionId, evalId),
       job: jobId => courseService.job(jobId) as Record<string, unknown> | undefined,
       tools: providerStatus => courseService.tools(providerStatus),
@@ -580,7 +579,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       getLastOpenedPath: () => registry.lastOpenedPath,
     },
     courseSummary: async root => {
-      // v2 布局收拢：旧根目录产物一次性搬进 .studyclaw/（marker 守卫，幂等）。
+      // v2 布局收拢：旧根目录产物一次性搬进 .syllora/（marker 守卫，幂等）。
       await migrateLegacyLayout(root).catch(() => undefined)
       return listCourseSummaries(root)
     },
@@ -588,7 +587,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // opens the modern IFileOpenDialog via koffi (the dialog is the child's
     // first window, so Windows foregrounds it — the PowerShell
     // FolderBrowserDialog spawned from this background host never surfaced;
-    // see @studyclaw/directory-picker-native). Non-Windows resolves null and
+    // see @syllora/directory-picker-native). Non-Windows resolves null and
     // the client falls back to the browse backend.
     pickDirectory: () => pickNativeDirectory(),
     browseDirectory: path => browseLocalDirectory(path, registry.lastOpenedPath),
@@ -659,7 +658,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       create: (courseId, mode, title) => agentService.create(registry.lastOpenedPath, courseId, mode, title),
       resume: (courseId, sessionId) => agentService.resume(registry.lastOpenedPath, courseId, sessionId),
       selectModel: (_courseId, sessionId, selection) => agentService.selectModel(sessionId, selection),
-      send: (courseId, sessionId, mode, content, metadata) => agentService.send(registry.lastOpenedPath, courseId, sessionId, mode as import('@studyclaw/session').LearningMode, content, metadata),
+      send: (courseId, sessionId, mode, content, metadata) => agentService.send(registry.lastOpenedPath, courseId, sessionId, mode as import('@syllora/session').LearningMode, content, metadata),
       list: async () => agentService.list(),
       answer: (agentId, answer) => agentService.answer(agentId, answer),
       status: async agentId => agentService.status(agentId),
@@ -688,7 +687,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       }
     },
     settingsService: {
-      // FL-03：未打开工作区时 root 为 ''，`join('', '.studyclaw', 'config.yaml')`
+      // FL-03：未打开工作区时 root 为 ''，`join('', '.syllora', 'config.yaml')`
       // 会落在宿主进程 cwd——UI 报"已保存"但配置写飞，重启即失忆。所有落盘
       // 操作必须先有工作区。
       get: async () => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '读取设置'); return settingsPayload(registry.lastOpenedPath) as unknown as Record<string, unknown> },
@@ -827,7 +826,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const acpHost: AcpHost = {
     initialize: () => ({
       protocolVersion: 1,
-      serverInfo: { name: 'studyclaw', version: '0.1.0' },
+      serverInfo: { name: 'syllora', version: '0.1.0' },
       capabilities: { sessions: true, prompt: true, replay: true, cancellation: true, approvals: true, models: true },
     }),
     createSession: params => acpCall('agents.create', params),
@@ -943,7 +942,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           response.end()
           return
         }
-        console.error('[studyclaw] upload 失败:', error instanceof Error ? sanitizeErrorMessage(error.stack ?? error.message) : String(error))
+        console.error('[syllora] upload 失败:', error instanceof Error ? sanitizeErrorMessage(error.stack ?? error.message) : String(error))
         response.writeHead(500)
         response.end(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: '上传处理失败', details: null } }))
       })
@@ -1022,7 +1021,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         // 回显），出日志与出 API 前先净化。日志记净化后的堆栈（栈首行即
         // message），排障信息不丢；API 响应只回净化后的单行 message。
         const message = sanitizeErrorMessage(error instanceof Error ? error.message : String(error))
-        console.error(`[studyclaw] rpc ${method} 失败:`, error instanceof Error ? sanitizeErrorMessage(error.stack ?? error.message) : message)
+        console.error(`[syllora] rpc ${method} 失败:`, error instanceof Error ? sanitizeErrorMessage(error.stack ?? error.message) : message)
         response.writeHead(500)
         response.end(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message, details: null } }))
       }
@@ -1386,7 +1385,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (abortController.signal.aborted) { response.end(); return }
       // BUG-005：SSE 错误帧同样可能携带上游凭据回显，出日志与帧前净化。
       const message = sanitizeErrorMessage(error instanceof Error ? error.message : String(error))
-      console.error(`[studyclaw] chat/stream 失败:`, message)
+      console.error(`[syllora] chat/stream 失败:`, message)
       writeFrame('error', {
         code: 'CHAT_STREAM_FAILED',
         message,
@@ -1458,7 +1457,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     server.once('error', (error: NodeJS.ErrnoException) => {
       // FL-41：端口被占时的默认 EADDRINUSE 栈对用户不可读——给出行动指引。
       if (error.code === 'EADDRINUSE') {
-        reject(new Error(`端口 ${port === 0 ? '(随机)' : port} 已被占用（可能是另一个 StudyClaw 实例或其他应用）。可用 --port <n> 换端口，或排查占用进程后重试。`))
+        reject(new Error(`端口 ${port === 0 ? '(随机)' : port} 已被占用（可能是另一个 Syllora 实例或其他应用）。可用 --port <n> 换端口，或排查占用进程后重试。`))
         return
       }
       reject(error)
@@ -1470,7 +1469,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       const actualPort = typeof address === 'object' && address !== null ? address.port : port
       instanceLock.noteActualPort(actualPort)
       void writeHostConfig(actualPort, token).then(() => {
-        console.log(`[studyclaw] host listening on http://127.0.0.1:${actualPort} (home: ${hostHome()}, logs: ${hostLogger.logDir}${token === null ? ', auth: DISABLED' : ''})`)
+        console.log(`[syllora] host listening on http://127.0.0.1:${actualPort} (home: ${hostHome()}, logs: ${hostLogger.logDir}${token === null ? ', auth: DISABLED' : ''})`)
         if (options.open === true) void openBrowser(`http://127.0.0.1:${actualPort}`)
         resolve()
       }).catch(reject)
@@ -1505,20 +1504,20 @@ async function openBrowser(url: string): Promise<void> {
       spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).unref()
     }
   } catch (error) {
-    console.warn(`[studyclaw] 打开浏览器失败: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(`[syllora] 打开浏览器失败: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
 /** FL-21：Web UI 静态产物根目录。env 覆盖 > 仓库布局推断（对源码运行与
  * 打包产物同深度成立：apps/cli/src 与 apps/cli/lib 都距仓库根三级）。 */
 function webDistRoot(): string {
-  if (process.env.STUDYCLAW_WEB_DIST !== undefined && process.env.STUDYCLAW_WEB_DIST !== '') {
-    return process.env.STUDYCLAW_WEB_DIST
+  if (process.env.SYLLORA_WEB_DIST !== undefined && process.env.SYLLORA_WEB_DIST !== '') {
+    return process.env.SYLLORA_WEB_DIST
   }
   return join(fileURLToPath(new URL('../../..', import.meta.url)), 'apps', 'web', 'out')
 }
 
-/** `studyclaw status`: print the workspace, courses, and progress summaries. */
+/** `syllora status`: print the workspace, courses, and progress summaries. */
 async function status(): Promise<void> {
   const ctx = new Context()
   await ctx.plugin(Storage)
@@ -1528,11 +1527,11 @@ async function status(): Promise<void> {
   const root = ctx.workspaceRegistry.lastOpenedPath
   await ctx.fiber.dispose()
   if (root === '') {
-    console.log('尚未打开工作区（studyclaw serve 后从 WebUI 导入）')
+    console.log('尚未打开工作区（syllora serve 后从 WebUI 导入）')
     return
   }
   console.log(`工作区：${root}`)
-  const { listCourseSummaries } = await import('@studyclaw/course-summary')
+  const { listCourseSummaries } = await import('@syllora/course-summary')
   const { courses } = await listCourseSummaries(root)
   for (const course of courses) {
     console.log(
@@ -1553,8 +1552,8 @@ async function migrateSessions(sessionId?: string): Promise<void> {
   if (root === '') throw new Error('尚未打开工作区')
   const { courses } = await listCourseSummaries(root)
   let count = 0
-  // L11：事件历史在 <工作区根>/.studyclaw/history（v2 布局），旧代码漏掉
-  // .studyclaw 段导致迁移命令永远扫空目录。
+  // L11：事件历史在 <工作区根>/.syllora/history（v2 布局），旧代码漏掉
+  // .syllora 段导致迁移命令永远扫空目录。
   const historyDir = join(stateDirOf(root), 'history')
   for (const course of courses) {
     const sessions = await listSessions(root, course.id)

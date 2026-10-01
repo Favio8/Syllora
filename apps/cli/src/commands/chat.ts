@@ -1,11 +1,11 @@
 /**
- * `studyclaw chat` — interactive tutoring REPL over `/api/chat/stream`:
+ * `syllora chat` — interactive tutoring REPL over `/api/chat/stream`:
  * hidden thinking (a single "[思考中…]" hint, no deltas), live token output,
  * tool-call summaries, ask-frame answers resumed through
  * `/api/agents/answer/stream`, sync hints, and done usage lines. Exits via
  * /exit | /quit | :quit, Ctrl-C or EOF, always ending with the auto-save
  * notice. Session selection: --new | --session <id> | most-recent (auto).
- * @module @studyclaw/cli/commands/chat
+ * @module @syllora/cli/commands/chat
  */
 
 import { CliError, hostRpc, streamAgentAnswer, streamChat, type RpcFn, type SseFrame } from '../lib/client.ts'
@@ -169,7 +169,7 @@ async function renderFrames(
         try {
           answer = await t.prompt('> 回复: ')
         } catch (error) {
-          if (error instanceof EndOfInput) throw new CliError('aborted', '已退出（ask 挂起可通过 studyclaw agent answer 恢复）')
+          if (error instanceof EndOfInput) throw new CliError('aborted', '已退出（ask 挂起可通过 syllora agent answer 恢复）')
           throw error
         }
         const agentId = `study-${context.getSessionId()}`
@@ -205,7 +205,7 @@ function summarize(value: unknown): string {
 
 function translateError(message: string): string {
   if (message.includes('LLM_NOT_CONFIGURED') || message.includes('未配置模型')) {
-    return `${message}（可在 Web 设置中保存并激活供应商，或编辑 .studyclaw/config.yaml 的 providers + active_provider）`
+    return `${message}（可在 Web 设置中保存并激活供应商，或编辑 .syllora/config.yaml 的 providers + active_provider）`
   }
   return message
 }
@@ -215,7 +215,7 @@ function isExitCommand(text: string): boolean {
   return trimmed === '/exit' || trimmed === '/quit' || trimmed === ':quit'
 }
 
-/** `studyclaw chat [message] [--mode <模式>] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N]` */
+/** `syllora chat [message] [--mode <模式>] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N]` */
 export async function chatCommand(argv: string[]): Promise<void> {
   const parsed = parseArgs(argv)
   const modeRaw = parsed.options.mode
@@ -223,7 +223,7 @@ export async function chatCommand(argv: string[]): Promise<void> {
     throw new UsageError('--mode 取值 socratic | quick | feynman | debug')
   }
   const sessionFlag = parsed.options.session
-  if (sessionFlag === true) throw new UsageError('--session 需要会话 ID（可用 studyclaw sessions.list 查看）')
+  if (sessionFlag === true) throw new UsageError('--session 需要会话 ID（可用 syllora sessions.list 查看）')
   const turnsRaw = parsed.options.turns
   let turns: number | null = null
   if (turnsRaw !== undefined && turnsRaw !== true) {

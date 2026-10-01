@@ -1,5 +1,5 @@
 /**
- * StudyClaw WebUI 全局状态（Zustand，T3.1）。
+ * Syllora WebUI 全局状态（Zustand，T3.1）。
  *
  * 三栏共享：激活项目/对话、当前学习模式、右栏 Tab 与新事件角标、
  * 中栏聚焦概念（大纲树/拓扑图点击 → Agent 注入对应 chunk 上下文）、

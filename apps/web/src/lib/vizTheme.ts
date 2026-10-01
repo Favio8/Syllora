@@ -11,7 +11,7 @@ export const VIZ_CSP =
   "img-src data: blob:; font-src data:; form-action 'none'; base-uri 'none'";
 
 export const VIZ_THEME_CSS = `:root {
-  /* StudyClaw tokens（同步自 globals.css @theme） */
+  /* Syllora tokens（同步自 globals.css @theme） */
   --color-bg-root: #f9fafb;
   --color-bg-panel: #ffffff;
   --color-bg-card: #f1f3f5;

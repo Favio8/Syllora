@@ -4,13 +4,13 @@
  * (retire changed-file cards, id-collision bumping), progress seeding, and
  * granularity regeneration. Ported from Python `workspace.py` checksums +
  * `builder.py::CourseBuilder`.
- * @module @studyclaw/course-builder/src/builder
+ * @module @syllora/course-builder/src/builder
  */
 
 import { createHash } from 'node:crypto'
 import { mkdir, open, readFile, readdir, rename, stat } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
-import { withCourseLock } from '@studyclaw/tools'
+import { withCourseLock, workspaceStateDirOf } from '@syllora/tools'
 import { MarkdownIngestor } from './ingestor.ts'
 import { extractSourceText } from './extract.ts'
 import { graphAdjacency, projectChapterDependencies, type DependencyInferrerLike } from './dep-infer.ts'
@@ -32,10 +32,10 @@ export const COURSE_STATE_FILES = new Set([
 
 /**
  * 所有应用自有产物（大纲/题池/进度/会话/校验和）都收在
- * `<workspaceRoot>/.studyclaw/` 下；用户资料留在原地只读。
+ * `<workspaceRoot>/.syllora/` 下；用户资料留在原地只读。
  */
 export function stateDirOf(workspaceRoot: string): string {
-  return join(workspaceRoot, '.studyclaw')
+  return workspaceStateDirOf(workspaceRoot)
 }
 
 const LEGACY_LAYOUT_MARKER = '.layout-v2'
@@ -43,7 +43,7 @@ const LEGACY_LAYOUT_ARTIFACTS = ['syllabus.json', 'progress.md', 'notes.md', 'ta
 
 /**
  * One-shot layout migration: moves pre-v2 root-level artifacts into
- * `.studyclaw/`. Idempotent and marker-guarded; existing files inside the
+ * `.syllora/`. Idempotent and marker-guarded; existing files inside the
  * state directory always win over the legacy copy.
  * `move` 可注入（测试/特殊 FS 场景），默认 fs rename。
  */
@@ -65,15 +65,15 @@ export async function migrateLegacyLayout(
     const to = join(stateDir, name)
     if ((await stat(to).catch(() => null)) !== null) continue
     // T-10：rename 失败必须留痕——旧实现吞掉错误但仍写 marker，半迁移被永久化：
-    // 根 progress.md 成孤儿、v2 只读 .studyclaw/progress.md，历史静默丢失。
+    // 根 progress.md 成孤儿、v2 只读 .syllora/progress.md，历史静默丢失。
     const ok = await move(join(workspaceRoot, name), to).then(() => true).catch(() => false)
     if (ok) moved.push(name)
     else failed.push(name)
   }
-  if (moved.length > 0) console.log(`[studyclaw] 布局迁移: ${moved.join(', ')} -> .studyclaw/`)
+  if (moved.length > 0) console.log(`[syllora] 布局迁移: ${moved.join(', ')} -> .syllora/`)
   if (failed.length > 0) {
     // 有遗留未迁移：不写 marker，下次启动重试（避免半迁移被 marker 洗白）。
-    console.warn(`[studyclaw] 布局迁移未完成（${failed.join(', ')} 仍在根目录，可能被占用/杀软锁定）；下次启动将重试`)
+    console.warn(`[syllora] 布局迁移未完成（${failed.join(', ')} 仍在根目录，可能被占用/杀软锁定）；下次启动将重试`)
     return
   }
   await atomicWrite(marker, 'v2' + String.fromCharCode(10))
@@ -154,7 +154,7 @@ export async function computeChecksums(
 }
 
 async function atomicWrite(path: string, content: string): Promise<void> {
-  // v2 布局：产物在 .studyclaw/ 下，首次写入前目录可能还不存在。
+  // v2 布局：产物在 .syllora/ 下，首次写入前目录可能还不存在。
   await mkdir(dirname(path), { recursive: true })
   // T-3：固定 `path + '.tmp'` 在并发写（跨进程 regenerateSyllabus / 同进程双
   // regenerate / 与 progress.ts 同目录写）时互踩——两个写流交错写同一 tmp，
@@ -302,7 +302,7 @@ export class CourseBuilder {
       // build path keeps the constructor default, matching Python's F7 scope.
     }
     if (!(await stat(this.courseDir).catch(() => null))?.isDirectory()) {
-      throw new BuildError(`课程目录不存在: ${this.courseDir}（先运行 studyclaw init）`)
+      throw new BuildError(`课程目录不存在: ${this.courseDir}（先运行 syllora init）`)
     }
     const sourcesDir = this.sourcesDir()
     // T-7：超限源文件收集进 degraded（在 report 建立前，先落本地数组）。
