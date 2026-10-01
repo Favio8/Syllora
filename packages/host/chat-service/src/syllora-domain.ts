@@ -8,7 +8,9 @@ export interface Question { id: string; pointId: string; taskId: string; slot: n
 export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number }
 export interface Evidence { state: '未评估' | '待验证' | '待加强' | '初步掌握' | '复测通过'; count: number; streak: number; learnedAt: number | null; dueAt: number | null; interval: number; lastAt: number | null; reason: string; ruleVersion: string }
 export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; date: string; minutes: number; status: 'todo' | 'in_progress' | 'completed' | 'skipped'; explained: boolean; slots: number; cycle: number | null; immediate?: boolean }
-export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: string[]; dailyMinutes: number; feasible: boolean }
+export interface OverflowEntry { pointId: string; reason: 'window-full' | 'task-too-large' }
+export interface PlanInput { scope: string[]; dailyMinutes: number; days: number; restDays: number[]; deadline?: string | null; estimates?: Record<string, number> }
+export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: OverflowEntry[]; dailyMinutes: number; feasible: boolean; deadline: string | null; restDays: number[]; estimates: Record<string, number> }
 export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number }
 export interface AnswerDraft { questionId: string; option: number }
 export interface Drafts { prompt: string; answers: AnswerDraft[] }
@@ -45,6 +47,17 @@ export function normalizeCourse(course: Course) {
   if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
   if (!Array.isArray(course.changes)) course.changes = []
   if (course.notice === undefined) course.notice = null
+  course.plan = normalizePlan(course.plan)
+  course.draft = normalizePlan(course.draft)
+}
+
+function normalizePlan(plan: Plan | null): Plan | null {
+  if (!plan) return plan
+  if (plan.deadline === undefined) plan.deadline = null
+  if (!Array.isArray(plan.restDays)) plan.restDays = []
+  if (!plan.estimates || typeof plan.estimates !== 'object' || Array.isArray(plan.estimates)) plan.estimates = {}
+  if (plan.overflow.some(entry => typeof entry === 'string')) plan.overflow = (plan.overflow as unknown[]).map(entry => typeof entry === 'string' ? { pointId: entry, reason: 'window-full' as const } : entry as OverflowEntry)
+  return plan
 }
 
 export function usableSources(course: Course): Source[] {
@@ -99,33 +112,41 @@ export function addDate(day: string, days: number): string {
   return new Date(Date.parse(`${day}T12:00:00Z`) + days * 24 * HOUR).toISOString().slice(0, 10)
 }
 
-export function buildPlan(course: Course, input: { scope: string[]; dailyMinutes: number; days: number; restDays: number[] }, now: number, id: () => string): Plan {
+export function buildPlan(course: Course, input: PlanInput, now: number, id: () => string): Plan {
   const today = localDate(now, course.timezone)
+  // A deadline pins the window to its inclusive end in the course timezone; without one the rolling window applies.
+  let windowDays = input.days
+  if (input.deadline) windowDays = Math.round((Date.parse(`${input.deadline}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000) + 1
+  windowDays = Math.max(1, Math.min(windowDays, 366))
   const preserved = course.plan?.tasks.filter(t => t.status === 'completed' || t.status === 'in_progress' || t.status === 'skipped') ?? []
   const tasks = structuredClone(preserved)
+  // Future todo tasks keep their identity across regenerations so diffs show moves instead of remove+add.
+  const reusable = new Map<string, string>()
+  for (const task of course.plan?.tasks ?? []) if (task.status === 'todo') reusable.set(`${task.kind}:${task.pointId}:${task.cycle ?? ''}`, task.id)
   const pending: Task[] = []
   for (const pointId of input.scope) {
     const e = evidence(course, pointId)
     if (e.dueAt !== null && e.dueAt <= now && !tasks.some(t => t.pointId === pointId && t.kind === 'review' && t.cycle === e.dueAt)) {
-      pending.push({ id: id(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: e.dueAt })
+      pending.push({ id: reusable.get(`review:${pointId}:${e.dueAt}`) ?? id(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: e.dueAt })
     }
   }
   pending.sort((a,b) => (a.cycle ?? 0) - (b.cycle ?? 0))
   for (const pointId of input.scope) {
-    if (!tasks.some(t => t.pointId === pointId && t.kind === 'learn')) pending.push({ id: id(), pointId, kind: 'learn', date: today, minutes: 20, status: 'todo', explained: false, slots: 2, cycle: null })
+    if (!tasks.some(t => t.pointId === pointId && t.kind === 'learn')) pending.push({ id: reusable.get(`learn:${pointId}:`) ?? id(), pointId, kind: 'learn', date: today, minutes: input.estimates?.[pointId] ?? 20, status: 'todo', explained: false, slots: 2, cycle: null })
   }
-  const overflow: string[] = []
+  const overflow: OverflowEntry[] = []
   for (const task of pending) {
+    if (task.minutes > input.dailyMinutes) { overflow.push({ pointId: task.pointId, reason: 'task-too-large' }); continue }
     let placed = false
-    for (let offset = 0; offset < input.days; offset++) {
+    for (let offset = 0; offset < windowDays; offset++) {
       const day = addDate(today, offset)
       if (input.restDays.includes(new Date(`${day}T12:00:00Z`).getUTCDay())) continue
       const used = tasks.filter(t => t.date === day && t.status !== 'skipped').reduce((n,t) => n + t.minutes, 0)
       if (used + task.minutes <= input.dailyMinutes) { tasks.push({ ...task, date: day }); placed = true; break }
     }
-    if (!placed) overflow.push(task.pointId)
+    if (!placed) overflow.push({ pointId: task.pointId, reason: 'window-full' })
   }
-  return { id: id(), version: (course.plan?.version ?? 0) + 1, baseVersion: course.plan?.version ?? 0, scope: input.scope, tasks, overflow, dailyMinutes: input.dailyMinutes, feasible: !overflow.length && !!input.scope.length }
+  return { id: id(), version: (course.plan?.version ?? 0) + 1, baseVersion: course.plan?.version ?? 0, scope: input.scope, tasks, overflow, dailyMinutes: input.dailyMinutes, feasible: !overflow.length && !!input.scope.length, deadline: input.deadline ?? null, restDays: input.restDays, estimates: input.estimates ?? {} }
 }
 
 function evidenceSnap(course: Course, pointId: string | null) {
@@ -222,14 +243,14 @@ export function proposeReviews(course: Course, pointIds: string[], now: number, 
   if (!base) throw new Error('没有已确认计划')
   const today = localDate(now, course.timezone)
   const tasks = structuredClone(base.tasks)
-  const overflow: string[] = []
+  const overflow: OverflowEntry[] = []
   for (const pointId of pointIds) {
     const current = evidence(course, pointId)
     const used = tasks.filter(task => task.date === today && task.status !== 'skipped').reduce((sum, task) => sum + task.minutes, 0)
-    if (used + 10 > base.dailyMinutes) overflow.push(pointId)
+    if (used + 10 > base.dailyMinutes) overflow.push({ pointId, reason: base.dailyMinutes < 10 ? 'task-too-large' : 'window-full' })
     tasks.push({ id: makeId(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: current.dueAt, immediate: current.dueAt === null || current.dueAt > now })
   }
-  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0 }
+  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0, deadline: base.deadline, restDays: base.restDays, estimates: base.estimates }
 }
 
 export function restoreNotice(course: Course, now: number): ScheduleNotice | null {
