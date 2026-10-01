@@ -26,6 +26,8 @@ export interface ProviderPayload {
   name: string;
   model: string;
   baseUrl: string | null;
+  /** 线上协议；旧配置缺省读出为 openai。 */
+  protocol: ProviderProtocol;
   apiKeyEnv: string | null;
   apiKeyConfigured: boolean;
   temperature: number;
@@ -33,11 +35,15 @@ export interface ProviderPayload {
   models: ProviderModelPayload[];
 }
 
+/** 供应商线上协议：openai = {base}/chat/completions + Bearer；anthropic = {base}/v1/messages + x-api-key。 */
+export type ProviderProtocol = "openai" | "anthropic";
+
 /** 内置供应商目录条目（api_spec §2.8 v2.6）。 */
 export interface ProviderCatalogEntry {
   id: string;
   name: string;
   baseUrl: string | null;
+  protocol: ProviderProtocol;
   models: ProviderModelPayload[];
 }
 

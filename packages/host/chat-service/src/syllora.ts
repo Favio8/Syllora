@@ -16,7 +16,9 @@ const answerSchema = z.object({ text: z.string().min(1).max(16000), sourceIds: z
 const questionSchema = z.object({ stem: z.string().min(1).max(3000), options: z.array(z.string().min(1).max(1000)).length(4), answer: z.number().int().min(0).max(3), explanation: z.string().min(1).max(5000), sourceIds: citations, quote: z.string().min(4).max(3000) })
 interface Job { id: string; requestId: string; courseId: string; kind: string; state: 'running' | 'succeeded' | 'failed' | 'cancelled'; message: string; createdAt: number; model: string; calls: number; inputTokens: number | null; outputTokens: number | null }
 interface Database { version: 1; courses: Course[]; jobs: Job[]; consent: boolean; callLimit: number; calls: number }
-const initial = (): Database => ({ version: 1, courses: [], jobs: [], consent: false, callLimit: 0, calls: 0 })
+// consent/callLimit 已不再是闸门（外部调用默认允许、次数不限），这里给
+// 诚实的中性默认值，仅供 state 上报与诊断展示。
+const initial = (): Database => ({ version: 1, courses: [], jobs: [], consent: true, callLimit: Number.MAX_SAFE_INTEGER, calls: 0 })
 export class SylloraError extends Error { constructor(readonly code: string, message: string) { super(message) } }
 function fail(code: string, message: string): never { throw new SylloraError(code,message) }
 const id = () => randomUUID()
@@ -301,8 +303,8 @@ export class SylloraService {
       const course = this.course(db,p.courseId)
       const existing = db.jobs.find(j => j.requestId === p.requestId && j.courseId === course.id)
       if (existing) return { job: existing, fresh:false, course }
-      if (!db.consent) fail('CONSENT_REQUIRED','请先确认允许向所选模型发送资料片段和问题')
-      if (db.calls >= db.callLimit) fail('BUDGET_EXCEEDED','已达到模型调用上限，请在设置中调整累计上限')
+      // 外部调用与配额的闸门已按产品决定移除：默认允许调用、次数不限。
+      // `db.consent`/`db.callLimit` 字段仍在（老数据兼容），但不再作为闸门。
       if (db.jobs.some(j => j.courseId === course.id && j.state === 'running')) fail('BUSY','本课程已有生成任务，请等待或取消')
       if (!usableSources(course).length) fail('NO_USABLE_SOURCE','请先导入资料并接受可用部分')
       const job: Job = { id:id(),requestId:p.requestId,courseId:course.id,kind:p.kind,state:'running',message:'正在生成，结果校验通过后发布',createdAt:this.now(),model:config.model,calls:0,inputTokens:null,outputTokens:null }
@@ -338,8 +340,6 @@ export class SylloraService {
         await this.transaction(db => {
           const current = db.jobs.find(j => j.id === job.id)
           if (!current || current.state !== 'running' || controller.signal.aborted) fail('CANCELLED','已取消')
-          if (!db.consent) fail('CONSENT_REQUIRED','外部模型授权已撤回')
-          if (db.calls >= db.callLimit) fail('BUDGET_EXCEEDED','模型调用上限已到达')
           db.calls++;current.calls++
         })
         const usage: { input: number | null; output: number | null } = { input:null,output:null }

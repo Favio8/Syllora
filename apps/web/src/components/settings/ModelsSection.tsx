@@ -2,12 +2,14 @@
 
 /**
  * DSH 风格模型配置 Tab（v2 重构，对齐 ui-settings-models 交互）：
+ * - 两个视图：「模型配置」（目录选型新增）与「供应商管理」（已配置 API 的
+ *   管理：激活/编辑/删除），顶部「← 返回」一键回到模型配置起始状态
  * - 行卡片稳定：行永远可见（状态点/名称/使用中 + 操作），编辑器展开在行下方；
- *   编辑 / 添加 / 声明三态互斥，一次只开一张卡
- * - Key 主字段化：API Key 是唯一主字段；Base URL、默认模型、模型列表收进
- *   「自定义设置」折叠区
- * - 添加双入口：内置目录选型（预填地址，模型由用户发现/选择）＋
- *   自定义 OpenAI 兼容声明卡（ID / Base URL / 至少一个模型三道门控）
+ *   编辑 / 添加两态互斥，一次只开一张卡
+ * - Key 主字段化：API Key 是唯一主字段；协议、Base URL、默认模型、模型列表
+ *   收进「自定义设置」折叠区
+ * - 添加入口：内置目录选型（预填地址与协议，模型由用户发现/选择）；自定义
+ *   OpenAI 兼容端点从目录选「OpenAI 兼容」条目手填
  * - 模型列表可从端点拉取（discover-models，用表单当前值询问），失败可手填
  * - 首次运行姿态：没有任何已配置密钥的 provider 时自动展开 setup 卡
  */
@@ -21,6 +23,7 @@ import type {
   ProviderCatalogEntry,
   ProviderModelPayload,
   ProviderPayload,
+  ProviderProtocol,
   SettingsPayload,
 } from "@/src/types/api";
 
@@ -32,6 +35,8 @@ interface EditorProfile {
   temperature: number;
   maxConcurrency: number;
   models: ProviderModelPayload[];
+  /** 线上协议；缺省 = 保留现值（编辑态）/ openai（创建态）。 */
+  protocol?: ProviderProtocol;
   /** 编辑既有 id 时置 true（跳过 409）；创建态缺省。 */
   overwrite?: boolean;
 }
@@ -65,6 +70,7 @@ interface AddCardDraft {
   rows: ModelDraft[];
   temperature: number;
   maxConcurrency: number;
+  protocol?: ProviderProtocol;
 }
 
 function errorMessage(error: unknown): string {
@@ -133,6 +139,11 @@ function ProviderEditorCard({
   // 高级字段：编辑态从既有 provider 初始化真实值，创建态用默认（X2）。
   const [temperature, setTemperature] = useState(draft?.temperature ?? provider?.temperature ?? 0.3);
   const [maxConcurrency, setMaxConcurrency] = useState(draft?.maxConcurrency ?? provider?.maxConcurrency ?? 4);
+  // 协议决定请求路径与鉴权头（openai: /chat/completions + Bearer；
+  // anthropic: /v1/messages + x-api-key）。目录条目自带默认，编辑态以已存值为准。
+  const [protocol, setProtocol] = useState<ProviderProtocol>(
+    draft?.protocol ?? provider?.protocol ?? entry?.protocol ?? "openai",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discovering, setDiscovering] = useState(false);
@@ -219,6 +230,7 @@ function ProviderEditorCard({
           baseUrl: baseUrl.trim() || null,
           temperature,
           maxConcurrency,
+          protocol,
           models: parsedRows.map((r) => ({
             id: r.id,
             name: r.row.name.trim(),
@@ -248,6 +260,7 @@ function ProviderEditorCard({
         apiKey: apiKey.trim() || undefined,
         apiKeyEnv: apiKey.trim() ? undefined : provider?.apiKeyEnv ?? undefined,
         providerId: apiKey.trim() ? undefined : provider?.id ?? undefined,
+        protocol,
       });
       setCandidates(result.models);
       // 已配置过的候选默认不勾选：采纳选择绝不覆盖用户已调优的容量。
@@ -392,9 +405,26 @@ function ProviderEditorCard({
       <details className="mt-3 rounded-lg border border-border-line bg-bg-panel" open={creating}>
         <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-text-secondary">
           自定义设置
-          <span className="ml-2 font-normal text-text-faint">Base URL · 默认模型 · 模型列表</span>
+          <span className="ml-2 font-normal text-text-faint">协议 · Base URL · 默认模型 · 模型列表</span>
         </summary>
         <div className="flex flex-col gap-3 px-3 pb-3 pt-1">
+          <label className="flex flex-col gap-1.5 text-xs text-text-secondary">
+            协议
+            <select
+              value={protocol}
+              name={`${uid}_protocol`}
+              onChange={(e) => setProtocol(e.target.value === "anthropic" ? "anthropic" : "openai")}
+              className={inputClass}
+            >
+              <option value="openai">OpenAI 兼容（{"{base}"}/chat/completions）</option>
+              <option value="anthropic">Anthropic 兼容（{"{base}"}/v1/messages）</option>
+            </select>
+            <span className="text-[11px] text-text-faint">
+              {protocol === "anthropic"
+                ? "按 Anthropic Messages 协议请求，鉴权头用 x-api-key；Base URL 填到 /v1 之前（如 https://api.anthropic.com）。"
+                : "按 OpenAI 兼容协议请求，鉴权头用 Authorization: Bearer。"}
+            </span>
+          </label>
           <label className="flex flex-col gap-1.5 text-xs text-text-secondary">
             Base URL（必填）
             <input
@@ -703,7 +733,9 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addEntryId, setAddEntryId] = useState("");
-  const [declaring, setDeclaring] = useState(false);
+  // 供应商管理子界面：进入后只展示已配置供应商的管理列表。自定义 OpenAI 兼容
+  // 的能力不丢——目录里本来就有「OpenAI 兼容」条目，从「添加供应商」选它即可。
+  const [manageOpen, setManageOpen] = useState(false);
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(new Set());
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // X5：创建时撞到已存在 id 的覆盖确认（409 provider-exists）。
@@ -714,6 +746,8 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const [catalogRetry, setCatalogRetry] = useState(0);
   // X4：添加卡按目录条目缓存整卡草稿（切换条目不丢输入）。
   const addDraftsRef = useRef(new Map<string, AddCardDraft>());
+  // 返航键要把设置弹窗右侧内容区滚回顶部；该容器是本组件的父节点。
+  const sectionRef = useRef<HTMLElement | null>(null);
   // P2：空目录的添加卡被用户手动收起后，不因 SettingsDialog 的 loaded 刷新
   // （如去通用页签保存）而反复重开。
   const [dismissedEmptyAdd, setDismissedEmptyAdd] = useState(false);
@@ -736,6 +770,23 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     }
   }, [initial, dismissedEmptyAdd]);
 
+  // Syllora 直接以 `initial={null}` 挂载本组件（它不经过 SettingsDialog），
+  // 旧实现此时 payload 永远是 null——供应商管理界面因此恒为空。没有调用方
+  // 喂 payload 时自己拉一次。
+  const selfLoadedRef = useRef(false);
+  useEffect(() => {
+    if (initial !== null || selfLoadedRef.current) return;
+    selfLoadedRef.current = true;
+    let alive = true;
+    void api.settings().then(
+      (loaded) => { if (alive && payload === null) setPayload(loaded); },
+      () => { /* 拉取失败保持空态；行内操作会给出可行动的错误。 */ },
+    );
+    return () => { alive = false };
+    // payload 只作幂等判据：拿到数据后不再重复请求。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+
   useEffect(() => {
     let alive = true;
     // 目录加载失败不阻塞页面：手填与编辑既有 provider 的路径完全可用，
@@ -754,7 +805,9 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
 
   const addableCatalog = useMemo(() => {
     if (!catalog) return [];
-    return catalog.filter((entry) => entry.id !== "custom" && !providers.some((p) => p.id === entry.id));
+    // 「OpenAI 兼容」也留在列表里：它是用户点名要预选的五项之一，靠 catalog
+    // 条目（带默认协议）比只能手填的声明卡更好用。已配置过的 id 仍要剔除。
+    return catalog.filter((entry) => !providers.some((p) => p.id === entry.id));
   }, [catalog, providers]);
 
   useEffect(() => {
@@ -772,16 +825,30 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     setDismissedSetup((current) => new Set([...current, id]));
   }
 
+  /** 收起所有打开的卡片。**不**退出供应商管理子界面——保存后用户应留在
+   *  管理列表里看到结果；退出子界面是「← 返回」的职责。 */
   function closeAllCards() {
     setEditingId(null);
     setAdding(false);
-    setDeclaring(false);
+  }
+
+  /**
+   * 返航键：无论当前在编辑某家供应商、在新增、还是在供应商管理子界面，
+   * 一下回到模型配置的起始状态。滚动容器是设置弹窗的右侧内容区。
+   */
+  function backToHome() {
+    closeAllCards();
+    setManageOpen(false);
+    setError(null);
+    // jsdom 不实现 Element.scrollTo：能力探测，测试环境里静默跳过滚动。
+    const scroller = (sectionRef.current?.closest(".sy-settings-body")
+      ?? sectionRef.current?.parentElement) as HTMLElement | null;
+    if (typeof scroller?.scrollTo === "function") scroller.scrollTo({ top: 0 });
   }
 
   /** 打开某行的编辑器；一次只开一张卡，打开前先收起其他卡。 */
   function openEditOnly(id: string) {
     setAdding(false);
-    setDeclaring(false);
     setEditingId(id);
   }
 
@@ -876,12 +943,26 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const selectedEntry = addableCatalog.find((entry) => entry.id === addEntryId) ?? null;
 
   return (
-    <section className="flex max-w-[720px] flex-col gap-3">
-      <div>
-        <h3 className="text-base font-medium text-text-primary">模型配置</h3>
-        <p className="mt-1 text-sm leading-6 text-text-faint">
-          配置会立即用于新的对话和课程构建任务。API Key 以写入方式保存，不显示明文。
-        </p>
+    <section ref={sectionRef} className="flex max-w-[720px] flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-medium text-text-primary">
+            {manageOpen ? "供应商管理" : "模型配置"}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-text-faint">
+            {manageOpen
+              ? "已配置的模型 API 都在这里：可激活、编辑或删除；激活后新对话与课程构建将使用它。"
+              : "配置会立即用于新的对话和课程构建任务。API Key 以写入方式保存，不显示明文。"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={backToHome}
+          title="收起当前操作，回到模型配置起始状态"
+          className="flex shrink-0 items-center gap-1 rounded-lg border border-border-line px-2.5 py-1.5 text-xs font-medium text-text-primary hover:bg-bg-card"
+        >
+          ← 返回
+        </button>
       </div>
 
       {error ? (
@@ -890,7 +971,14 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
         </div>
       ) : null}
 
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {/* 供应商管理子界面：只看已配置的 API。 */}
+      {manageOpen ? (
+        providers.length === 0 ? (
+          <p className="text-xs text-text-faint">
+            还没有已配置的供应商。先回到「模型配置」添加一个。
+          </p>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {providers.map((provider) => {
           const setupPosture = setupId === provider.id;
           const editing = editingId === provider.id;
@@ -962,11 +1050,13 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
             </li>
           );
         })}
-      </ul>
-
+          </ul>
+        )
+      ) : (
+        <>
       {catalogFailed ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-accent-warn/30 bg-accent-warn/5 p-3 text-xs text-accent-warn" role="alert">
-          <span>内置供应商目录加载失败，「＋ 添加供应商」暂不可用；仍可使用自定义 OpenAI 兼容。</span>
+          <span>内置供应商目录加载失败，「＋ 添加供应商」暂不可用；仍可从目录选择「OpenAI 兼容」手填。</span>
           <button
             type="button"
             onClick={() => setCatalogRetry((n) => n + 1)}
@@ -1010,20 +1100,12 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
             <p className="text-xs text-text-faint">正在加载内置供应商目录...</p>
           )}
         </div>
-      ) : declaring ? (
-        <ProviderEditorCard
-          provider={null}
-          entry={null}
-          creating
-          onSave={handleSaveWithConflict}
-          onCancel={() => setDeclaring(false)}
-        />
       ) : (
         <div className="flex gap-2">
           <button
             type="button"
             disabled={addableCatalog.length === 0}
-            onClick={() => { setEditingId(null); setDeclaring(false); setAdding(true); }}
+            onClick={() => { setEditingId(null); setAdding(true); }}
             className="flex-1 rounded-xl border border-border-line px-3 py-2 text-sm text-text-muted hover:bg-bg-card disabled:opacity-40"
           >
             {/* P2：目录加载期间说明按钮禁用原因（旧实现无提示地灰住）。 */}
@@ -1031,12 +1113,14 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
           </button>
           <button
             type="button"
-            onClick={() => { setEditingId(null); setAdding(false); setDeclaring(true); }}
+            onClick={() => { setAdding(false); setManageOpen(true); }}
             className="flex-1 rounded-xl border border-border-line px-3 py-2 text-sm text-text-muted hover:bg-bg-card"
           >
-            ＋ 自定义 OpenAI 兼容
+            供应商管理{providers.length > 0 ? `（${providers.length}）` : ""}
           </button>
         </div>
+      )}
+        </>
       )}
 
       {deleteId ? (

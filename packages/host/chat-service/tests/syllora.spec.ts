@@ -123,10 +123,16 @@ describe('Syllora persistence and boundaries',()=>{
     await expect(svc.handle('rename',{courseId:randomUUID(),name:'越权'})).rejects.toThrow('课程不存在');
     const restored=new SylloraService(root);const state=await restored.handle('state') as any;expect(state.courses).toHaveLength(1);expect(state.courses[0].materials).toHaveLength(1);
   })
-  it('blocks unconsented model calls and zero budgets before contacting the model',async()=>{
+  it('runs model calls without consent or budget gates (外部调用与配额已按产品决定移除)',async()=>{
     let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:'{}'}}};const {svc}=await service(client);const courseId=await create(svc);
-    await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('确认允许');
-    await svc.handle('preferences',{consent:true,callLimit:0});await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('上限');expect(calls).toBe(0);
+    // 新建课程后不设任何授权/配额，也必须能直接生成。
+    await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'});await waitJob(svc);
+    expect(calls).toBeGreaterThan(0);
+    // preferences 仍可写入（兼容旧客户端），但不再拦任何调用——历史数据里
+    // 存的是 consent:false / callLimit:0，若仍生效会把产品锁死。
+    await svc.handle('preferences',{consent:false,callLimit:0});
+    await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'});await waitJob(svc);
+    expect(calls).toBeGreaterThan(1);
   })
   it('runs generation, plan confirmation, fixed grading and dispute replay',async()=>{
     let n=0;const client:StructuredCallClient={async *stream(options){

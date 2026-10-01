@@ -36,7 +36,7 @@ const { flashStatusBanner, apiMocks, catalog, ApiError } = vi.hoisted(() => {
         baseUrl: "https://token.sensenova.cn/v1",
         models: [{ id: "sensenova-6.8-flash-lite", name: "S6.8", contextWindow: null, maxTokens: null }],
       },
-      { id: "custom", name: "自定义 OpenAI 兼容", baseUrl: null, models: [] },
+      { id: "custom", name: "OpenAI 兼容", baseUrl: null, protocol: "openai" as const, models: [] },
     ],
   };
 });
@@ -91,6 +91,7 @@ const configuredProvider = {
   name: "Acme",
   model: "m1",
   baseUrl: "https://acme.example/v1",
+  protocol: "openai" as const,
   apiKeyEnv: "ACME_API_KEY",
   apiKeyConfigured: true,
   temperature: 0.3,
@@ -101,6 +102,11 @@ const configuredProvider = {
 async function openAdvancedFold() {
   fireEvent.click(screen.getByText("自定义设置"));
   await screen.findByLabelText(/Base URL/);
+}
+
+/** 供应商行卡片收在「供应商管理」子界面里；需要操作行（编辑/删除）先进去。 */
+function openManage() {
+  fireEvent.click(screen.getByRole("button", { name: /供应商管理/ }));
 }
 
 describe("ModelsSection 首次运行与目录添加", () => {
@@ -136,9 +142,16 @@ describe("ModelsSection 首次运行与目录添加", () => {
     expect(flashStatusBanner).toHaveBeenCalledWith(expect.stringContaining("DeepSeek 官方"));
   });
 
-  it("自定义声明卡：Base URL 必填、ID 非法时点名且保存被禁用", async () => {
-    render(<ModelsSection initial={makePayload([configuredProvider])} />);
-    fireEvent.click(screen.getByRole("button", { name: /自定义 OpenAI 兼容/ }));
+  it("自定义 OpenAI 兼容从目录添加：Base URL 必填、ID 非法时点名且保存被禁用", async () => {
+    render(<ModelsSection initial={makePayload([])} />);
+    // 声明卡已并入目录：选「OpenAI 兼容」条目即等价于原「自定义 OpenAI 兼容」。
+    await screen.findByText("选择供应商");
+    const catalogSelect = screen.getByLabelText(/选择供应商/) as HTMLSelectElement;
+    // 目录异步到达，先等「OpenAI 兼容」选项真的出现在下拉里再切换。
+    await waitFor(() => expect([...catalogSelect.options].some(o => o.value === "custom")).toBe(true));
+    fireEvent.change(catalogSelect, { target: { value: "custom" } });
+    // 等卡片按所选条目重挂载（Base URL 预填被清空、占位符换成通用网关）。
+    await screen.findByPlaceholderText(/your-gateway/);
 
     const save = screen.getByRole("button", { name: "保存" });
     expect(save).toHaveProperty("disabled", true);
@@ -158,11 +171,11 @@ describe("ModelsSection 首次运行与目录添加", () => {
     apiMocks.providerCatalog.mockRejectedValueOnce(new Error("502"));
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
 
-    // 失败提示出现；自定义声明入口不受影响
+    // 失败提示出现；供应商管理入口不受影响
     expect(await screen.findByRole("alert")).toHaveTextContent(/目录加载失败/);
     const addButton = screen.getByRole("button", { name: /添加供应商/ });
     expect(addButton).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: /自定义 OpenAI 兼容/ })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: /供应商管理/ })).toHaveProperty("disabled", false);
 
     // 重试成功后提示消失、按钮恢复
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
@@ -178,6 +191,7 @@ describe("ModelsSection 行卡片与编辑器", () => {
 
     // 已有可用 provider：不出现首次运行卡
     await waitFor(() => expect(screen.queryByText("选择供应商")).toBeNull());
+    openManage();
     expect(screen.getByText("Acme")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
@@ -192,22 +206,28 @@ describe("ModelsSection 行卡片与编辑器", () => {
     expect(apiMocks.setProviderCredential).not.toHaveBeenCalled();
   });
 
-  it("一次只开一张卡：打开添加卡会收起编辑中的行", async () => {
+  it("一次只开一张卡：返回键收起编辑中的行，再进添加卡", async () => {
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
     await waitFor(() => expect(screen.queryByText("选择供应商")).toBeNull());
+    openManage();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     expect(screen.getByPlaceholderText("保留当前密钥，留空不修改")).toBeTruthy();
 
+    // ← 返回：收起编辑卡并回到模型配置起始状态
+    fireEvent.click(screen.getByRole("button", { name: /← 返回/ }));
+    expect(screen.queryByPlaceholderText("保留当前密钥，留空不修改")).toBeNull();
+    expect(screen.queryByText("Acme")).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: /添加供应商/ }));
     expect(await screen.findByText("选择供应商")).toBeTruthy();
-    expect(screen.queryByPlaceholderText("保留当前密钥，留空不修改")).toBeNull();
   });
 
   it("删除需确认并点名 provider", async () => {
     apiMocks.deleteProvider.mockResolvedValue(makePayload([]));
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
     await waitFor(() => expect(screen.queryByText("选择供应商")).toBeNull());
+    openManage();
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
     const dialog = screen.getByRole("dialog");
@@ -226,6 +246,7 @@ describe("ModelsSection 模型列表", () => {
       ],
     });
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    openManage();
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     await openAdvancedFold();
 
@@ -238,6 +259,9 @@ describe("ModelsSection 模型列表", () => {
         apiKey: undefined,
         apiKeyEnv: "ACME_API_KEY",
         providerId: "acme",
+        // 目录端点随协议而异（openai: {base}/models；anthropic: {base}/v1/models），
+        // 所以探测必须把表单当前协议一起带上。
+        protocol: "openai",
       }),
     );
 
@@ -256,6 +280,7 @@ describe("ModelsSection 模型列表", () => {
 
   it("容量支持 K/M 后缀，非法时点名行并禁用保存", async () => {
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    openManage();
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     await openAdvancedFold();
 
@@ -282,6 +307,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     };
     apiMocks.saveProvider.mockResolvedValue(makePayload([tuned]));
     render(<ModelsSection initial={makePayload([tuned])} />);
+    openManage();
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     await openAdvancedFold();
 
@@ -406,6 +432,7 @@ describe("ModelsSection Key 保存失败一致性（P1-4）", () => {
     apiMocks.saveProvider.mockResolvedValue(makePayload([configuredProvider]));
     apiMocks.setProviderCredential.mockRejectedValue(new ApiError("INTERNAL_ERROR", "磁盘写入失败", 500));
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    openManage();
 
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     fireEvent.change(screen.getByPlaceholderText("保留当前密钥，留空不修改"), { target: { value: "sk-new" } });
@@ -436,6 +463,7 @@ describe("ModelsSection 模型候选去重（P1-5）", () => {
       ],
     });
     render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    openManage();
     fireEvent.click(screen.getByRole("button", { name: "编辑" }));
     await openAdvancedFold();
     fireEvent.click(screen.getByRole("button", { name: /从端点获取/ }));

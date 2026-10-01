@@ -13,7 +13,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join, dirname, resolve } from 'node:path'
-import { mkdir, readFile, realpath, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import { migrateLegacyHome } from '@syllora/tools'
@@ -80,6 +80,39 @@ function requireWorkspaceRootForSettings(root: string, action: string): void {
   if (root === '') {
     throw new Error(`请先在左栏添加/打开一个项目，再${action}（当前没有已打开的工作区，配置无处落盘）`)
   }
+}
+
+/** 诊断日志的单份读取上限：超出保留**末尾**（最近的行才是排障要看的），并在
+ *  文本头部标记截断，避免一个失控日志把响应与导出文件撑爆。 */
+const DIAG_LOG_MAX_BYTES = 256 * 1024
+const DIAG_LOG_MAX_FILES = 7
+const DIAG_LOG_TRUNCATED_NOTE = '(日志过长，此处仅保留最后 256 KiB)\n'
+
+/** 读取宿主日志（`logs/host-YYYY-MM-DD.log`，新到旧）。给「诊断日志」分区导出：
+ *  渲染层没有文件系统访问，日志内容只能经宿主 RPC 出去。单份读取失败就跳过，
+ *  不影响其余文件。 */
+async function readHostDiagnostics(): Promise<{ files: Array<{ name: string; bytes: number; text: string; truncated: boolean }> }> {
+  const logsDir = join(hostHome(), 'logs')
+  let names: string[] = []
+  try {
+    names = (await readdir(logsDir)).filter(name => /^host-\d{4}-\d{2}-\d{2}\.log$/.test(name)).sort().reverse()
+  } catch {
+    return { files: [] }
+  }
+  const files: Array<{ name: string; bytes: number; text: string; truncated: boolean }> = []
+  for (const name of names.slice(0, DIAG_LOG_MAX_FILES)) {
+    const full = join(logsDir, name)
+    try {
+      const info = await stat(full)
+      const raw = await readFile(full)
+      const truncated = raw.byteLength > DIAG_LOG_MAX_BYTES
+      const slice = truncated ? raw.subarray(raw.byteLength - DIAG_LOG_MAX_BYTES) : raw
+      files.push({ name, bytes: info.size, truncated, text: truncated ? DIAG_LOG_TRUNCATED_NOTE + slice.toString('utf8') : slice.toString('utf8') })
+    } catch {
+      // 日志可能在读取间隙被轮转清理；跳过该文件。
+    }
+  }
+  return { files }
 }
 
 /** FL-41：宿主单实例锁（`<hostHome>/host.lock` 记 pid + port）。持有者进程
@@ -711,12 +744,17 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           apiKey: apiKey === '' ? null : apiKey,
           apiKeyEnv: input.apiKeyEnv ?? null,
           refresh: true,
+          // exactOptionalPropertyTypes：缺省时必须整个省略，不能显式传 undefined。
+          ...input.protocol === undefined ? {} : { protocol: input.protocol },
         }) as unknown as Array<Record<string, unknown>>
       },
       save: async input => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '保存模型供应商'); return saveProvider(registry.lastOpenedPath, input as Parameters<typeof saveProvider>[1]) as unknown as Record<string, unknown> },
       remove: async providerId => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '删除模型供应商'); return deleteProvider(registry.lastOpenedPath, providerId) as unknown as Record<string, unknown> },
       activate: async providerId => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '激活模型供应商'); return activateProvider(registry.lastOpenedPath, providerId) as unknown as Record<string, unknown> },
       credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(registry.lastOpenedPath, '保存 API Key'); return setCredential(registry.lastOpenedPath, providerId, apiKey) as unknown as Record<string, unknown> },
+    },
+    diagnosticsService: {
+      logs: () => readHostDiagnostics(),
     },
     courseService: wrapCourseService(),
     toolProviders: () => ({
