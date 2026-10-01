@@ -21,6 +21,9 @@ import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 const NS = settingsNamespace('llm-deepseek')
 const KEY_REF = credentialRef('DEEPSEEK_API_KEY')
+/** Fixture value standing in for a stored secret; carries no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
 const IMAGE_REF: ImageAttachmentRef = {
   attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png',
@@ -126,9 +129,9 @@ describe('request-level dynamic configuration', () => {
     const keyless = await prompt(ctx)
     expect(keyless.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
     await expect(access(join(dir, '.anonymous-user-id'))).rejects.toMatchObject({ code: 'ENOENT' })
-    await ctx.credentials.set(KEY_REF, 'sk-arrived')
+    await ctx.credentials.set(KEY_REF, PLACEHOLDER)
     await prompt(ctx)
-    expect(server.headers[0]?.authorization).toBe('Bearer sk-arrived')
+    expect(server.headers[0]?.authorization).toBe('Bearer ' + PLACEHOLDER)
     await expect(access(join(dir, '.anonymous-user-id'))).resolves.toBeUndefined()
   })
 
@@ -136,7 +139,7 @@ describe('request-level dynamic configuration', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', '')
     const dir = await home()
     const { ctx } = await boot(dir, { baseURL: 'http://127.0.0.1:1' })
-    const secret = 'sk-\u{1F600}supersecret'
+    const secret = 'placeholder\u{1F600}supersecret'
 
     // The real credentials seam (the path the web Models page writes through),
     // not a hand-built stub: this package's own dynamic-config harness already

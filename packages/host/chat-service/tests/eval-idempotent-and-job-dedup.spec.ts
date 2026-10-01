@@ -14,6 +14,10 @@ import { writeTaskPool, type HarnessTask } from '@syllora/course-builder'
 import { createCourseService, JobManager } from '../src/course.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
+/** Fixture value standing in for a stored secret; carries no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+
 /** 与 eval-submit.spec.ts 同款：providerId 'mock' 触发 requireGenerator 通过，
  * 但 MCQ 答案键路径零 LLM 调用。 */
 const fakeConfig: ResolvedChatConfig = {
@@ -24,7 +28,7 @@ const fakeConfig: ResolvedChatConfig = {
   judgeEffort: null,
   baseUrl: 'https://mock.example/v1',
   apiKeyEnv: 'MOCK_API_KEY',
-  apiKey: 'sk-mock',
+  apiKey: PLACEHOLDER,
   temperature: 0.3,
   maxConcurrency: 1,
   maxTokens: null,

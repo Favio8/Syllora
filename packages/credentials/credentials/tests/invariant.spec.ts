@@ -5,6 +5,10 @@ import { credentialRef } from '../src/index.ts'
 import * as CredentialsInvariant from '../src/invariant.ts'
 import { MemoryCredentials } from './memory.ts'
 
+/** Fixture value standing in for a stored secret; carries no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+
 const REF = credentialRef('DEEPSEEK_API_KEY')
 
 describe('credentials invariant companion', () => {
@@ -14,7 +18,7 @@ describe('credentials invariant companion', () => {
     await ctx.plugin(CredentialsInvariant)
     await ctx.plugin(MemoryCredentials)
 
-    await expect(ctx.credentials.set(REF, 'sk-live')).resolves.toBeUndefined()
+    await expect(ctx.credentials.set(REF, PLACEHOLDER)).resolves.toBeUndefined()
   })
 
   it('fails an update event emitted without a live service', async () => {

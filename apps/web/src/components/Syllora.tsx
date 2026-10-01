@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil } from 'lucide-react';
 import ModelsSection from './settings/ModelsSection';
+import { api } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import type { SylloraState, Task, CourseView } from '../types/syllora';
 import { editDraft, hydrateCourse, markSaved, rememberServer, type DraftCache } from './syllora-drafts';
@@ -19,6 +20,22 @@ async function rpc<T = unknown>(action:string,payload:unknown={}):Promise<T> {
 }
 const uuid = () => crypto.randomUUID();
 const formatTime = (at:number,zone:string) => new Intl.DateTimeFormat('zh-CN',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(at);
+
+/** 桌面壳经 contextBridge 暴露的桥。浏览器里整块不存在（undefined），
+ *  所以所有调用点都必须先判空——「本机与诊断」在浏览器下退化为只显示提示。 */
+type DesktopBridge = {
+  isDesktop?: boolean;
+  platform?: string;
+  hostInfo?: () => Promise<{ dev?: boolean; port?: number|null; hostHome?: string; logsDir?: string; dataDir?: string }>;
+  openPath?: (path:string) => Promise<{ ok:boolean; error?:string }>;
+};
+const desktopBridge = (): DesktopBridge|undefined => (window as unknown as { sylloraDesktop?: DesktopBridge }).sylloraDesktop;
+
+/** 设置弹窗的左侧分区。 */
+type SettingsTab = 'models'|'archive'|'diag';
+
+/** 一份宿主日志文件（内容已按上限截断）。 */
+type DiagFile = { name:string; bytes:number; text:string; truncated:boolean };
 
 export default function Syllora() {
   const [data,setData] = useState<SylloraState|null>(null);
@@ -39,6 +56,12 @@ export default function Syllora() {
   const [estimates,setEstimates] = useState<Record<string,string>>({});
   const [restDays,setRestDays] = useState<number[]>([]);
   const [consent,setConsent] = useState(false);
+  const [renaming,setRenaming] = useState(false);
+  const [renameValue,setRenameValue] = useState('');
+  const [disputeTarget,setDisputeTarget] = useState<string|null>(null);
+  const [disputeReason,setDisputeReason] = useState('');
+  const [diagFiles,setDiagFiles] = useState<DiagFile[]|null>(null);
+  const [diagLoading,setDiagLoading] = useState(false);
   const [sourceId,setSourceId] = useState<string|null>(null);
   const [activeTask,setActiveTask] = useState<string|null>(null);
   const [answers,setAnswers] = useState<Record<string,number>>({});
@@ -46,6 +69,8 @@ export default function Syllora() {
   const [diffCourse,setDiffCourse] = useState<CourseView|null>(null);
   const [adjustNotice,setAdjustNotice] = useState<string|null>(null);
   const [editMinutes,setEditMinutes] = useState<Record<string,string>>({});
+  const [settingsTab,setSettingsTab] = useState<SettingsTab>('models');
+  const [hostPaths,setHostPaths] = useState<{hostHome?:string;logsDir?:string;dataDir?:string}|null>(null);
   const pollInFlight = useRef(false);
   const pollStartedAt = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -55,6 +80,11 @@ export default function Syllora() {
   const dataRef = useRef(data);
   const cacheRef = useRef<DraftCache>({});
   const saveTimer = useRef<number | null>(null);
+  // 「继续」在导入资料这一步要直接唤起系统文件选择框。输入框必须常驻挂在
+  // 组件顶层：放在「资料」标签页里时，setTab('materials') 之后 React 还没
+  // 重渲染，ref 仍指向旧树上的节点，.click() 会落空——这正是原来「点了没反应」
+  // 的成因之一。
+  const fileInput = useRef<HTMLInputElement>(null);
   const course = data?.courses.find(c=>c.id===selected);
   const refresh = useCallback(async()=>{
     if(pollInFlight.current)return;
@@ -72,13 +102,32 @@ export default function Syllora() {
     for(const item of data.courses) cacheRef.current=rememberServer(cacheRef.current,item.id,item.drafts,pollStartedAt.current);
   },[data]);
   useEffect(()=>{
-    setScope([]);setActiveTask(null);setSourceId(null);setError('');setDeadline('');setEstimates({});setMinutes(40);setDays(7);setRestDays([]);setDiffCourse(null);setAdjustNotice(null);setEditMinutes({});
+    setRenaming(false);setDisputeTarget(null);setScope([]);setActiveTask(null);setSourceId(null);setError('');setDeadline('');setEstimates({});setMinutes(40);setDays(7);setRestDays([]);setDiffCourse(null);setAdjustNotice(null);setEditMinutes({});
     if(!selected)return;
     const server=dataRef.current?.courses.find(item=>item.id===selected)?.drafts??{prompt:'',answers:[]};
     if(!cacheRef.current[selected]) cacheRef.current=rememberServer(cacheRef.current,selected,server);
     const view=hydrateCourse(cacheRef.current,selected,server);
     promptRef.current=view.prompt;answersRef.current=view.answers;setPrompt(view.prompt);setAnswers(view.answers);
   },[selected]);
+  // 「诊断日志」需要宿主目录事实（桌面桥提供）；浏览器里桥不存在，
+  // 分区仍可用——日志内容来自宿主 RPC，与桌面桥无关。
+  useEffect(()=>{
+    if(!settings)return;
+    let alive=true;
+    void desktopBridge()?.hostInfo?.().then(info=>{if(alive)setHostPaths({hostHome:info.hostHome,logsDir:info.logsDir,dataDir:info.dataDir})},()=>{if(alive)setHostPaths(null)});
+    return ()=>{alive=false};
+  },[settings]);
+  // 进入「诊断日志」分区时拉一次日志；切走再切回不重复拉（除非手动刷新）。
+  useEffect(()=>{
+    if(!settings||settingsTab!=='diag'||diagFiles!==null)return;
+    let alive=true;
+    setDiagLoading(true);
+    void api.diagnosticsLogs().then(
+      r=>{if(alive){setDiagFiles(r.files);setDiagLoading(false)}},
+      ()=>{if(alive){setDiagFiles([]);setDiagLoading(false)}},
+    );
+    return ()=>{alive=false};
+  },[settings,settingsTab,diagFiles]);
   useEffect(()=>{bottom.current?.scrollIntoView({behavior:'smooth'});},[course?.messages.length]);
   const persistDraft = async(courseId:string)=>{
     const local=cacheRef.current[courseId];
@@ -129,6 +178,20 @@ export default function Syllora() {
   const task = course?.plan?.tasks.find(t=>t.id===activeTask) ?? course?.plan?.tasks.find(t=>t.status==='in_progress');
   const source = course?.materials.flatMap(m=>[...m.sources,...(m.history??[])]).find(s=>s.id===sourceId);
   const pointName = (id:string) => course?.points.find(p=>p.id===id)?.name??'知识点';
+  /** 把拉到的日志拼成单个 .log 文件下载。Blob + a[download] 在浏览器与
+   *  Electron 里行为一致，不依赖桌面桥。 */
+  const exportDiagLogs = ()=>{
+    const files = diagFiles ?? [];
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    const body = files.map(f=>`===== ${f.name} (${f.bytes} bytes${f.truncated?', 截断':''}) =====\n${f.text}`).join('\n\n');
+    const blob = new Blob([body||'(无日志内容)\n'],{type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `syllora-diag-${stamp}.log`;
+    document.body.appendChild(a); a.click(); a.remove();
+    // 释放对象 URL：延迟到点击处理结束之后，避免个别引擎提前回收。
+    setTimeout(()=>URL.revokeObjectURL(url),10_000);
+  };
   const startTask = async(t:Task)=>{if(await run('start',{taskId:t.id}))setActiveTask(t.id)};
   const upload = async(file:File)=>{
     if(file.size>20*1024*1024){setError('单文件不能超过 20 MiB');return}
@@ -138,15 +201,29 @@ export default function Syllora() {
     reader.readAsDataURL(file);
   };
   const proposeReview = async(pointId:string)=>{if(await run('review',{pointId})){setActiveTask(null);setTab('today')}};
+  /** 唤起系统文件选择框。切到「资料」页是为了让用户选完就能看到结果。 */
+  const pickMaterialFile = ()=>{setTab('materials');fileInput.current?.click()};
   const next = async()=>{
     if(!course)return;
-    if(course.next.taskId){const t=course.plan?.tasks.find(t=>t.id===course.next.taskId);if(t)await startTask(t)}
-    else if(course.next.pointId) await proposeReview(course.next.pointId);
-    else setTab(course.materials.some(m=>m.status!=='deleted')?'outline':'materials');
+    if(course.folder&&!course.revision){setTab('materials');return}
+    if(course.next.taskId){
+      const t=course.plan?.tasks.find(t=>t.id===course.next.taskId);
+      if(t){await startTask(t);return}
+      // 计划版本更替后旧任务 id 会失效，旧实现这里没有 else——静默什么都不做，
+      // 用户看到的就是「点了继续没反应」。改为显式同步并说明。
+      await refresh();setError('计划已更新，已同步最新状态，请再点一次「继续」');return;
+    }
+    if(course.next.pointId){await proposeReview(course.next.pointId);return}
+    // 还没有可用资料 = 正处在「导入资料」这一步：直接打开文件选择框。
+    if(!course.materials.some(m=>m.status!=='deleted')){pickMaterialFile();return}
+    setTab('outline');
   };
   useEffect(()=>{setEditMinutes({})},[course?.draft?.id]);
   const courseList = (archived:boolean)=>(data?.courses??[]).filter(c=>c.archived===archived).map(c=><button className={`sy-course ${c.id===selected?'is-selected':''}`} key={c.id} onClick={()=>void selectCourse(c.id)}><BookOpen size={17}/><span>{c.name}<small>{c.points.length} 个知识点{c.archived?' · 已归档':''}</small></span></button>);
   return <div className={`sy-app ${showRight?'':'sy-no-right'}`}>
+    {/* 常驻隐藏输入框：滚到任何标签页、以及「继续」在导入资料这一步，都靠它
+        唤起同一个系统文件选择框（见 fileInput 的注释）。 */}
+    <input ref={fileInput} type="file" accept=".pdf,.md,.txt" aria-label="上传课程资料" style={{display:'none'}} disabled={!course||busy||course.archived} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value=''}}/>
     <aside className="sy-left">
       <div className="sy-brand"><div className="sy-mark"><BookOpen size={23}/></div><div><strong>Syllora</strong><small>你的课程，持续的学习</small></div></div>
       <button className="sy-new" onClick={()=>{setMigration(null);setCreating(true)}}><FolderOpen size={17}/>打开课程文件夹</button>
@@ -154,10 +231,10 @@ export default function Syllora() {
       <nav className="sy-courses" aria-label="课程">{courseList(false)}{data&&!data.courses.length&&<p className="sy-muted sy-pad">打开课程文件夹，检查资料后开始初始化。</p>}{data?.courses.some(c=>c.archived)&&<><div className="sy-section-title">已归档</div>{courseList(true)}</>}</nav>
       {data?.projects?.filter(p=>p.error).map(p=><p className="sy-pad sy-muted" key={p.id}>{p.name}：{p.error}</p>)}
       {!!data?.legacyCourses?.length&&<div className="sy-legacy"><div className="sy-section-title">旧课程迁移</div>{data.legacyCourses.map(c=><button key={c.id} onClick={()=>{setMigration(c);setCreating(true)}}>{c.name} · 迁移到文件夹</button>)}</div>}
-      <div className="sy-left-bottom"><p>Turn every course into<br/>a learning system.</p><button onClick={()=>{setSettings(true);setConsent(data?.settings.consent??false)}}><Settings size={17}/>模型与设置</button><small>本机单用户 · 资料保存在本地</small></div>
+      <div className="sy-left-bottom"><p>Turn every course into<br/>a learning system.</p><button onClick={()=>{setSettings(true);setSettingsTab('models');setConsent(data?.settings.consent??false)}}><Settings size={17}/>模型与设置</button><small>本机单用户 · 资料保存在本地</small></div>
     </aside>
     <main className="sy-main">
-      <header className="sy-top"><div><span>学习工作台</span><h1>{course?.name??'从一门课程开始'}</h1></div><div className="sy-actions">{course&&<><button aria-label="重命名课程" title="重命名" onClick={()=>{const name=window.prompt('课程名称',course.name);if(name)void run('rename',{name})}}><Pencil size={16}/></button><button aria-label={course.archived?'恢复课程':'归档课程'} title={course.archived?'恢复课程':'归档课程'} onClick={()=>void run('archive',{archived:!course.archived})}>{course.archived?<RotateCcw size={16}/>:<Archive size={16}/>}</button><button aria-label="删除课程" title="删除课程" onClick={()=>{if(window.confirm(`删除「${course.name}」的 Syllora 整理产物与学习记录？原始资料和课程文件夹保留。此操作不可撤销。`))void run('delete',{confirmed:true})}}><Trash2 size={16}/></button></>}<button aria-label="切换状态栏" onClick={()=>setShowRight(!showRight)}><PanelRight size={18}/></button></div></header>
+      <header className="sy-top"><div><span>学习工作台</span><h1>{course?.name??'从一门课程开始'}</h1></div><div className="sy-actions">{course&&<><button aria-label="重命名课程" title="重命名" onClick={()=>{setRenameValue(course.name);setRenaming(true)}}><Pencil size={16}/></button><button aria-label={course.archived?'恢复课程':'归档课程'} title={course.archived?'恢复课程':'归档课程'} onClick={()=>void run('archive',{archived:!course.archived})}>{course.archived?<RotateCcw size={16}/>:<Archive size={16}/>}</button><button aria-label="删除课程" title="删除课程" onClick={()=>{if(window.confirm(`删除「${course.name}」的 Syllora 整理产物与学习记录？原始资料和课程文件夹保留。此操作不可撤销。`))void run('delete',{confirmed:true})}}><Trash2 size={16}/></button></>}<button aria-label="切换状态栏" onClick={()=>setShowRight(!showRight)}><PanelRight size={18}/></button></div></header>
       {error&&<div className="sy-error" role="alert">{error}<button aria-label="关闭错误" onClick={()=>setError('')}><X size={14}/></button></div>}
       {!data?<div className="sy-empty"><LoaderCircle className="sy-spin"/><h2>正在连接本地服务</h2><p>请确认 Syllora 服务已启动。</p></div>:!course?<div className="sy-empty"><BookOpen size={48}/><p className="sy-kicker">学习从这里开始</p><h2>把资料变成<br/>下一步行动。</h2><p>打开课程文件夹，整理讲义，按自己的节奏学习。<br/>每一次作答，都会留下可追溯的学习证据。</p><button className="sy-primary" onClick={()=>setCreating(true)}>打开课程文件夹 <ArrowRight size={16}/></button></div>:<>
       <div className="sy-content">
@@ -169,7 +246,7 @@ export default function Syllora() {
         {Array.from({length:task.slots},(_,slot)=>{
           const q=course.questions.filter(q=>q.taskId===task.id&&q.slot===slot).at(-1);
           const attempt=q?course.attempts.find(a=>a.questionId===q.id):undefined;
-          return <div className="sy-question" key={slot}><div className="sy-kicker">练习 {slot+1}</div>{!q||q.status!=='valid'?<><p>{q?'此题已暂停评估，原作答保留，请生成替代题。':'按当前知识点资料生成一道新题。'}</p><button disabled={busy||!!running||course.archived} onClick={()=>void generate('question',{taskId:task.id,slot})}>生成{q?'替代':''}题目</button></>:<><h3>{q.stem}</h3><div className="sy-options" role="group" aria-label={`练习 ${slot+1} 选项`}>{q.options.map((o,i)=><button key={i} disabled={!!attempt||busy||course.archived} className={(attempt?.option??answers[q.id])===i?'is-selected':''} onClick={()=>rememberAnswer(q.id,i)}><span>{String.fromCharCode(65+i)}</span>{o}</button>)}</div>{!attempt?<div className="sy-row"><button className="sy-primary" disabled={answers[q.id]===undefined||busy||course.archived} onClick={async()=>{setAdjustNotice(null);const r=await run('submit',{questionId:q.id,option:answers[q.id],requestId:uuid()}) as {correct?:boolean;planAdjustment?:{ok:boolean;code:string;message?:string;draftId:string|null}}|null;if(r&&!r.correct){if(r.planAdjustment?.ok)setAdjustNotice('已根据本次错答生成计划调整草案，可查看差异后决定是否接受');else if(r.planAdjustment?.code==='SKIPPED_EXISTING_DRAFT')setAdjustNotice('已有待确认草案，本次未重复生成');else if(r.planAdjustment?.code==='FAILED')setAdjustNotice('本次错答未能生成调整建议，可稍后重试')}}}>提交答案</button><button disabled={busy||course.archived} onClick={()=>void run('reveal',{questionId:q.id})}>查看答案（记为辅助学习）</button></div>:<div className="sy-feedback"><strong>{attempt.correct?'回答正确':'回答错误'} · {attempt.assisted?'辅助学习，不计独立证据':'已保存独立作答'}</strong><p>{course.evidence[q.pointId]?.state} · {course.evidence[q.pointId]?.reason}</p></div>}{q.answer!==undefined&&<div className="sy-explanation"><p><strong>答案 {String.fromCharCode(65+q.answer)}</strong>　{q.explanation}</p><blockquote>{q.quote}</blockquote><div className="sy-row">{q.sourceIds.map(s=><button key={s} onClick={()=>setSourceId(s)}>查看依据</button>)}<button disabled={course.archived||busy} onClick={()=>{const reason=window.prompt('报错原因：歧义、来源不支持或答案错误');if(reason)void run('dispute',{questionId:q.id,reason})}}>题目报错并暂停计入</button></div></div>}</>}</div>
+          return <div className="sy-question" key={slot}><div className="sy-kicker">练习 {slot+1}</div>{!q||q.status!=='valid'?<><p>{q?'此题已暂停评估，原作答保留，请生成替代题。':'按当前知识点资料生成一道新题。'}</p><button disabled={busy||!!running||course.archived} onClick={()=>void generate('question',{taskId:task.id,slot})}>生成{q?'替代':''}题目</button></>:<><h3>{q.stem}</h3><div className="sy-options" role="group" aria-label={`练习 ${slot+1} 选项`}>{q.options.map((o,i)=><button key={i} disabled={!!attempt||busy||course.archived} className={(attempt?.option??answers[q.id])===i?'is-selected':''} onClick={()=>rememberAnswer(q.id,i)}><span>{String.fromCharCode(65+i)}</span>{o}</button>)}</div>{!attempt?<div className="sy-row"><button className="sy-primary" disabled={answers[q.id]===undefined||busy||course.archived} onClick={async()=>{setAdjustNotice(null);const r=await run('submit',{questionId:q.id,option:answers[q.id],requestId:uuid()}) as {correct?:boolean;planAdjustment?:{ok:boolean;code:string;message?:string;draftId:string|null}}|null;if(r&&!r.correct){if(r.planAdjustment?.ok)setAdjustNotice('已根据本次错答生成计划调整草案，可查看差异后决定是否接受');else if(r.planAdjustment?.code==='SKIPPED_EXISTING_DRAFT')setAdjustNotice('已有待确认草案，本次未重复生成');else if(r.planAdjustment?.code==='FAILED')setAdjustNotice('本次错答未能生成调整建议，可稍后重试')}}}>提交答案</button><button disabled={busy||course.archived} onClick={()=>void run('reveal',{questionId:q.id})}>查看答案（记为辅助学习）</button></div>:<div className="sy-feedback"><strong>{attempt.correct?'回答正确':'回答错误'} · {attempt.assisted?'辅助学习，不计独立证据':'已保存独立作答'}</strong><p>{course.evidence[q.pointId]?.state} · {course.evidence[q.pointId]?.reason}</p></div>}{q.answer!==undefined&&<div className="sy-explanation"><p><strong>答案 {String.fromCharCode(65+q.answer)}</strong>　{q.explanation}</p><blockquote>{q.quote}</blockquote><div className="sy-row">{q.sourceIds.map(s=><button key={s} onClick={()=>setSourceId(s)}>查看依据</button>)}<button disabled={course.archived||busy} onClick={()=>{setDisputeTarget(q.id);setDisputeReason('')}}>题目报错并暂停计入</button></div></div>}</>}</div>
         })}</section>}
         <section className="sy-discussion"><div className="sy-section-title">资料问答</div>{!course.messages.length&&<div className="sy-chat-empty"><FileText size={23}/><p>围绕你的课程资料提问。<br/><span>回答会附上可查看的来源；资料不足时会明确说明。</span></p></div>}{course.messages.map(m=><article className={`sy-message ${m.role}`} key={m.id}><div className="sy-message-name">{m.role==='user'?'你':'Syllora'}<small>{formatTime(m.at,course.timezone)}</small></div><ReactMarkdown skipHtml components={{img:({alt})=><span>{alt ? `[图片：${alt}]` : '[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{m.text}</ReactMarkdown>{m.sourceIds.length>0&&<div className="sy-citations">{m.sourceIds.map((s,i)=><button key={s} onClick={()=>setSourceId(s)}><FileText size={13}/>来源 {i+1}</button>)}</div>}</article>)}<div ref={bottom}/></section>
       </div>
@@ -180,7 +257,7 @@ export default function Syllora() {
     {showRight&&<aside className="sy-right"><div className="sy-right-title">学习状态 <span>{course?.timezone??'本地时间'}</span></div><div className="sy-tabs" role="tablist">{([['today','计划'],['lecture','讲义'],['outline','大纲'],['review','复习'],['materials','资料']] as const).map(([id,label])=><button role="tab" aria-selected={tab===id} className={tab===id?'is-selected':''} key={id} onClick={()=>setTab(id)}>{label}</button>)}</div><div className="sy-panel">
       {!course?<p className="sy-muted">打开课程文件夹后，在这里检查资料、阅读讲义与查看学习证据。</p>:tab==='lecture'?<><h2>阅读课程讲义</h2><p>在左侧阅读章节导读、概念解释与原文依据。</p><p className="sy-muted">{course.revision?'讲义已发布，学习范围与计划由你确认。':'请先在资料页检查文件并点击初始化。'}</p><button onClick={()=>setTab('materials')}>检查课程资料</button></>:tab==='materials'?<>
         {course.folder&&<MaterialInitialization key={course.id} course={course} epoch={fileEpoch} busy={busy} running={!!running} onRun={run}/>}
-        <h2>课程资料</h2><p className="sy-muted">支持文本 PDF、MD、TXT。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p><label className="sy-upload"><Upload size={20}/><span>选择资料文件</span><input aria-label="上传课程资料" type="file" accept=".pdf,.md,.txt" disabled={busy||course.archived} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value=''}}/></label><label>或粘贴正文<textarea rows={4} value={text} onChange={e=>setText(e.target.value)} placeholder="粘贴有使用权限的学习资料"/></label><button disabled={!text.trim()||busy||course.archived} onClick={async()=>{if(await run('import',{name:'粘贴资料.txt',text}))setText('')}}>保存正文</button>
+        <h2>课程资料</h2><p className="sy-muted">支持文本 PDF、MD、TXT。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p><button className="sy-upload" disabled={busy||course.archived} onClick={pickMaterialFile}><Upload size={20}/><span>选择资料文件</span></button><label>或粘贴正文<textarea rows={4} value={text} onChange={e=>setText(e.target.value)} placeholder="粘贴有使用权限的学习资料"/></label><button disabled={!text.trim()||busy||course.archived} onClick={async()=>{if(await run('import',{name:'粘贴资料.txt',text}))setText('')}}>保存正文</button>
         {course.materials.map(m=><div className="sy-material" key={m.id}><FileText size={17}/><div>
           <strong>{m.name}</strong><small>{m.missingOriginal?'缺少原文件 · ':''}{m.status==='deleted'?'已删除':m.status==='partial'?`部分可用${m.accepted?' · 已接受':' · 待确认'}`:'可用'} · v{m.revisionNumber??1} · {m.sources.length} 个片段{m.pages>0?` · ${m.pages} 页`:''}</small>
           {m.warnings?.map((warning,i)=><small key={i}>{warning}</small>)}
@@ -204,7 +281,18 @@ export default function Syllora() {
     {creating&&<ProjectDialog onClose={()=>{setCreating(false);setMigration(null)}} {...(migration?{migrationName:migration.name}:{})} onOpen={async path=>{if(!(await flushDraft()))throw new Error('请先保存当前课程草稿');const result=await rpc<{id:string}>(migration?'migrateCourse':'openCourse',migration?{courseId:migration.id,path}:{path,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone});await refresh();selectedRef.current=result.id;setSelected(result.id);setCreating(false);setMigration(null);setTab('materials')}}/>}
     {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{course?.materials.find(m=>m.id===source.materialId)?.name} · {source.anchor}</p><pre className="sy-source-text">{source.text}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
     {diffCourse?.draft&&<DiffModal course={diffCourse} onClose={()=>setDiffCourse(null)} busy={busy} onConfirm={async()=>{if(await run('confirmPlan',{courseId:diffCourse.id,baseVersion:diffCourse.draft!.baseVersion,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}} onReject={async()=>{if(await run('rejectPlan',{courseId:diffCourse.id,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}}/>}
-    {settings&&<div className="sy-overlay"><section className="sy-modal sy-settings" role="dialog" aria-modal="true" aria-label="模型与设置"><header><h2>模型与设置</h2><button aria-label="关闭设置" onClick={()=>setSettings(false)}><X size={19}/></button></header><p className="sy-muted">模型配置与加密凭据保存在本机。密钥仅保存在本机，不进入前端构建产物。</p><ModelsSection initial={null}/><hr/><h3>外部调用授权</h3><p>生成大纲、回答和题目时，将向所选模型服务发送相关资料片段、问题和题目。供应商的数据留存规则以其实际政策为准。</p><label className="sy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>允许向已配置模型发送以上内容</label><p className="sy-muted">已调用 {data?.settings.calls??0} 次。供应商账户费用与额度由你自行管理。</p><button className="sy-primary" disabled={busy} onClick={async()=>{if(await run('preferences',{consent}))setSettings(false)}}>保存授权</button></section></div>}
+    {settings&&<div className="sy-overlay"><section className="sy-modal sy-settings" role="dialog" aria-modal="true" aria-label="模型与设置"><header><h2>模型与设置</h2><button aria-label="关闭设置" onClick={()=>setSettings(false)}><X size={19}/></button></header><div className="sy-settings-cols"><nav className="sy-settings-nav" aria-label="设置分区">{([['models','模型配置'],['archive','归档管理'],['diag','诊断日志']] as const).map(([id,label])=><button key={id} className={settingsTab===id?'is-selected':''} aria-current={settingsTab===id} onClick={()=>setSettingsTab(id)}>{label}</button>)}</nav><div className="sy-settings-body">
+      {settingsTab==='models'?<><ModelsSection initial={null}/><hr/><h3>外部调用授权</h3><p>生成大纲、回答和题目时，将向所选模型服务发送相关资料片段、问题和题目。供应商的数据留存规则以其实际政策为准。</p><label className="sy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>允许向已配置模型发送以上内容</label><p className="sy-muted">已调用 {data?.settings.calls??0} 次。供应商账户费用与额度由你自行管理。</p><button className="sy-primary" disabled={busy} onClick={async()=>{if(await run('preferences',{consent}))setSettings(false)}}>保存授权</button></>
+      :settingsTab==='archive'?<><h3>归档管理</h3><p className="sy-muted">已归档课程不参与学习与复习。可以恢复，也可以永久删除——删除只清理 Syllora 产物与学习记录，课程文件夹和原始资料保留。此操作不可撤销。</p>
+        {!(data?.courses.some(c=>c.archived))?<p className="sy-muted">暂无已归档课程。在工作台顶部的课程操作里点「归档」，课程就会移到这里。</p>
+        :(data?.courses.filter(c=>c.archived)??[]).map(c=><div className="sy-archive-row" key={c.id}><FileText size={17}/><div><strong>{c.name}</strong><small>{c.points.length} 个知识点 · {c.materials.length} 份资料 · {c.attempts.length} 次作答</small></div><div className="sy-row"><button disabled={busy} onClick={()=>void run('archive',{courseId:c.id,archived:false})}>恢复</button><button disabled={busy} onClick={()=>{if(window.confirm(`永久删除「${c.name}」的 Syllora 产物与学习记录？课程文件夹和原始资料保留，此操作不可撤销。`))void run('delete',{courseId:c.id,confirmed:true})}}>永久删除</button></div></div>)}</>
+      :<><h3>诊断日志</h3><p className="sy-muted">宿主运行日志按天存放在本机。模型配置或生成失败时，这里能找到确切原因；导出后可直接发给开发排查。</p>
+        <div className="sy-row"><button className="sy-primary" disabled={diagLoading||!(diagFiles?.length)} onClick={exportDiagLogs}>导出诊断日志</button>{hostPaths?.logsDir&&desktopBridge()?.openPath&&<button onClick={()=>void desktopBridge()?.openPath?.(hostPaths.logsDir!)}>打开日志目录</button>}{diagFiles!==null&&!diagLoading&&<button onClick={()=>setDiagFiles(null)}>重新读取</button>}</div>
+        {diagLoading?<p className="sy-muted">正在读取日志…</p>:!(diagFiles?.length)?<p className="sy-muted">暂无日志文件。</p>
+        :diagFiles.map(f=><div className="sy-diag-file" key={f.name}><FileText size={15}/><div><strong>{f.name}</strong><small>{(f.bytes/1024).toFixed(1)} KiB{f.truncated?' · 已截断':''}</small></div></div>)}</>}
+    </div></div></section></div>}
+    {renaming&&course&&<div className="sy-overlay" onClick={()=>setRenaming(false)}><section className="sy-modal sy-create-modal" role="dialog" aria-modal="true" aria-label="重命名课程" onClick={e=>e.stopPropagation()}><header><h2>重命名课程</h2><button aria-label="关闭重命名" onClick={()=>setRenaming(false)}><X size={19}/></button></header><form onSubmit={async e=>{e.preventDefault();if(await run('rename',{name:renameValue})){setRenaming(false)}}}><label>课程名称<input autoFocus value={renameValue} maxLength={60} onChange={e=>setRenameValue(e.target.value)} required/></label><div className="sy-row"><button className="sy-primary" disabled={busy||!renameValue.trim()||renameValue.trim()===course.name}>保存</button><button type="button" disabled={busy} onClick={()=>setRenaming(false)}>取消</button></div></form></section></div>}
+    {disputeTarget&&<div className="sy-overlay" onClick={()=>setDisputeTarget(null)}><section className="sy-modal sy-create-modal" role="dialog" aria-modal="true" aria-label="题目报错" onClick={e=>e.stopPropagation()}><header><h2>题目报错</h2><button aria-label="关闭报错" onClick={()=>setDisputeTarget(null)}><X size={19}/></button></header><p className="sy-muted">报错后该题版本暂停计入学习证据，你的原作答会保留，原题位可生成替代题。</p><form onSubmit={async e=>{e.preventDefault();const target=disputeTarget;if(target&&await run('dispute',{questionId:target,reason:disputeReason})){setDisputeTarget(null);setDisputeReason('')}}}><label>报错原因<textarea rows={3} autoFocus value={disputeReason} maxLength={400} onChange={e=>setDisputeReason(e.target.value)} placeholder="例如：歧义、来源不支持、答案错误" required/></label><div className="sy-row"><button className="sy-primary" disabled={busy||!disputeReason.trim()}>提交报错</button><button type="button" disabled={busy} onClick={()=>setDisputeTarget(null)}>取消</button></div></form></section></div>}
   </div>
 }
 

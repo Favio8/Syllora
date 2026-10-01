@@ -143,11 +143,14 @@ console.log('[smoke] GET / via sidecar →', ui.status, 'token-injected:', html.
 // 跳过——所以这里显式告警，并可用 SMOKE_STRICT=1 把"优雅退出失败"本身判失败。
 const gracefulStop = () => {
   if (process.platform === 'win32') {
-    // 无 /F：向 GUI 窗口发 WM_CLOSE 关闭请求 → Electron 走正常退出流程。
-    // taskkill 对无响应窗口/拒绝访问会失败，退出码必须看（否则静默走兜底）。
-    const killed = spawnSync('taskkill', ['/PID', String(child.pid)], { stdio: 'ignore', windowsHide: true })
+    // Close the actual main window rather than requesting process termination.
+    // taskkill without /F can target a console and bypass Electron's close hooks.
+    // Process.CloseMainWindow ignores hidden windows; CI hides the GUI console.
+    // Enumerate Electron's native windows so visibility cannot skip this check.
+    const closeRequest = `Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class SylloraSmokeClose { public delegate bool Callback(IntPtr window, IntPtr context); [DllImport("user32.dll")] public static extern bool EnumWindows(Callback callback, IntPtr context); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint id); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr window, StringBuilder name, int size); [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam); public static int Close(uint processId) { int count=0; EnumWindows((window, context) => { uint id; GetWindowThreadProcessId(window, out id); var name=new StringBuilder(256); GetClassName(window, name, 256); if(id==processId && name.ToString()=="Chrome_WidgetWin_1" && PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero)) count++; return true; }, IntPtr.Zero); return count; } }'; if ([SylloraSmokeClose]::Close(${child.pid}) -eq 0) { exit 2 }`
+    const killed = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', closeRequest], { stdio: 'ignore', windowsHide: true })
     if (killed.status !== 0) {
-      console.log('[smoke] taskkill 关闭请求失败，status =', killed.status, killed.error?.code ?? '')
+      console.log('[smoke] 主窗口关闭请求失败，status =', killed.status, killed.error?.code ?? '')
     }
   } else {
     child.kill('SIGTERM')

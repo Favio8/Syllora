@@ -12,6 +12,10 @@ import { writeTaskPool, type HarnessTask } from '@syllora/course-builder'
 import { createCourseService } from '../src/course.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
+/** Fixture value standing in for a stored secret; carries no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+
 const fakeConfig: ResolvedChatConfig = {
   providerId: 'mock',
   model: 'mock-model',
@@ -20,7 +24,7 @@ const fakeConfig: ResolvedChatConfig = {
   judgeEffort: null,
   baseUrl: 'https://mock.example/v1',
   apiKeyEnv: 'MOCK_API_KEY',
-  apiKey: 'sk-mock',
+  apiKey: PLACEHOLDER,
   temperature: 0.3,
   maxConcurrency: 1,
   maxTokens: null,

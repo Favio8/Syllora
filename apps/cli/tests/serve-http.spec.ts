@@ -212,6 +212,18 @@ const auth = (token: string | null = host!.token): Record<string, string> => ({
 });
 
 describe("serve HTTP 边界（集成）", () => {
+  it('requires authentication for diagnostics and returns only a bounded log tail', async () => {
+    const logs=join(host!.home,'logs'), name='host-9999-12-31.log'
+    mkdirSync(logs,{recursive:true});writeFileSync(join(logs,name),'prefix-removed\n'+'x'.repeat(300*1024)+'\nrecent-log-tail')
+    const denied=await fetch(`${base()}/api/diagnostics.logs`,{method:'POST',headers:auth(null),body:JSON.stringify({payload:{}})})
+    expect(denied.status).toBe(401)
+    const response=await fetch(`${base()}/api/diagnostics.logs`,{method:'POST',headers:auth(),body:JSON.stringify({payload:{}})})
+    const body=await response.json() as any
+    expect(response.status).toBe(200);expect(body.result.files.length).toBeLessThanOrEqual(7)
+    const file=body.result.files.find((f:{name:string})=>f.name===name)
+    expect(file.truncated).toBe(true);expect(file.text.endsWith('recent-log-tail')).toBe(true)
+    expect(file.text).not.toContain('prefix-removed');expect(Buffer.byteLength(file.text)).toBeLessThan(257*1024)
+  })
   it('previews initialized PDF originals with authentication, ownership and version checks',async()=>{
     const previewHost=await startHost(),previewBase=()=>`http://127.0.0.1:${previewHost.port}`,previewAuth=()=>({authorization:`Bearer ${previewHost.token}`,'content-type':'application/json'})
     const mock=createServer((request,response)=>{

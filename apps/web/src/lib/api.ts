@@ -24,6 +24,7 @@ import type {
   SettingsPayload,
   ProviderModelPayload,
   ProviderCatalogEntry,
+  ProviderProtocol,
   SessionModelDirectory,
   SessionModelSelection,
   WorkspaceRegistryPayload,
@@ -375,11 +376,16 @@ export const api = {
   providerCatalog: () =>
     rpc<{ catalog: ProviderCatalogEntry[] }>("settings.providerCatalog"),
 
+  /** 宿主运行日志（诊断日志分区导出用）。注意这是顶层方法，不走
+   *  /api/syllora/* 专线。 */
+  diagnosticsLogs: () =>
+    rpc<{ files: Array<{ name: string; bytes: number; text: string; truncated: boolean }> }>("diagnostics.logs"),
+
   /** 向端点代理询问模型列表；只读探测，不落盘（api_spec §2.8 v2.6）。
    *  providerId 供服务端在表单密钥为空时解析**已加密存储**的凭据（编辑态密钥
    *  按设计不回填浏览器）——不带它时探测不带 Authorization，对已配 Key 的
    *  provider 必然 401。 */
-  discoverModels: (payload: { baseUrl: string; apiKey?: string; apiKeyEnv?: string; providerId?: string }) =>
+  discoverModels: (payload: { baseUrl: string; apiKey?: string; apiKeyEnv?: string; providerId?: string; protocol?: ProviderProtocol }) =>
     rpc<{ models: ProviderModelPayload[] }>("settings.discoverModels", payload),
 
   /** 项目根候选资料枚举（api_spec §6.3，新项目向导勾选数据源）。 */
@@ -520,6 +526,8 @@ export const api = {
     /** 缺省 = 保留现值（merge 语义，DSH 对齐）。 */
     temperature?: number;
     maxConcurrency?: number;
+    /** 缺省 = 保留现值；首次创建缺省为 openai。 */
+    protocol?: ProviderProtocol;
     /** null = 保留现有列表；[] = 清空；数组 = 整体替换。 */
     models?: { id: string; name: string; contextWindow: number | null; maxTokens: number | null }[] | null;
     /** 创建时覆盖已存在 id 需要显式置 true（否则 409 provider-exists）。 */

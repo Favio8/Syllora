@@ -11,6 +11,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
+import { ANTHROPIC_VERSION, anthropicEndpoint } from '@syllora/llm-anthropic'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
 
 export interface ProviderModelPayload {
@@ -25,6 +26,8 @@ export interface ProviderPayload {
   readonly name: string
   readonly model: string
   readonly baseUrl: string | null
+  /** Wire protocol this provider speaks; absent in config.yaml reads as `openai`. */
+  readonly protocol: ProviderProtocol
   readonly apiKeyEnv: string | null
   readonly apiKeyConfigured: boolean
   readonly temperature: number
@@ -78,6 +81,7 @@ interface ProviderConfigYaml {
   readonly name?: string
   readonly model?: string
   readonly base_url?: string | null
+  readonly protocol?: string | null
   readonly api_key_env?: string | null
   readonly temperature?: number
   readonly max_concurrency?: number
@@ -256,6 +260,7 @@ async function providerPayload(workspaceRoot: string, id: string, provider: Prov
     name: provider.name ?? id,
     model: provider.model ?? '',
     baseUrl: provider.base_url ?? null,
+    protocol: normalizeProtocol(provider.protocol),
     apiKeyEnv: ref,
     apiKeyConfigured: await credentialConfigured(workspaceRoot, ref),
     temperature: provider.temperature ?? 0.3,
@@ -294,34 +299,73 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
   }
 }
 
+/** Wire protocol a provider speaks. `openai` = `{base}/chat/completions` +
+ *  `Authorization: Bearer`; `anthropic` = `{base}/v1/messages` + `x-api-key`.
+ *  Absent in config.yaml means `openai` (backward compatible). */
+export type ProviderProtocol = 'openai' | 'anthropic'
+
+/** Coerce a raw config.yaml value to a known protocol; anything unrecognized
+ *  (including a missing key, which is every provider written before this field
+ *  existed) reads as `openai`, so existing configs keep their behaviour. */
+export function normalizeProtocol(value: unknown): ProviderProtocol {
+  return value === 'anthropic' ? 'anthropic' : 'openai'
+}
+
 /** Built-in catalog entry (Python provider_catalog parity). */
 export interface CatalogEntry {
   readonly id: string
   readonly name: string
   readonly baseUrl: string | null
+  readonly protocol: ProviderProtocol
   readonly models: ProviderModelPayload[]
 }
 
+/**
+ * 预置供应商清单。baseUrl 与模型名取自各家官方文档，写成可直接用的默认值；
+ * 用户仍可在编辑卡片的「自定义设置」里改 Base URL、协议与模型列表。
+ */
 export function providerCatalog(): CatalogEntry[] {
   return [
     {
       id: 'deepseek',
       name: 'DeepSeek 官方',
       baseUrl: 'https://api.deepseek.com',
+      protocol: 'openai',
+      // 官方未在文档页面列出稳定的 id 列表，留空由「从端点获取」发现。
       models: [],
     },
     {
-      id: 'sensenova',
-      name: 'SenseNova 日日新',
-      baseUrl: 'https://token.sensenova.cn/v1',
+      id: 'mimo',
+      name: '小米 MiMo',
+      baseUrl: 'https://api.xiaomimimo.com/v1',
+      protocol: 'openai',
       models: [
-        { id: 'sensenova-6.8-flash-lite', name: 'SenseNova 6.8 Flash Lite', contextWindow: null, maxTokens: null },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro（商汤托管）', contextWindow: null, maxTokens: null },
-        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash（商汤托管）', contextWindow: null, maxTokens: null },
+        { id: 'mimo-v2.6-pro', name: 'MiMo V2.6 Pro', contextWindow: null, maxTokens: null },
+        { id: 'mimo-v2.6-flash', name: 'MiMo V2.6 Flash', contextWindow: null, maxTokens: null },
+        { id: 'mimo-v2.6-pro-ultraspeed', name: 'MiMo V2.6 Pro UltraSpeed', contextWindow: null, maxTokens: null },
+        { id: 'mimo-v2.5-pro', name: 'MiMo V2.5 Pro', contextWindow: null, maxTokens: null },
+        { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: null, maxTokens: null },
       ],
     },
-    { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', models: [] },
-    { id: 'custom', name: '自定义 OpenAI 兼容', baseUrl: null, models: [] },
+    {
+      id: 'glm',
+      name: '智谱 GLM',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      protocol: 'openai',
+      models: [
+        { id: 'glm-5.3', name: 'GLM-5.3', contextWindow: null, maxTokens: null },
+        { id: 'glm-5.2', name: 'GLM-5.2（推理）', contextWindow: null, maxTokens: null },
+        { id: 'glm-5.3-flash', name: 'GLM-5.3 Flash', contextWindow: null, maxTokens: null },
+      ],
+    },
+    { id: 'custom', name: 'OpenAI 兼容', baseUrl: null, protocol: 'openai', models: [] },
+    {
+      id: 'anthropic',
+      name: 'Anthropic 兼容',
+      baseUrl: 'https://api.anthropic.com',
+      protocol: 'anthropic',
+      models: [],
+    },
   ]
 }
 
@@ -342,7 +386,7 @@ export function parseModelsPayload(payload: unknown): ProviderModelPayload[] {
     const maxOut = entry['max_output_length'] ?? entry['max_tokens']
     models.push({
       id,
-      name: String(entry['name'] ?? '').trim() || id,
+      name: String(entry['name'] ?? entry['display_name'] ?? '').trim() || id,
       contextWindow: typeof context === 'number' && context > 0 ? context : null,
       maxTokens: typeof maxOut === 'number' && maxOut > 0 ? maxOut : null,
     })
@@ -361,7 +405,7 @@ export function parseModelsPayload(payload: unknown): ProviderModelPayload[] {
  * first-class use case, and cross-site browser callers are already blocked
  * by the serve 入口的 Origin 门禁.
  */
-const API_KEY_ENV_RE = /^(?:DEEPSEEK|OPENAI|ANTHROPIC|GOOGLE|GEMINI|DASHSCOPE|MOONSHOT|ZHIPU|SENSENOVA|OPENROUTER|SILICONFLOW|CUSTOM|SYLLORA)_[A-Z0-9_]+$|^[A-Z][A-Z0-9_]*_(?:API_KEY|API_TOKEN)$/
+const API_KEY_ENV_RE = /^(?:DEEPSEEK|OPENAI|ANTHROPIC|GOOGLE|GEMINI|DASHSCOPE|MOONSHOT|ZHIPU|MIMO|SENSENOVA|OPENROUTER|SILICONFLOW|CUSTOM|SYLLORA)_[A-Z0-9_]+$|^[A-Z][A-Z0-9_]*_(?:API_KEY|API_TOKEN)$/
 
 /** Validate and normalize a user-supplied model endpoint base URL. */
 export function validateModelBaseUrl(rawUrl: string): string {
@@ -388,14 +432,17 @@ export function validateModelBaseUrl(rawUrl: string): string {
 const MODEL_DISCOVERY_TTL_MS = 5 * 60_000
 const modelDiscoveryCache = new Map<string, { models: ProviderModelPayload[]; ts: number }>()
 
-function discoveryCacheKey(base: string, apiKey: string | null): string {
-  return `${base}|${apiKey === null || apiKey === '' ? '-' : createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`
+function discoveryCacheKey(base: string, apiKey: string | null, protocol: ProviderProtocol): string {
+  return `${protocol}|${base}|${apiKey === null || apiKey === '' ? '-' : createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`
 }
 
 /** Probe `GET {baseUrl}/models` (read-only, no persistence). */
-export async function discoverModels(input: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; refresh?: boolean }): Promise<ProviderModelPayload[]> {
+export async function discoverModels(input: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; refresh?: boolean; protocol?: ProviderProtocol }): Promise<ProviderModelPayload[]> {
   const base = validateModelBaseUrl(input.baseUrl)
   if (base === '') throw new Error('Base URL 不能为空')
+  // 两种协议的目录端点与鉴权头都不同：OpenAI 兼容是 `{base}/models` +
+  // `Authorization: Bearer`，Anthropic 是 `{base}/v1/models` + `x-api-key`。
+  const protocol = normalizeProtocol(input.protocol)
   let apiKey = input.apiKey?.trim() ?? null
   if (
     apiKey === null
@@ -406,33 +453,58 @@ export async function discoverModels(input: { baseUrl: string; apiKey?: string |
     }
     apiKey = process.env[input.apiKeyEnv.trim()] ?? null
   }
-  const cacheKey = discoveryCacheKey(base, apiKey)
+  const cacheKey = discoveryCacheKey(base, apiKey, protocol)
   if (input.refresh !== true) {
     const cached = modelDiscoveryCache.get(cacheKey)
     if (cached !== undefined && Date.now() - cached.ts < MODEL_DISCOVERY_TTL_MS) return cached.models
   }
-  const headers: Record<string, string> = { Accept: 'application/json' }
-  if (apiKey !== null && apiKey !== '') headers['Authorization'] = `Bearer ${apiKey}`
-  let response: Response
-  try {
-    response = await fetch(`${base}/models`, { headers, signal: AbortSignal.timeout(5000) })
-  } catch {
-    // 不回显目标地址：错误细节本身就是内网探测的回显信道。
-    throw new Error('无法连接模型端点（请检查 Base URL 与网络）')
+  const headers: Record<string, string> = { Accept: 'application/json', ...(protocol === 'anthropic' ? { 'anthropic-version': ANTHROPIC_VERSION } : {}) }
+  if (apiKey !== null && apiKey !== '') {
+    if (protocol === 'anthropic') {
+      headers['x-api-key'] = apiKey
+      headers['anthropic-version'] = ANTHROPIC_VERSION
+    } else {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
   }
-  if (!response.ok) {
-    // 未携带密钥时的 401/403 与"密钥被拒"是两回事：旧实现一律提示
-    // "请检查 API Key 是否正确"，而编辑既有 provider 时探测本来就不带密钥
-    // （服务端未解析已存凭据时的老路），用户照提示去改一个本来正确的 Key。
-    const carried = apiKey !== null && apiKey !== ''
-    const hint = response.status === 401 || response.status === 403
-      ? carried ? '，请检查 API Key 是否正确' : '（本次探测未携带 API Key）'
-      : ''
-    throw new Error(`端点返回 HTTP ${response.status}${hint}`)
+  const discoveryUrl = protocol === 'anthropic' ? anthropicEndpoint(base, 'models') : `${base}/models`
+  const signal = AbortSignal.timeout(5000)
+  const models: ProviderModelPayload[] = []
+  const cursors = new Set<string>()
+  let nextUrl = discoveryUrl
+  for (let page = 0; page < 20; page++) {
+    let response: Response
+    try {
+      response = await fetch(nextUrl, { headers, signal, redirect: 'error' })
+    } catch {
+      // 不回显目标地址：错误细节本身就是内网探测的回显信道。
+      throw new Error('无法连接模型端点（请检查 Base URL 与网络）')
+    }
+    if (!response.ok) {
+      // 未携带密钥时的 401/403 与"密钥被拒"是两回事：旧实现一律提示
+      // "请检查 API Key 是否正确"，而编辑既有 provider 时探测本来就不带密钥
+      // （服务端未解析已存凭据时的老路），用户照提示去改一个本来正确的 Key。
+      const carried = apiKey !== null && apiKey !== ''
+      const hint = response.status === 401 || response.status === 403
+        ? carried ? '，请检查 API Key 是否正确' : '（本次探测未携带 API Key）'
+        : ''
+      throw new Error(`端点返回 HTTP ${response.status}${hint}`)
+    }
+    const payload = await response.json() as { has_more?: boolean; last_id?: string }
+    models.push(...parseModelsPayload(payload))
+    if (models.length > 1000) throw new Error('模型目录过大，请手动填写模型')
+    if (protocol !== 'anthropic' || payload.has_more !== true) {
+      const unique = [...new Map(models.map(model => [model.id, model])).values()]
+      modelDiscoveryCache.set(cacheKey, { models: unique, ts: Date.now() })
+      return unique
+    }
+    if (typeof payload.last_id !== 'string' || payload.last_id === '' || cursors.has(payload.last_id)) throw new Error('模型目录分页信息不正确')
+    cursors.add(payload.last_id)
+    const next = new URL(discoveryUrl)
+    next.searchParams.set('after_id', payload.last_id)
+    nextUrl = next.href
   }
-  const models = parseModelsPayload(await response.json())
-  modelDiscoveryCache.set(cacheKey, { models, ts: Date.now() })
-  return models
+  throw new Error('模型目录分页过多，请手动填写模型')
 }
 
 /** Duplicate-provider creation guard (409 in the RPC envelope). */
@@ -463,6 +535,7 @@ export async function saveProvider(workspaceRoot: string, input: {
   baseUrl: string | null
   temperature?: number
   maxConcurrency?: number
+  protocol?: ProviderProtocol
   models?: Array<{ id: string; name: string; contextWindow: number | null; maxTokens: number | null }> | null
   overwrite?: boolean
 }): Promise<SettingsPayload> {
@@ -487,6 +560,8 @@ export async function saveProvider(workspaceRoot: string, input: {
       name,
       model: input.model.trim(),
       base_url: input.baseUrl?.trim() || null,
+      // 协议随卡片一起写：不传时保留既有值（merge），首次创建缺省 openai。
+      protocol: input.protocol ?? normalizeProtocol(existing?.protocol),
       api_key_env: existing?.api_key_env ?? null,
       ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
       ...(input.maxConcurrency !== undefined ? { max_concurrency: input.maxConcurrency } : {}),

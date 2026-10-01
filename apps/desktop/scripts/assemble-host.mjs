@@ -90,7 +90,11 @@ mkdirSync(hostOut, { recursive: true })
 // 2) host ESM bundle
 const bundle = join(repoRoot, 'apps', 'cli', 'lib', 'bin.js')
 mustExist(bundle, 'Run the CLI bundle build first (node scripts/assemble-host.mjs --build).')
-cpSync(bundle, join(hostOut, 'bin.js'))
+// tsdown can emit sibling chunks for dynamic imports (for example Busboy).
+// Copy the same flat JS closure shipped by the CLI package's lib/*.js glob.
+for (const name of readdirSync(dirname(bundle))) {
+  if (name.endsWith('.js') && statSync(join(dirname(bundle), name)).isFile()) cpSync(join(dirname(bundle), name), join(hostOut, name))
+}
 // ESM marker: bin.js is ESM but keeps a .js extension; nearest package.json must declare type=module.
 // bin.js 顶层还会 createRequire('../package.json') 读取版本号（bundle 内联），
 // 因此 host/ 的上一级（resources/）也需要一份含 version 的 package.json。

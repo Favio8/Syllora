@@ -16,9 +16,13 @@ const home=join(testRoot,'home'), data=join(testRoot,'data')
 process.env.SYLLORA_HOME=home
 await mkdir(data,{recursive:true})
 let sequence=0
+const protocol=process.env.SYLLORA_E2E_PROTOCOL==='anthropic'?'anthropic':'openai'
 const mock=createServer((req,res)=>{
+  if(req.method==='GET' && req.url?.endsWith('/models')) {res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[{id:'syllora-test-fixture',display_name:'Fixture'}],has_more:false}));return}
   let body='';req.on('data',part=>{body+=part});req.on('end',()=>{
     try {
+      assert.equal(req.url,protocol==='anthropic'?'/v1/messages':'/v1/chat/completions')
+      assert.equal(protocol==='anthropic'?req.headers['x-api-key']:req.headers.authorization,protocol==='anthropic'?'test-only-not-a-real-secret':'Bearer test-only-not-a-real-secret')
       const request=JSON.parse(body)
       const last=request.messages.at(-1).content
       const text=typeof last==='string'?last:last.map((p:{text?:string})=>p.text??'').join('')
@@ -32,6 +36,12 @@ const mock=createServer((req,res)=>{
       else if(text.includes('生成一道四选一题')) {sequence++;output={stem:`练习 ${sequence}：单位矩阵的主对角线元素等于什么？`,options:['1','0','2','3'],answer:0,explanation:'依据本次导入讲义：主对角线为 1，其余元素为 0。',sourceIds:[sourceId],quote:'单位矩阵的主对角线元素为 1'}}
       else output={text:sources.some((s:{text:string})=>s.text.includes('主对角线'))?'单位矩阵的主对角线元素为 **1**，其余元素为 **0**。\n\n例如二阶单位矩阵保持二维向量不变。这是教学示例。':`这是本地自动化测试响应。资料原文：${sources[0].text}`,sourceIds:[sourceId],insufficient:false}
       res.writeHead(200,{'Content-Type':'text/event-stream'})
+      if(protocol==='anthropic') {
+        const frame=(event:string,data:unknown)=>res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        frame('message_start',{message:{usage:{input_tokens:150,output_tokens:0}}});frame('content_block_start',{index:0,content_block:{type:'text',text:''}})
+        frame('content_block_delta',{index:0,delta:{type:'text_delta',text:JSON.stringify(output)}});frame('content_block_stop',{index:0})
+        frame('message_delta',{delta:{stop_reason:'end_turn'},usage:{output_tokens:80}});frame('message_stop',{});res.end();return
+      }
       res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'syllora-test-fixture',choices:[{index:0,delta:{role:'assistant',content:JSON.stringify(output)},finish_reason:null}]})}\n\n`)
       res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'syllora-test-fixture',choices:[{index:0,delta:{},finish_reason:'stop'}],usage:{prompt_tokens:150,completion_tokens:80,total_tokens:230}})}\n\n`)
       res.end('data: [DONE]\n\n')
@@ -40,7 +50,7 @@ const mock=createServer((req,res)=>{
 })
 await new Promise<void>(r=>mock.listen(0,'127.0.0.1',r))
 const address=mock.address() as {port:number}
-await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`})
+await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`,protocol})
 await setCredential(data,'syllora-test','test-only-not-a-real-secret')
 await activateProvider(data,'syllora-test')
 const host=spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
@@ -140,11 +150,18 @@ try {
   state=await rpc('state');assert.equal(state.courses[0].changes.length,2)
   await page.reload();await page.getByRole('heading',{name:'线性代数 · 自动化测试'}).waitFor()
   state=await rpc('state');assert.equal(state.courses[0].progress.completed,1)
-  const questionId=state.courses[0].questions[0].id
-  await rpc('dispute',{courseId,questionId,reason:'自动化测试：排除唯一错答'})
+  await page.getByRole('tab',{name:'计划',exact:true}).click();await page.getByRole('button',{name:/单位矩阵.*活动完成/}).first().click()
+  await page.getByRole('button',{name:'题目报错并暂停计入',exact:true}).first().click()
+  const dispute=page.getByRole('dialog',{name:'题目报错'});await dispute.getByLabel('报错原因').fill('自动化测试：排除唯一错答');await dispute.getByRole('button',{name:'提交报错',exact:true}).click();await dispute.waitFor({state:'detached'})
   state=await rpc('state');assert.equal(state.courses[0].evidence[pointId].state,'待验证')
-  await page.getByRole('button',{name:'模型与设置'}).click();await page.getByRole('dialog',{name:'模型与设置'}).waitFor();await page.screenshot({path:join(testRoot,'model-settings.png'),fullPage:true})
+  await page.getByRole('button',{name:'模型与设置'}).click();await page.getByRole('dialog',{name:'模型与设置'}).waitFor()
+  await page.getByRole('button',{name:'供应商管理（1）',exact:true}).click();await page.getByText('自动化测试服务',{exact:true}).waitFor();await page.getByRole('button',{name:'编辑',exact:true}).click()
+  await page.getByText('自定义设置',{exact:false}).first().click();assert.equal(await page.locator('select[name$="_protocol"]').inputValue(),protocol)
+  await page.getByRole('dialog',{name:'模型与设置'}).screenshot({path:join(testRoot,'model-settings.png')})
+  await page.getByRole('button',{name:'诊断日志',exact:true}).click();await page.getByRole('button',{name:'导出诊断日志',exact:true}).waitFor();const settingsBox=await page.getByRole('dialog',{name:'模型与设置'}).boundingBox(),closeBox=await page.getByRole('button',{name:'关闭设置',exact:true}).boundingBox();assert.ok(closeBox.y>=settingsBox.y&&closeBox.y+closeBox.height<=settingsBox.y+settingsBox.height);await page.getByRole('dialog',{name:'模型与设置'}).screenshot({path:join(testRoot,'diagnostics.png')})
   await page.getByRole('button',{name:'关闭设置',exact:true}).click()
+  for(const name of ['线性代数 · 已命名','线性代数 · 自动化测试']) {await page.getByRole('button',{name:'重命名课程',exact:true}).click();const rename=page.getByRole('dialog',{name:'重命名课程'});await rename.getByLabel('课程名称').fill(name);await rename.getByRole('button',{name:'保存',exact:true}).click();await rename.waitFor({state:'detached'});await page.getByRole('heading',{name,exact:true}).waitFor()}
+  state=await rpc('state');assert.equal(state.courses.find((c:{id:string})=>c.id===courseId).folder,courseFolder)
   await page.getByRole('textbox',{name:'向课程资料提问'}).fill('切课后保留的未发送问题')
   const secondFolder=join(testRoot,'切课草稿检查');await mkdir(secondFolder)
   await page.getByRole('button',{name:'打开课程文件夹',exact:true}).click()
@@ -191,7 +208,7 @@ try {
   await page.getByText(/部分可用 · 已接受 · v2 ·/).waitFor();await page.screenshot({path:join(testRoot,'pdf-version-update.png'),fullPage:true})
   assert.deepEqual(failedResponses,['409 /api/syllora/material-file'])
   assert.deepEqual(errors,[])
-  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,model:'local test fixture, not a live provider',checks:['open course folder','inspect saved source','initialize','read lecture','locate original source','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft','PDF partial confirmation and physical page issues','authenticated byte-for-byte original preview','answer context coverage','changed original preview rejected','material version update preserves original source IDs'],browserErrors:errors,expectedFailures:failedResponses},null,2))
+  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,protocol,model:'local test fixture, not a live provider',checks:['open course folder','inspect saved source','initialize','read lecture','locate original source','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings with provider protocol','diagnostics view','rename without moving course folder','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft','PDF partial confirmation and physical page issues','authenticated byte-for-byte original preview','answer context coverage','changed original preview rejected','material version update preserves original source IDs'],browserErrors:errors,expectedFailures:failedResponses},null,2))
   console.log(JSON.stringify({passed:true,artifacts:testRoot}))
 } catch(error) {
   await page?.screenshot({path:join(testRoot,'failure.png'),fullPage:true})

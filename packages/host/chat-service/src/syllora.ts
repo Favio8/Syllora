@@ -536,7 +536,7 @@ export class SylloraService {
     },false)
     try {
       const delegate=this.options.client?.(config)??createDeepSeekToolClient(config)
-      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),check,
+      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),check,
         progress:async progress=>{await check();await this.transaction(db=>{const current=db.jobs.find(j=>j.id===job.id)!;current.progress=progress;current.message=progress.message})},
         call:async (sources,prompt)=>{
           await check()
