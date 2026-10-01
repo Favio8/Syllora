@@ -232,6 +232,15 @@ async function createMainWindow() {
 
 function fatal(message) {
   diagnostic(`fatal: ${message}`)
+  // showErrorBox is modal. In CI nobody dismisses it, so the process stays up
+  // with no further stdout and the smoke wait expires without an exit code.
+  // Smoke sets this env so the fatal line in desktop.log can be read and the
+  // process can exit. Interactive launches still show the dialog.
+  if (process.env.SYLLORA_DESKTOP_SMOKE === '1') {
+    console.error(`[desktop] fatal: ${message}`)
+    app.exit(1)
+    return
+  }
   dialog.showErrorBox('Syllora 启动失败', message)
   app.quit()
 }

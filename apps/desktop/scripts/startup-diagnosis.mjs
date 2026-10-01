@@ -1,12 +1,12 @@
 /**
- * Desktop smoke launch contract and failure text.
+ * Desktop smoke launch options and failure text.
  *
- * Windows CI job 110406638882 (commit 913c020) spawned electron.exe with piped
- * stdio and windowsHide:false. The step printed nothing after the userData path
- * and host.json was still missing at 20s. The same runner class with
- * windowsHide:true (job 110442030725) wrote host.json in about 4s. An interactive
- * desktop can pass either way, so the hidden console is required for CI rather
- * than a cosmetic flag. Do not treat a longer wait as the fix.
+ * Job 110406638882 waited 20s with empty Electron stdout and no host.json while
+ * windowsHide was false. Job 110442030725 later wrote host.json in about 4s
+ * with windowsHide true, but that commit also changed naming, diagnostics, and
+ * paths. The console flag is therefore not an isolated cause. Smoke still hides
+ * the GUI console because piped stdio needs it on Windows CI, and it records
+ * stage timestamps instead of treating a longer wait as the fix.
  */
 
 export function electronLaunchOptions() {
@@ -19,34 +19,48 @@ export function electronLaunchOptions() {
 export function redactSecrets(text) {
   return String(text)
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/("token"\s*:\s*")[^"]*/gi, '$1[redacted]')
+    .replace(/("(?:token|access_token|apiKey|api_key|secret|password)"\s*:\s*")[^"]*/gi, '$1[redacted]')
+    .replace(/\b((?:token|access_token|apiKey|api_key|secret|password)\s*[:=]\s*)\S+/gi, '$1[redacted]')
 }
 
-export function diagnosticLines(desktopLog) {
+const STAMP = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s+(.*)$/
+
+export function diagnosticEntries(desktopLog) {
   if (!desktopLog || desktopLog.startsWith('(desktop.log was not created')) return []
   return redactSecrets(desktopLog)
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
-    .map(line => line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/, '').slice(0, 240))
+    .map(line => {
+      const match = STAMP.exec(line)
+      const message = (match ? match[2] : line).slice(0, 240)
+      return { at: match ? match[1] : null, message }
+    })
+}
+
+export function diagnosticLines(desktopLog) {
+  return diagnosticEntries(desktopLog).map(entry => entry.message)
 }
 
 export function startupStage(desktopLog) {
-  const lines = diagnosticLines(desktopLog)
-  return lines.at(-1) ?? 'electron-not-in-main'
+  return diagnosticLines(desktopLog).at(-1) ?? 'electron-not-in-main'
 }
 
-export function describeMissingHost({ desktopLog, spawnCode, exit, windowsHide }) {
+export function formatStage(entry, elapsedMs) {
+  const elapsed = Number.isFinite(elapsedMs) ? `+${Math.max(0, Math.round(elapsedMs))}ms` : '+?ms'
+  return entry.at ? `${elapsed} ${entry.at} ${entry.message}` : `${elapsed} ${entry.message}`
+}
+
+export function describeMissingHost({ desktopLog, spawnCode, exit, windowsHide, elapsedMs }) {
   const stage = startupStage(desktopLog)
+  const elapsed = Number.isFinite(elapsedMs) ? `${Math.max(0, Math.round(elapsedMs))}ms` : 'unknown'
   const lines = [
-    `host.json not found; stage=${stage}; spawn=${spawnCode ?? 'ok'}; exit=${JSON.stringify(exit)}; windowsHide=${windowsHide === true}`,
+    `host.json not found; stage=${stage}; elapsed=${elapsed}; spawn=${spawnCode ?? 'ok'}; exit=${JSON.stringify(exit)}; windowsHide=${windowsHide === true}`,
   ]
-  if (stage === 'electron-not-in-main' && windowsHide !== true) {
-    lines.push('Electron did not enter main.cjs. On Windows, piped stdio plus a visible console can stall the GUI process before desktop.log exists; launch with windowsHide:true.')
-  } else if (stage === 'electron-not-in-main') {
-    lines.push('Electron did not enter main.cjs. The binary was missing, the process stalled before the first diagnostic line, or it crashed without reaching main.')
+  if (stage === 'electron-not-in-main') {
+    lines.push('Electron did not enter main.cjs before the wait ended, so desktop.log has no stage. Spawn and exit above are the process result. Console visibility was not isolated as the cause.')
   } else if (stage.startsWith('fatal:')) {
-    lines.push('Electron reached main.cjs and stopped with a startup fatal. The stage above is the reason; host.json is not expected after that.')
+    lines.push('Electron reached main.cjs and stopped with a startup fatal. The stage above is the recorded reason.')
   }
   if (desktopLog) lines.push(redactSecrets(desktopLog))
   return lines.join('\n')

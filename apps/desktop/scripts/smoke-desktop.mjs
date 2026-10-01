@@ -18,7 +18,7 @@ import { existsSync, readFileSync, rmSync, mkdtempSync, mkdirSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describeMissingHost, diagnosticLines, electronLaunchOptions, redactSecrets } from './startup-diagnosis.mjs'
+import { describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, redactSecrets } from './startup-diagnosis.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const desktop = resolve(here, '..')
@@ -34,7 +34,7 @@ console.log('[smoke] userData =', userData)
 
 // ELECTRON_RUN_AS_NODE 会让 electron 二进制退化为纯 Node 运行（app 未定义，
 // main.cjs 直接崩）——调用方环境（CI/Harness）可能带着它，必须显式剔除。
-const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData }
+const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData, SYLLORA_DESKTOP_SMOKE: '1' }
 delete childEnv.ELECTRON_RUN_AS_NODE
 
 const child = spawn(electron, ['.'], {
@@ -80,12 +80,15 @@ const t0 = Date.now()
 let printedLines = 0
 let reportedPreMain = false
 while (Date.now() - t0 < 20000) {
-  const lines = diagnosticLines(diagnostics())
-  for (const line of lines.slice(printedLines)) console.log('[smoke] stage', line)
-  printedLines = lines.length
-  if (lines.at(-1)?.startsWith('fatal:')) break
-  if (lines.length === 0 && !reportedPreMain && Date.now() - t0 > 2000) {
-    console.log('[smoke] stage waiting for main.cjs')
+  const entries = diagnosticEntries(diagnostics())
+  for (const entry of entries.slice(printedLines)) {
+    const stamped = entry.at ? Date.parse(entry.at) - t0 : Date.now() - t0
+    console.log('[smoke] stage', formatStage(entry, stamped))
+  }
+  printedLines = entries.length
+  if (entries.at(-1)?.message.startsWith('fatal:')) break
+  if (entries.length === 0 && !reportedPreMain && Date.now() - t0 > 2000) {
+    console.log('[smoke] stage', formatStage({ at: null, message: 'waiting for main.cjs' }, Date.now() - t0))
     reportedPreMain = true
   }
   if (existsSync(hostJsonPath)) break
@@ -98,6 +101,7 @@ if (!existsSync(hostJsonPath)) {
     spawnCode: spawnError?.code ?? null,
     exit,
     windowsHide: launch.windowsHide,
+    elapsedMs: Date.now() - t0,
   })}\n${redactSecrets(out.slice(-1500))}`)
 }
 // host.json 同理由非原子 writeFile 写出：existsSync 命中时可能只写了一半，
