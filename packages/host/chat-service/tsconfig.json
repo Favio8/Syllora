@@ -18,6 +18,9 @@
       "path": "../../../packages/llm/llm-deepseek"
     },
     {
+      "path": "../../../packages/llm/llm-anthropic"
+    },
+    {
       "path": "../../../packages/session/session"
     },
     {

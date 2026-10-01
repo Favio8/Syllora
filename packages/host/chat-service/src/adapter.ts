@@ -7,9 +7,10 @@
  * @module @syllora/chat-service/src/adapter
  */
 
-import { CallId, createAssistantMessage, createToolResultMessage, createUserMessage, ReasoningEffortId, type ContentBlock, type LlmReasoningEffortInfo } from '@deepseek-ai/dsh-llm'
+import { CallId, createAssistantMessage, createToolResultMessage, createUserMessage, ReasoningEffortId, type ContentBlock, type GenerateOptions, type LlmReasoningEffortInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { DeepSeekAdapter, type DeepSeekConnectionOptions } from '@deepseek-ai/dsh-llm-deepseek'
+import { AnthropicAdapter, type AnthropicConnectionOptions } from '@syllora/llm-anthropic'
 import type { ToolCall, ToolLlmClient } from '@syllora/session'
 import type { StructuredCallClient } from '@syllora/course-builder'
 import type { ResolvedChatConfig } from './config.ts'
@@ -18,24 +19,68 @@ import type { ResolvedChatConfig } from './config.ts'
 const ANONYMOUS_USER = 'anonymous'
 
 /**
+ * The one surface the tool client needs from an adapter. Both protocol
+ * adapters satisfy it, and keeping this structural is what lets the client
+ * stay protocol-agnostic.
+ */
+export interface StreamingAdapter {
+  stream(options: GenerateOptions): AsyncIterable<StreamChunk>
+}
+
+/**
  * Build the tool-loop LLM client for one resolved config. The adapter is
  * constructed directly (no cordis plugin graph); options are re-read per
  * operation so a config change reaches the next request.
+ *
+ * The name is historical: this factory now dispatches on `config.protocol`, so
+ * it returns an Anthropic-backed client for an `anthropic` provider. It was
+ * left under the old name deliberately — renaming it would have touched three
+ * call-site files for no behavioural gain.
  */
 export function createDeepSeekToolClient(config: ResolvedChatConfig): ToolLlmClient & StructuredCallClient {
-  const adapter = createDeepSeekAdapter(config)
-  return new DeepSeekToolClient(adapter, config)
+  const adapter = createAdapter(config)
+  return new ProtocolToolClient(adapter, config)
 }
 
 /** Return the adapter-owned effort choices for one provider/model route. */
 export async function reasoningEffortsForConfig(config: ResolvedChatConfig, model = config.model): Promise<Array<{ id: string; name: string; description?: string }>> {
-  const adapter = createDeepSeekAdapter(config)
+  const adapter = createAdapter(config)
   const resolved = await adapter.resolveModel(config.providerId || 'syllora', model)
   return (resolved.reasoning?.efforts ?? []).map((effort: LlmReasoningEffortInfo) => ({
     id: String(effort.id),
     name: effort.name,
     ...(effort.description === undefined ? {} : { description: effort.description }),
   }))
+}
+
+/**
+ * Pick the adapter for this provider's wire protocol. Both speak the same
+ * `StreamChunk` protocol up the seam, so nothing above this line branches.
+ */
+function createAdapter(config: ResolvedChatConfig): DeepSeekAdapter | AnthropicAdapter {
+  return config.protocol === 'anthropic' ? createAnthropicAdapter(config) : createDeepSeekAdapter(config)
+}
+
+function createAnthropicAdapter(config: ResolvedChatConfig): AnthropicAdapter {
+  const connection = (): AnthropicConnectionOptions => ({
+    baseURL: config.baseUrl,
+    maxTokens: config.maxTokens ?? 16_384,
+    defaultContextWindow: 200_000,
+    models: [],
+    streamIdleTimeoutMs: 300_000,
+  })
+  return new AnthropicAdapter({
+    options: connection,
+    resolveApiKey: async (facts) => {
+      const key = config.apiKey ?? process.env[config.apiKeyEnv ?? ''] ?? null
+      if (key === null || key === '') {
+        // Same wording as the DeepSeek path: the user must be told where to go.
+        throw new Error(`缺少 API Key：请在 设置 → 模型配置 中为当前供应商填写密钥（供应商 ${facts.baseURL}）`)
+      }
+      return key
+    },
+    resolveUserId: () => ANONYMOUS_USER as never,
+  })
 }
 
 function createDeepSeekAdapter(config: ResolvedChatConfig): DeepSeekAdapter {
@@ -80,9 +125,9 @@ function createDeepSeekAdapter(config: ResolvedChatConfig): DeepSeekAdapter {
   })
 }
 
-class DeepSeekToolClient implements ToolLlmClient {
+class ProtocolToolClient implements ToolLlmClient {
   constructor(
-    private readonly adapter: DeepSeekAdapter,
+    private readonly adapter: StreamingAdapter,
     private readonly config: ResolvedChatConfig,
   ) {}
 
