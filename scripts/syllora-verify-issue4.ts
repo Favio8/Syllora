@@ -90,25 +90,34 @@ try {
   await page.getByRole('heading',{name:'issue4 验证课程',exact:true}).waitFor()
   const promptBox=()=>page.getByRole('textbox',{name:'向课程资料提问'})
 
-  // Scenario 1: a state response captured before the edit must not overwrite a draft saved afterwards.
+  // Scenario 1: a state response whose request started before the draft save must not overwrite the
+  // saved draft. The first intercepted poll is issued pre-edit, then fulfilled with the pre-edit body
+  // after a delay (polledAt < savedAt, the guarded race). Later polls are held so a poisoned cache
+  // could not heal before switching away and back rehydrates from it.
+  await rpc('create',{name:'issue4 第二门课程',requestId:uuid(),timezone:'Asia/Shanghai'})
   const staleBody=JSON.stringify({result:await rpcState()})
-  let holdState:(()=>void)|undefined
-  const stateHeld=new Promise<void>(r=>{holdState=r})
-  let oneShot=true
+  let pollPhase:'armed'|'held'|'after-stale'='armed'
+  let markHeld:(()=>void)|undefined
+  const pollHeld=new Promise<void>(resolve=>{markHeld=resolve})
   await page.route('**/api/syllora/state',async route=>{
-    if(oneShot) {oneShot=false;holdState();await sleep(3000);await route.fulfill({contentType:'application/json',body:staleBody});return}
+    if(pollPhase==='armed') {pollPhase='held';markHeld();await sleep(3000);await route.fulfill({contentType:'application/json',body:staleBody});pollPhase='after-stale';return}
+    if(pollPhase==='after-stale') await sleep(15000)
     await route.continue()
   })
-  await stateHeld
+  await pollHeld
   await promptBox().fill('旧轮询不应覆盖的草稿')
   await sleep(1200)
   await waitUntil(async()=>(await rpcState()).courses[0].drafts.prompt==='旧轮询不应覆盖的草稿')
   await sleep(3000)
   assert.equal(await promptBox().inputValue(),'旧轮询不应覆盖的草稿')
+  await page.getByRole('button',{name:/issue4 第二门课程.*0 个知识点/}).click()
+  await page.getByRole('heading',{name:'issue4 第二门课程',exact:true}).waitFor()
+  await page.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
+  await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='旧轮询不应覆盖的草稿')
   await shot(page,'01-stale-poll-guard.png')
+  await page.unroute('**/api/syllora/state')
   await page.reload()
   await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='旧轮询不应覆盖的草稿')
-  await page.unroute('**/api/syllora/state')
   checks.push('stale polling keeps saved draft')
 
   // Scenario 3 (page pair): page B is frozen on a stale state snapshot while page A confirms live.
@@ -153,7 +162,6 @@ try {
   checks.push('task-progress change rejects stale draft')
 
   // Scenario 2: a failed draft save must keep the user on the current course.
-  await rpc('create',{name:'issue4 第二门课程',requestId:uuid(),timezone:'Asia/Shanghai'})
   await page.route('**/api/syllora/saveDraft',route=>route.abort())
   await promptBox().fill('这条草稿保存会失败')
   await page.locator('.sy-error').filter({hasText:'未提交草稿未能保存，已停留在当前课程'}).waitFor()
