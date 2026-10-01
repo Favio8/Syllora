@@ -907,6 +907,40 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         })()
         return
       }
+      // FR-02：原资料预览是 GET（浏览器/iframe 直取），不能走 syllora/* 的 POST 通道。
+      if (url.pathname === '/api/syllora/material-file') {
+        void (async () => {
+          try {
+            let courseId: string
+            let materialId: string
+            try {
+              // WHATWG URL 的 searchParams 已解码一次；无效百分号序列会在解码时抛错，
+              // 因此这里仍要兜住，避免异常升级为未捕获异常打崩宿主进程。
+              courseId = decodeURIComponent(url.searchParams.get('courseId') ?? '')
+              materialId = decodeURIComponent(url.searchParams.get('materialId') ?? '')
+            } catch {
+              response.writeHead(400)
+              response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'courseId 或 materialId 含无效的百分号编码', details: null } }))
+              return
+            }
+            const { file, data } = await syllora.readMaterialFile(courseId, materialId)
+            const asciiName = file.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+            response.writeHead(200, {
+              'Content-Type': 'application/pdf',
+              'Content-Length': String(data.length),
+              'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+              'Cache-Control': 'private, no-store',
+              'X-Content-Type-Options': 'nosniff',
+            })
+            response.end(request.method === 'HEAD' ? undefined : data)
+          } catch (error) {
+            if (response.headersSent || response.writableEnded || response.destroyed) { response.end(); return }
+            response.writeHead(error instanceof SylloraError ? 404 : 500)
+            response.end(JSON.stringify({ error: { code: error instanceof SylloraError ? error.code : 'INTERNAL_ERROR', message: error instanceof SylloraError ? error.message : '原文件读取失败', details: null } }))
+          }
+        })()
+        return
+      }
       response.writeHead(405)
       response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: `method ${request.method ?? ''} is not supported`, details: null } }))
       return

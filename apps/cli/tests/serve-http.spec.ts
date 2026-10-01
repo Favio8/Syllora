@@ -19,12 +19,22 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+/** 真 PDF 字节：预览用例要断言「下发的就是上传的原件」，不能用占位串。 */
+async function makePdfBytes(text: string): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  doc.addPage().drawText(text, { x: 40, y: 700, size: 12, font });
+  return Buffer.from(await doc.save());
+}
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const tsxCli = join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs");
@@ -304,6 +314,48 @@ describe("serve HTTP 边界（集成）", () => {
     });
     expect(res.status).toBe(409);
   }, 15_000);
+
+  it("FR-02 原资料预览路由：鉴权、内容类型与归属校验", async () => {
+    // 这一条是 apps/cli 侧唯一覆盖 `GET /api/syllora/material-file` 的用例：
+    // 它必须走 GET（浏览器 iframe 直取），不能复用 syllora/* 的 POST 通道，
+    // 只能在 bin.ts 单独路由，因此需要一条端到端用例守住它。
+    const rpc = async (action: string, payload: unknown): Promise<Record<string, unknown>> => {
+      const res = await fetch(`${base()}/api/syllora/${action}`, {
+        method: "POST",
+        headers: { ...auth(), "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const body = (await res.json()) as { result?: Record<string, unknown>; error?: { message?: string } };
+      expect(body.error, `syllora/${action} 失败：${body.error?.message ?? ""}`).toBeUndefined();
+      return body.result ?? {};
+    };
+
+    const bytes = await makePdfBytes("Syllora material preview integration.");
+    const courseId = randomUUID();
+    await rpc("create", { name: "集成课程", requestId: courseId, timezone: "Asia/Shanghai" });
+    const imported = await rpc("import", { courseId, name: "讲义.pdf", base64: bytes.toString("base64") });
+    const materialId = imported.id as string;
+    expect(typeof materialId).toBe("string");
+
+    const previewUrl = `${base()}/api/syllora/material-file?courseId=${courseId}&materialId=${materialId}`;
+
+    // token 门禁同样适用于这条 GET 路由
+    const noToken = await fetch(previewUrl, { signal: AbortSignal.timeout(8_000) });
+    expect(noToken.status).toBe(401);
+
+    const ok = await fetch(previewUrl, { headers: auth(), signal: AbortSignal.timeout(8_000) });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("application/pdf");
+    expect(ok.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(ok.headers.get("content-disposition")).toContain("inline");
+    // 下发的必须是原字节，不是重新生成的 PDF
+    expect(Buffer.from(await ok.arrayBuffer()).equals(bytes)).toBe(true);
+
+    // 归属校验：不存在的资料不给文件，也不泄漏其他课程内容
+    const missing = await fetch(`${base()}/api/syllora/material-file?courseId=${courseId}&materialId=${randomUUID()}`, { headers: auth(), signal: AbortSignal.timeout(8_000) });
+    expect(missing.status).toBe(404);
+  }, 60_000);
 });
 
 describe("serve 关停与实例锁", () => {

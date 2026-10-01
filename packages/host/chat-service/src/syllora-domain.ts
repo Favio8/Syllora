@@ -2,7 +2,18 @@
 export const RULE_VERSION = 'syllora-v1'
 export const HOUR = 3_600_000
 export interface Source { id: string; materialId: string; anchor: string; text: string }
-export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[] }
+/** Per-page extraction outcome. PRD 6.2 requires partial materials to "列出失败范围". */
+export type PageIssueReason = 'blank-page' | 'unextracted-text' | 'parse-failed'
+export interface PageIssue { num: number; reason: PageIssueReason }
+/** Storage handle for the untouched original. PRD 6.3 requires the user to preview it. */
+export interface MaterialFile { id: string; ext: string; bytes: number; name: string }
+export interface Material {
+  id: string; name: string; fingerprint: string;
+  status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[];
+  /** PRD 6.3: every material records its own version. PRD 6.4: changed content starts a new line. */
+  version: number; versionOf: string | null;
+  file: MaterialFile | null; pageIssues: PageIssue[]; parseError: string | null;
+}
 export interface Point { id: string; chapter: string; name: string; sourceIds: string[] }
 export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean }
 export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number }
@@ -47,8 +58,22 @@ export function normalizeCourse(course: Course) {
   if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
   if (!Array.isArray(course.changes)) course.changes = []
   if (course.notice === undefined) course.notice = null
+  normalizeMaterials(course)
   course.plan = normalizePlan(course.plan)
   course.draft = normalizePlan(course.draft)
+}
+
+/** Snapshots written before versioned materials existed lack the FR-02 fields. */
+function normalizeMaterials(course: Course) {
+  if (!Array.isArray(course.materials)) { course.materials = []; return }
+  course.materials = course.materials.map(material => ({
+    ...material,
+    version: Number.isInteger(material.version) && material.version > 0 ? material.version : 1,
+    versionOf: material.versionOf ?? null,
+    file: material.file ?? null,
+    pageIssues: Array.isArray(material.pageIssues) ? material.pageIssues : [],
+    parseError: material.parseError ?? null,
+  }))
 }
 
 function normalizePlan(plan: Plan | null): Plan | null {
@@ -354,6 +379,13 @@ export function publicCourse(course: Course, now: number) {
   const stored = course.actions.at(-1)
   return {
     ...course,
+    // PRD 6.3: the original is previewable; the URL is server-provided data, not a client guess.
+    materials: course.materials.map(material => ({
+      ...material,
+      previewUrl: material.status !== 'deleted' && material.file
+        ? `/api/syllora/material-file?courseId=${encodeURIComponent(course.id)}&materialId=${encodeURIComponent(material.id)}`
+        : null,
+    })),
     questions: course.questions.map(question => {
       const answered = course.attempts.some(attempt => attempt.questionId === question.id)
       const { answer, explanation, quote, ...safe } = question
