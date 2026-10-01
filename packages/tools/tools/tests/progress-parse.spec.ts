@@ -11,10 +11,10 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { handlerGetCourseState, type ToolContext } from '../src/handlers.ts'
 
-const courseDir = await mkdtemp(join(tmpdir(), 'studyclaw-progress-'))
-await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
+const courseDir = await mkdtemp(join(tmpdir(), 'syllora-progress-'))
+await mkdir(join(courseDir, '.syllora'), { recursive: true })
 // 内容模拟 builder renderRecordRow 的写侧产物（escapeCell 转义 + renderMastery emoji）。
-await writeFile(join(courseDir, '.studyclaw', 'progress.md'), [
+await writeFile(join(courseDir, '.syllora', 'progress.md'), [
   '# 学习进度',
   '',
   '| concept_id | name | chapter | mastery | evals | pass_rate | ef | next_review_at | misattribution | streak |',
@@ -50,10 +50,10 @@ describe('get_course_state 进度表解析', () => {
 
 describe('T-9：概念名含 concept_id 子串不能被当表头跳过', () => {
   it('读侧保留该行（旧实现整行丢失 → eval 时掌握度/evals 被静默归零）', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'studyclaw-progress-t9-'))
+    const dir = await mkdtemp(join(tmpdir(), 'syllora-progress-t9-'))
     try {
-      await mkdir(join(dir, '.studyclaw'), { recursive: true })
-      await writeFile(join(dir, '.studyclaw', 'progress.md'), [
+      await mkdir(join(dir, '.syllora'), { recursive: true })
+      await writeFile(join(dir, '.syllora', 'progress.md'), [
         '# 学习进度',
         '',
         '| concept_id | name | chapter | mastery | evals | pass_rate | ef | next_review_at | misattribution | streak |',

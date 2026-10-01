@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AcpRouter, ACP_PROTOCOL_VERSION } from '../src/index.ts'
 
-describe('StudyClaw ACP router', () => {
+describe('Syllora ACP router', () => {
   it('normalizes initialization and DSH method aliases', async () => {
     const router = new AcpRouter({
       createSession: async params => ({ sessionId: String(params['sessionId'] ?? 'new') }),

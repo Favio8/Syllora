@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { writeTaskPool, type HarnessTask } from '@studyclaw/course-builder'
+import { writeTaskPool, type HarnessTask } from '@syllora/course-builder'
 import { createCourseService } from '../src/course.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
@@ -58,7 +58,7 @@ function mcqTask(answerIndex: number): HarnessTask {
 }
 
 async function setup(): Promise<{ root: string; ws: string; service: ReturnType<typeof createCourseService>; courseId: string; cleanup: () => Promise<void> }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-eval-fast-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-eval-fast-'))
   const ws = join(root, 'ws')
   await mkdir(ws, { recursive: true })
   const sourcePath = join(root, 'doc.md')

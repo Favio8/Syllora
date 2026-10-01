@@ -1,16 +1,16 @@
 /**
  * Streaming splitters: `<think>` reasoning blocks and the hidden
- * `[STUDYCLAW_SYNC]` block are diverted out of the user-visible text stream
+ * `[SYLLORA_SYNC]` block are diverted out of the user-visible text stream
  * (tail-reserve buffer prevents marker leakage across chunks). Ported
  * verbatim from Python `session.py` `stream_split`/`_ToolStreamSplitter`.
- * @module @studyclaw/session/src/splitter
+ * @module @syllora/session/src/splitter
  */
 
 import { syncBlock, type SyncBlock } from './models.ts'
 import { SessionError } from './store.ts'
 
-export const SYNC_MARKER = '[STUDYCLAW_SYNC]'
-export const SYNC_KEY = '_studyclaw_sync'
+export const SYNC_MARKER = '[SYLLORA_SYNC]'
+export const SYNC_KEY = '_syllora_sync'
 export const TAIL_RESERVE = 48
 
 export type StreamEvent = { kind: 'text' | 'think' | 'sync'; delta: string }
@@ -30,13 +30,13 @@ export function extractSync(text: string): [string, SyncBlock | null] {
   }
   if (typeof data !== 'object' || data === null) return [visible, null]
   const record = data as Record<string, unknown>
-  // 正规包裹形态：{"_studyclaw_sync": {...}}（prompts.ts 教的标准格式）。
+  // 正规包裹形态：{"_syllora_sync": {...}}（prompts.ts 教的标准格式）。
   if (SYNC_KEY in record) {
     try {
       return [visible, syncBlock.parse(record[SYNC_KEY])]
     } catch {
       // Schema violation: contract first (Python raises SessionError).
-      throw new SessionError('[STUDYCLAW_SYNC] 载荷 Schema 非法')
+      throw new SessionError('[SYLLORA_SYNC] 载荷 Schema 非法')
     }
   }
   // 兼容形态：历史上/部分模型会按裸对象直接给字段。带任一已知字段的才按
@@ -48,7 +48,7 @@ export function extractSync(text: string): [string, SyncBlock | null] {
     try {
       return [visible, syncBlock.parse(record)]
     } catch {
-      throw new SessionError('[STUDYCLAW_SYNC] 载荷 Schema 非法')
+      throw new SessionError('[SYLLORA_SYNC] 载荷 Schema 非法')
     }
   }
   return [visible, null]

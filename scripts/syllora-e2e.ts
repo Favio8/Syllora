@@ -12,7 +12,7 @@ const workspaceTmp = resolve(root,'../tmp')
 await mkdir(workspaceTmp,{recursive:true})
 const testRoot=await mkdtemp(join(workspaceTmp,'syllora-e2e-'))
 const home=join(testRoot,'home'), data=join(testRoot,'data')
-process.env.STUDYCLAW_HOME=home
+process.env.SYLLORA_HOME=home
 await mkdir(data,{recursive:true})
 let sequence=0
 const mock=createServer((req,res)=>{
@@ -27,7 +27,7 @@ const mock=createServer((req,res)=>{
       let output:unknown
       if(text.includes('从资料生成课程')) output={points:[{chapter:'矩阵与线性变换',name:'单位矩阵',sourceIds:[sourceId]}]}
       else if(text.includes('审查下面的题目')) output={valid:true,reason:'测试服务：单一标准答案'}
-      else if(text.includes('生成一道四选一题')) {sequence++;output={stem:`练习 ${sequence}：单位矩阵的主对角线元素等于什么？`,options:['1','0','2','-1'],answer:0,explanation:'依据本次导入讲义：主对角线为 1，其余元素为 0。',sourceIds:[sourceId],quote:'单位矩阵的主对角线元素为 1'}}
+      else if(text.includes('生成一道四选一题')) {sequence++;output={stem:`练习 ${sequence}：单位矩阵的主对角线元素等于什么？`,options:['1','0','2','3'],answer:0,explanation:'依据本次导入讲义：主对角线为 1，其余元素为 0。',sourceIds:[sourceId],quote:'单位矩阵的主对角线元素为 1'}}
       else output={text:'单位矩阵的主对角线元素为 **1**，其余元素为 **0**。\n\n例如二阶单位矩阵保持二维向量不变。这是教学示例。',sourceIds:[sourceId],insufficient:false}
       res.writeHead(200,{'Content-Type':'text/event-stream'})
       res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'syllora-test-fixture',choices:[{index:0,delta:{role:'assistant',content:JSON.stringify(output)},finish_reason:null}]})}\n\n`)
@@ -41,9 +41,12 @@ const address=mock.address() as {port:number}
 await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`})
 await setCredential(data,'syllora-test','test-only-not-a-real-secret')
 await activateProvider(data,'syllora-test')
-const host=spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),STUDYCLAW_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
+const host=spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
 let hostOutput='';host.stdout.on('data',b=>{hostOutput+=String(b)});host.stderr.on('data',b=>{hostOutput+=String(b)})
 let browser:any
+let page:any
+const errors:string[]=[]
+const failedResponses:string[]=[]
 try {
   let info:{port:number;token:string}|undefined
   for(let i=0;i<300;i++) {try{info=JSON.parse(await readFile(join(home,'host.json'),'utf8'));break}catch{await new Promise(r=>setTimeout(r,100))}}
@@ -54,8 +57,9 @@ try {
   const require=createRequire(join(root,'apps/web/package.json'))
   const {chromium}=require('playwright-core')
   browser=await chromium.launch({executablePath:process.env.SYLLORA_BROWSER??'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',headless:true})
-  const page=await browser.newPage({viewport:{width:1440,height:1000}})
-  const errors:string[]=[];page.on('pageerror',(e:Error)=>errors.push(e.message))
+  page=await browser.newPage({viewport:{width:1440,height:1000}})
+  page.on('pageerror',(e:Error)=>errors.push(e.message))
+  page.on('response',(response:any)=>{if(response.status()>=400)failedResponses.push(`${response.status()} ${new URL(response.url()).pathname}`)})
   await page.goto(origin)
   await page.getByRole('button',{name:'创建第一门课程'}).click()
   await page.getByLabel('课程名称').fill('线性代数 · 自动化测试')
@@ -69,6 +73,10 @@ try {
   await page.getByRole('button',{name:'选择全部知识点'}).waitFor({timeout:20000})
   await page.getByRole('button',{name:'选择全部知识点'}).click()
   await page.getByRole('button',{name:'生成计划草案'}).click()
+  await page.getByRole('button',{name:'确认生效'}).waitFor()
+  const initialDraft=(await rpc('state')).courses[0]
+  assert.equal(initialDraft.plan,null)
+  assert.ok(initialDraft.draftDiff.tasksAdded.length>0)
   await page.getByRole('button',{name:'确认生效'}).click()
   await page.getByRole('button',{name:'继续',exact:true}).click()
   await page.getByRole('button',{name:'获取资料讲解'}).click()
@@ -78,24 +86,71 @@ try {
   await page.getByRole('group',{name:'练习 1 选项'}).waitFor({timeout:20000})
   let state=await rpc('state');assert.equal(state.courses[0].questions[0].answer,undefined)
   await page.getByRole('group',{name:'练习 1 选项'}).getByRole('button').nth(1).click()
+  // Persist an unsubmitted selection, then rebuild the page from server state.
+  for(let i=0;i<50;i++) {if((await rpc('state')).courses[0].drafts.answers.length)break;await new Promise(r=>setTimeout(r,100))}
+  assert.equal((await rpc('state')).courses[0].drafts.answers[0]?.option,1)
+  await page.reload()
+  await page.getByRole('group',{name:'练习 1 选项'}).waitFor()
+  // Answer selection is hydrated from the draft cache in a post-render effect, so wait for the value instead of reading it immediately.
+  await page.waitForFunction(()=>String(document.querySelectorAll('[aria-label="练习 1 选项"] button')[1]?.className).includes('is-selected'))
   await page.getByRole('button',{name:'提交答案',exact:true}).click()
   await page.getByText('回答错误 · 已保存独立作答',{exact:true}).waitFor()
   await page.getByRole('button',{name:'生成题目',exact:true}).click()
   await page.getByRole('group',{name:'练习 2 选项'}).waitFor({timeout:20000})
   await page.getByRole('group',{name:'练习 2 选项'}).getByRole('button').first().click()
   await page.getByRole('button',{name:'提交答案',exact:true}).click()
-  await page.getByText('活动已完成',{exact:true}).waitFor()
+  await page.getByRole('button',{name:/单位矩阵.*活动完成/}).waitFor()
   await page.getByRole('tab',{name:'复习',exact:true}).click()
   await page.screenshot({path:join(testRoot,'mvp-workbench.png'),fullPage:true})
   state=await rpc('state');const courseId=state.courses[0].id;const pointId=state.courses[0].points[0].id
   assert.equal(state.courses[0].evidence[pointId].state,'待加强');assert.equal(state.courses[0].attempts.length,2)
+  assert.ok(state.courses[0].actions.length>0)
+  await page.getByRole('tab',{name:'计划',exact:true}).click()
+  await page.getByRole('heading',{name:'下一行动记录',exact:true}).waitFor()
+  await page.getByRole('heading',{name:'分母变化',exact:true}).waitFor()
+  const originalPlan=JSON.stringify(state.courses[0].plan)
+  await page.getByRole('tab',{name:'复习',exact:true}).click()
+  await page.getByRole('button',{name:/生成(到期复习|即时巩固)草案/}).click()
+  await page.getByRole('button',{name:'保留原计划',exact:true}).waitFor()
+  state=await rpc('state');assert.equal(JSON.stringify(state.courses[0].plan),originalPlan)
+  assert.ok(state.courses[0].draftDiff.tasksAdded.length>0)
+  await page.screenshot({path:join(testRoot,'review-plan-diff.png'),fullPage:true})
+  await page.getByRole('button',{name:'保留原计划',exact:true}).click()
+  await page.getByRole('button',{name:'保留原计划',exact:true}).waitFor({state:'detached'})
+  state=await rpc('state');assert.equal(JSON.stringify(state.courses[0].plan),originalPlan)
+  assert.equal(state.courses[0].draft,null)
+  await page.getByRole('tab',{name:'复习',exact:true}).click()
+  await page.getByRole('button',{name:/生成(到期复习|即时巩固)草案/}).click()
+  await page.getByRole('button',{name:'确认生效',exact:true}).click()
+  await page.getByRole('button',{name:'确认生效',exact:true}).waitFor({state:'detached'})
+  state=await rpc('state');assert.equal(state.courses[0].changes.length,2)
   await page.reload();await page.getByRole('heading',{name:'线性代数 · 自动化测试'}).waitFor()
   state=await rpc('state');assert.equal(state.courses[0].progress.completed,1)
   const questionId=state.courses[0].questions[0].id
   await rpc('dispute',{courseId,questionId,reason:'自动化测试：排除唯一错答'})
   state=await rpc('state');assert.equal(state.courses[0].evidence[pointId].state,'待验证')
   await page.getByRole('button',{name:'模型与设置'}).click();await page.getByRole('dialog',{name:'模型与设置'}).waitFor();await page.screenshot({path:join(testRoot,'model-settings.png'),fullPage:true})
+  await page.getByRole('button',{name:'关闭设置',exact:true}).click()
+  await page.getByRole('textbox',{name:'向课程资料提问'}).fill('切课后保留的未发送问题')
+  await page.getByRole('button',{name:'新建课程',exact:true}).click()
+  await page.getByLabel('课程名称').fill('切课草稿检查')
+  await page.getByRole('button',{name:'创建课程',exact:true}).click()
+  await page.getByRole('heading',{name:'切课草稿检查',exact:true}).waitFor()
+  await page.getByRole('button',{name:/线性代数 · 自动化测试.*个知识点/}).click()
+  await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor()
+  // The prompt draft is hydrated in a post-render effect; wait for the value instead of reading it immediately.
+  await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='切课后保留的未发送问题')
+  state=await rpc('state');assert.equal(state.courses.find((c:{id:string})=>c.id===courseId).drafts.prompt,'切课后保留的未发送问题')
+  await page.reload()
+  await page.getByRole('button',{name:/线性代数 · 自动化测试.*个知识点/}).click()
+  await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor()
+  await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='切课后保留的未发送问题')
   assert.deepEqual(errors,[])
-  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,model:'local test fixture, not a live provider',checks:['create','import','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings'],browserErrors:errors},null,2))
+  await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,model:'local test fixture, not a live provider',checks:['create','import','outline','confirm plan','cited answer','hidden answer','fixed grading','task completion','reload persistence','dispute replay','model settings','next-action history','denominator trace','review diff reject and confirm','answer draft reload','course-switch prompt draft'],browserErrors:errors},null,2))
   console.log(JSON.stringify({passed:true,artifacts:testRoot}))
+} catch(error) {
+  await page?.screenshot({path:join(testRoot,'failure.png'),fullPage:true})
+  await writeFile(join(testRoot,'failure.json'),JSON.stringify({error:String(error),browserErrors:errors,failedResponses,visibleText:await page?.locator('body').innerText()},null,2))
+  console.error(JSON.stringify({artifacts:testRoot,browserErrors:errors,failedResponses}))
+  throw error
 } finally {await browser?.close();host.kill();mock.close()}

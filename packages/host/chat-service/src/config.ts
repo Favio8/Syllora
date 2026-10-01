@@ -1,14 +1,15 @@
 /**
- * Chat configuration resolution: reads the workspace's `.studyclaw/config.yaml`
+ * Chat configuration resolution: reads the workspace's `.syllora/config.yaml`
  * (Python parity) plus credentials (env var first, then
- * `.studyclaw/credentials.json`). Produces the resolved connection facts the
+ * `.syllora/credentials.json`). Produces the resolved connection facts the
  * DeepSeek adapter needs.
- * @module @studyclaw/chat-service/src/config
+ * @module @syllora/chat-service/src/config
  */
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
+import { workspaceStateDirOf } from '@syllora/tools'
 
 export interface ResolvedChatConfig {
   readonly providerId: string
@@ -90,12 +91,12 @@ function normalizeBaseUrl(value: string): string {
 
 /**
  * Load and resolve the active chat config for one workspace.
- * @param workspaceRoot - The workspace root holding `.studyclaw/config.yaml`.
+ * @param workspaceRoot - The workspace root holding `.syllora/config.yaml`.
  * @returns resolved connection facts; `baseUrl`/`apiKey` may be null when
  * unconfigured (the host reports a clear error at chat time).
  */
 export async function loadChatConfig(workspaceRoot: string, selection?: { providerId?: string; model?: string }): Promise<ResolvedChatConfig> {
-  const configPath = join(workspaceRoot, '.studyclaw', 'config.yaml')
+  const configPath = join(workspaceStateDirOf(workspaceRoot), 'config.yaml')
   const raw = await readFile(configPath, 'utf8').catch(() => null)
   if (raw === null) {
     return {
@@ -111,7 +112,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
       maxConcurrency: 4,
       maxTokens: null,
       defaultMode: 'socratic',
-      agentPreset: 'studyclaw-learning',
+      agentPreset: 'syllora-learning',
       permissionPreset: 'workspace-write',
       plugins: {},
     }
@@ -151,15 +152,15 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
     maxConcurrency,
     maxTokens,
     defaultMode,
-    agentPreset: config.agent?.preset === 'general' ? 'general' : 'studyclaw-learning',
+    agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     permissionPreset,
     plugins,
   }
 }
 
-/** Credential resolution: env var first, then `.studyclaw/credentials.json`. */
+/** Credential resolution: env var first, then `.syllora/credentials.json`. */
 function credentialsPathOf(workspaceRoot: string): string {
-  return join(workspaceRoot, '.studyclaw', 'credentials.json')
+  return join(workspaceStateDirOf(workspaceRoot), 'credentials.json')
 }
 
 async function resolveCredential(workspaceRoot: string, providerId: string, apiKeyEnv: string | null): Promise<string | null> {

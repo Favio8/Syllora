@@ -3,7 +3,7 @@
 /**
  * DSH StatsLine 复刻：
  * 显示在消息流底部、消息列同轴；
- * 当前 StudyClaw 数据模型能给出 turns/steps/thinking 耗时，时间类字段留空即不渲染。
+ * 当前 Syllora 数据模型能给出 turns/steps/thinking 耗时，时间类字段留空即不渲染。
  */
 
 import type { ChatMessage } from "@/src/store/useAppStore";

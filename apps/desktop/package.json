@@ -1,10 +1,10 @@
 {
-  "name": "@studyclaw/desktop",
+  "name": "@syllora/desktop",
   "version": "0.1.1-beta",
   "private": true,
-  "description": "StudyClaw desktop shell (Electron + embedded local host sidecar)",
+  "description": "Syllora desktop shell (Electron + embedded local host sidecar)",
   "license": "MIT",
-  "homepage": "https://github.com/Favio8/studyclaw-next",
+  "homepage": "https://github.com/Favio8/Syllora",
   "main": "src/main.cjs",
   "scripts": {
     "check:runtime": "node scripts/check-runtime.mjs",
@@ -21,7 +21,7 @@
     "electron-builder": "^26.0.0"
   },
   "author": {
-    "name": "StudyClaw authors",
+    "name": "Syllora authors",
     "email": "favio9758@gmail.com"
   }
 }

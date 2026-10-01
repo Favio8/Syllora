@@ -1,7 +1,7 @@
 /**
  * Chat host package: config resolution, DeepSeek adapter wiring, and the
  * session service behind the RPC layer.
- * @module @studyclaw/chat-service
+ * @module @syllora/chat-service
  */
 
 export { loadChatConfig, providerFacts } from './config.ts'

@@ -1,3 +1,4 @@
+import { workspaceStateDirOf } from '@syllora/tools'
 /**
  * Read-only course listing for "project folder = one course" layout: a
  * project root is a course when it already holds `syllabus.json`; otherwise
@@ -5,7 +6,7 @@
  * can offer to initialize it in place. Every read is best-effort: a corrupt
  * syllabus or missing progress.md never throws, it falls back to the folder
  * name and zero metrics.
- * @module @studyclaw/course-summary
+ * @module @syllora/course-summary
  */
 
 import { readFile, stat } from 'node:fs/promises'
@@ -61,8 +62,8 @@ export async function listCourseSummaries(
   if (rootStat === null || !rootStat.isDirectory()) return { courses: [], missing: true }
 
   const id = basename(root)
-  // 应用产物自 v2 起收在 .studyclaw/ 下（与 builder/chat-service 同一约定）。
-  const stateDir = join(root, '.studyclaw')
+  // 应用产物自 v2 起收在 .syllora/ 下（与 builder/chat-service 同一约定）。
+  const stateDir = workspaceStateDirOf(root)
   const syllabus = await readFile(join(stateDir, 'syllabus.json'), 'utf8').catch(() => null)
   if (syllabus === null) return { courses: [], missing: false }
 

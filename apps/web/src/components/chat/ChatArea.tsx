@@ -89,7 +89,7 @@ export default function ChatArea() {
           添加项目
         </button>
         <p className="text-[12px] leading-5 text-text-caption">
-          如果刚刚启动，也可以先确认后端已在运行（studyclaw serve）
+          如果刚刚启动，也可以先确认后端已在运行（syllora serve）
         </p>
       </div>
     );

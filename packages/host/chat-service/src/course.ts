@@ -4,7 +4,7 @@
  * ingest, card creation, dynamic cards, eval submission, jobs, tools list,
  * and metrics. Wires CourseBuilder + LlmTaskGenerator + RubricEvaluator over
  * the config-backed LLM client.
- * @module @studyclaw/chat-service/src/course
+ * @module @syllora/chat-service/src/course
  */
 
 import { createHash } from 'node:crypto'
@@ -23,8 +23,8 @@ import {
   type Syllabus,
   type TaskGenerator,
   reviewSchedule,
-} from '@studyclaw/course-builder'
-import { DependencyInferrer } from '@studyclaw/course-builder'
+} from '@syllora/course-builder'
+import { DependencyInferrer } from '@syllora/course-builder'
 import {
   RubricEvaluator,
   generateDynamicCards,
@@ -33,20 +33,20 @@ import {
   readGlobalMemory,
   heatmap,
   heatmapDay,
-} from '@studyclaw/learning'
+} from '@syllora/learning'
 import { createDeepSeekToolClient } from './adapter.ts'
 import { fetchUrlSafe } from './fetch-url-safe.ts'
-import { buildDefaultSpecs } from '@studyclaw/course-builder'
-import { buildGenericSpecs, INPLACE_SOURCE_EXCLUDED_DIRS } from '@studyclaw/tools'
-import { withCourseLock } from '@studyclaw/tools'
+import { buildDefaultSpecs } from '@syllora/course-builder'
+import { buildGenericSpecs, INPLACE_SOURCE_EXCLUDED_DIRS } from '@syllora/tools'
+import { withCourseLock } from '@syllora/tools'
 
 /** F-14：手动建卡的调用序号，保证 chunk_id 唯一。 */
 let manualCardSeq = 0
-import { stateDirOf } from '@studyclaw/course-builder'
-import { localDateKey } from '@studyclaw/course-builder'
+import { stateDirOf } from '@syllora/course-builder'
+import { localDateKey } from '@syllora/course-builder'
 import type { ResolvedChatConfig } from './config.ts'
 import { createUserMessage, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
-import { SessionEventStore, SessionStore, utcTs } from '@studyclaw/session'
+import { SessionEventStore, SessionStore, utcTs } from '@syllora/session'
 import { loadChatConfig } from './config.ts'
 
 export class CourseNotFoundError extends Error {
@@ -80,7 +80,7 @@ async function requireCourse(workspaceRoot: string, courseId: string): Promise<s
 
 /** 项目即课程的项目构建器：资料/校验文件都在项目根（就地扫描，排除状态目录）。 */
 function projectBuilder(dir: string, generator: TaskGenerator, depInferrer: DependencyInferrer | null): CourseBuilder {
-  // 状态目录收拢：校验和写 .studyclaw（sourceRoot 仍为项目根，就地只读扫描）。
+  // 状态目录收拢：校验和写 .syllora（sourceRoot 仍为项目根，就地只读扫描）。
   return new CourseBuilder(dir, generator, depInferrer, null, 'fine', DEFAULT_SOURCE_EXTENSIONS, dir, stateDirOf(dir), INPLACE_SOURCE_EXCLUDED_DIRS, true)
 }
 
@@ -126,7 +126,7 @@ export function configProblem(config: ResolvedChatConfig | null): string {
 function newGenerator(config: ResolvedChatConfig): LlmTaskGenerator {
   return new LlmTaskGenerator(createDeepSeekToolClient(config), {
     model: config.model,
-    provider: config.providerId || 'studyclaw',
+    provider: config.providerId || 'syllora',
     temperature: config.temperature,
   })
 }
@@ -151,7 +151,7 @@ function inferrerOf(ctx: BuildContext): DependencyInferrer | null {
   if (ctx.config === null || configProblem(ctx.config) !== '') return null
   return new DependencyInferrer(createDeepSeekToolClient(ctx.config), {
     model: ctx.config.model,
-    provider: ctx.config.providerId || 'studyclaw',
+    provider: ctx.config.providerId || 'syllora',
     temperature: ctx.config.temperature,
   })
 }
@@ -179,7 +179,7 @@ interface MutableJob {
 
 /**
  * UI-7：评测幂等账本（evalId → 已结算帧）。M4：真实 evalId 持久化到
- * `.studyclaw/eval-ledger/<id>.json`——旧实现纯内存，宿主在 SM-2 已落盘、
+ * `.syllora/eval-ledger/<id>.json`——旧实现纯内存，宿主在 SM-2 已落盘、
  * 账本登记前崩溃后，同 evalId 重试会二次计分。TTL 10 分钟，超过 500 个文件
  * 按 mtime 清扫。匿名（无 evalId）提交无法被客户端重放匹配，不做记账。
  */
@@ -362,7 +362,7 @@ async function* runEvalSubmit(
       const judgeEffort = config.judgeEffort ?? 'off'
       const judgeClient = createDeepSeekToolClient({ ...config, model: judgeModel, reasoningEffort: ReasoningEffortId(judgeEffort), maxTokens: 4_096 })
       const evaluator = new RubricEvaluator(judgeClient, {
-        model: judgeModel, provider: config.providerId || 'studyclaw', temperature: config.temperature,
+        model: judgeModel, provider: config.providerId || 'syllora', temperature: config.temperature,
         reasoningEffort: ReasoningEffortId(judgeEffort), maxTokens: 4_096,
       })
       const memory = await readGlobalMemory(workspaceRoot)
@@ -434,7 +434,7 @@ async function* runEvalSubmit(
     ]
     if (onSettled !== undefined) await onSettled(tailFrames)
     // 追加评测审计事件到会话事件流。路径必须与 chat 运行时一致：
-    // `<课程根>/.studyclaw/history`（P1-1——旧代码漏掉 .studyclaw 段，
+    // `<课程根>/.syllora/history`（P1-1——旧代码漏掉 .syllora 段，
     // exists() 恒 false，审计被静默跳过）。评分结果已落 progress.md，
     // 审计写入失败不阻断 result/sm2/done，但必须以 warning 帧显式告知
     // 客户端（F-10：静默吞错升级为可见告警）。
@@ -589,7 +589,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
     },
     async files(workspaceRoot, courseId) {
       const dir = await requireCourse(workspaceRoot, courseId)
-      const { courseSourceRoot } = await import('@studyclaw/tools')
+      const { courseSourceRoot } = await import('@syllora/tools')
       const root = await courseSourceRoot(dir)
       return enumerateFiles(root)
     },
@@ -602,7 +602,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
           const rel = relative(workspaceRoot, path).split('\\').join('/')
           if (entry.name.startsWith('.')) continue
           if (entry.isDirectory()) {
-            if (['.studyclaw', 'courses', 'node_modules', '.git', '.next', 'tasks', 'history'].includes(entry.name)) continue
+            if (['.syllora', '.studyclaw', '.syllora-home', '.syllora-data', 'courses', 'node_modules', '.git', '.next', 'tasks', 'history'].includes(entry.name)) continue
             await collect(path, depth + 1)
           } else if (entry.isFile() && /\.(md|txt|pdf)$/i.test(entry.name) && !['syllabus.json', 'progress.md', 'notes.md', '.checksums', '.source-root.json'].includes(entry.name)) {
             const info = await stat(path)
@@ -661,7 +661,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       const text = stripTags(html).replace(/\n{3,}/g, '\n\n').slice(0, 200_000)
       const slugBase = createHash('md5').update(url, 'utf8').digest('hex').slice(0, 8)
       // F-16：落盘必须放进构建扫描可见的 `<课程根>/sources`（与上传一致），
-      // 旧实现写进被排除的 .studyclaw/sources → 摄取永远不进 checksum 死链。
+      // 旧实现写进被排除的 .syllora/sources → 摄取永远不进 checksum 死链。
       const sourcesDir = join(dir, 'sources')
       await mkdir(sourcesDir, { recursive: true })
       const path = join(sourcesDir, `web_${slugBase}.md`)
@@ -721,7 +721,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       if (source === undefined) throw new Error(`题卡不存在: ${payload.taskId}`)
       const cards = await generateDynamicCards(
         createDeepSeekToolClient(config),
-        { model: config.model, provider: config.providerId || 'studyclaw', temperature: config.temperature },
+        { model: config.model, provider: config.providerId || 'syllora', temperature: config.temperature },
         source,
         payload.misconception,
         payload.count ?? 1,
@@ -752,14 +752,14 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       }, evalId !== null && evalId !== ''
         ? tail => saveLedgerFrames(workspaceRoot, evalId, [...frames, ...tail]).catch(error => {
           // RV-18：尾帧账本落盘失败同样留告警（静默吞掉会让重试二次计分且无迹可查）。
-          console.warn(`[studyclaw] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
+          console.warn(`[syllora] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
         })
         : undefined)
       if (evalId !== null && evalId !== '') {
         // RV-18：账本落盘失败不能静默——settle（SM-2/progress）已写盘而账本
         // 缺失时，同 evalId 重试会二次计分。留告警让运维可见（客户端无从感知）。
         await saveLedgerFrames(workspaceRoot, evalId, frames).catch(error => {
-          console.warn(`[studyclaw] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
+          console.warn(`[syllora] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
         })
         return
       }

@@ -28,8 +28,8 @@ let root: string
 let ws: string
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'studyclaw-ingest-url-'))
-  process.env.STUDYCLAW_HOME = join(root, 'home')
+  root = await mkdtemp(join(tmpdir(), 'syllora-ingest-url-'))
+  process.env.SYLLORA_HOME = join(root, 'home')
   ws = join(root, 'ws')
   await mkdir(ws, { recursive: true })
   await writeFile(join(ws, 'seed.md'), '# 种子资料\n\n内容。\n', 'utf8')
@@ -37,7 +37,7 @@ beforeEach(async () => {
 })
 
 const teardown = async (): Promise<void> => {
-  delete process.env.STUDYCLAW_HOME
+  delete process.env.SYLLORA_HOME
   await rm(root, { recursive: true, force: true })
 }
 

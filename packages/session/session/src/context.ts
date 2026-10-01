@@ -1,15 +1,16 @@
+import { workspaceStateDirOf } from '@syllora/tools'
 /**
  * ContextAssembler: per-turn system/user prompt rendering from the bundled
  * tutor templates plus live material (Agent.md persona, Memory.md profile,
  * syllabus + progress board, concept chunks from sources/). Ported from
  * Python `session.py::ContextAssembler`; the M2 concept-chunk matcher is a
  * light heading-slug port of MarkdownIngestor (full builder lands at M3).
- * @module @studyclaw/session/src/context
+ * @module @syllora/session/src/context
  */
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parseProgressTable } from '@studyclaw/tools'
+import { parseProgressTable } from '@syllora/tools'
 import { TUTOR_MODES, TUTOR_SYSTEM, TUTOR_USER, renderTemplate } from './prompts.ts'
 import type { LearningMode } from './models.ts'
 import { SessionError } from './store.ts'
@@ -24,11 +25,11 @@ export interface CourseState {
 
 /**
  * 状态文件路径（v2 布局优先）：v2 把 syllabus.json / progress.md 收进
- * `<root>/.studyclaw/`；仅当 v2 文件不存在而根目录旧文件存在时回退，
+ * `<root>/.syllora/`；仅当 v2 文件不存在而根目录旧文件存在时回退，
  * 保证历史工作区可读。
  */
 async function resolveStateFile(courseDir: string, name: string): Promise<string> {
-  const v2 = join(courseDir, '.studyclaw', name)
+  const v2 = join(workspaceStateDirOf(courseDir), name)
   if ((await stat(v2).catch(() => null))?.isFile()) return v2
   return join(courseDir, name)
 }
@@ -115,12 +116,12 @@ export class ContextAssembler {
   }
 
   private async agentPersona(): Promise<string> {
-    const text = await readFile(join(this.workspaceRoot, '.studyclaw', 'Agent.md'), 'utf8').catch(() => null)
-    return (text ?? '你是 StudyClaw 的苏格拉底式技术导师。').trim()
+    const text = await readFile(join(workspaceStateDirOf(this.workspaceRoot), 'Agent.md'), 'utf8').catch(() => null)
+    return (text ?? '你是 Syllora 的苏格拉底式技术导师。').trim()
   }
 
   private async memory(): Promise<string> {
-    const text = await readFile(join(this.workspaceRoot, '.studyclaw', 'Memory.md'), 'utf8').catch(() => null)
+    const text = await readFile(join(workspaceStateDirOf(this.workspaceRoot), 'Memory.md'), 'utf8').catch(() => null)
     return text === null || text.trim() === '' ? '（尚无沉淀）' : text.trim()
   }
 
@@ -136,7 +137,7 @@ export class ContextAssembler {
         lines.push(`- ${c.conceptId} ${c.name}: 掌握度 ${Math.round(c.mastery * 100)}% / 评测 ${c.evals} 次`)
       }
     }
-    return lines.join('\n') || '（课程暂无大纲与进度数据，可先运行 studyclaw build）'
+    return lines.join('\n') || '（课程暂无大纲与进度数据，可先运行 syllora build）'
   }
 
   private recentProgress(state: CourseState, conceptId: string | null): string {

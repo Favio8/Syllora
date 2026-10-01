@@ -1,10 +1,10 @@
 /**
- * FL-21：SPA 静态托管（`studyclaw serve` 自带 Web UI，与 dsh
+ * FL-21：SPA 静态托管（`syllora serve` 自带 Web UI，与 dsh
  * `host/frontend-static` 同语义）：防目录穿越、未命中回落 index.html（SPA
  * 路由）、MIME 映射、index tap 注入启动参数（FL-30：token 由这里注入
- * `window.__STUDYCLAW__`，同源页面无需跨域读取）。dist 根不存在时返回 null，
+ * `window.__SYLLORA__`，同源页面无需跨域读取）。dist 根不存在时返回 null，
  * 宿主保持旧行为（纯 API 404）。
- * @module @studyclaw/cli/lib/static-host
+ * @module @syllora/cli/lib/static-host
  */
 
 import { readFile, stat } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import { join, resolve, sep } from 'node:path'
 export interface StaticHostOptions {
   /** Static dist root（apps/web 的 export 产物目录）。 */
   root: string
-  /** 注入 `window.__STUDYCLAW__` 的启动参数（token 等）；null 不注入。 */
+  /** 注入 `window.__SYLLORA__` 的启动参数（token 等）；null 不注入。 */
   bootstrap?: Record<string, unknown> | null
 }
 
@@ -61,7 +61,7 @@ function contentTypeOf(path: string): string {
 function withBootstrapTap(html: string, bootstrap: Record<string, unknown> | null): string {
   if (bootstrap === null) return html
   const json = JSON.stringify(bootstrap).replace(/</g, '\\u003c')
-  const tap = `<script>window.__STUDYCLAW__=${json}</script>`
+  const tap = `<script>window.__SYLLORA__=${json}</script>`
   const headIndex = html.indexOf('<head>')
   return headIndex >= 0
     ? html.slice(0, headIndex + 6) + tap + html.slice(headIndex + 6)

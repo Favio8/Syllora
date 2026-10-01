@@ -1,5 +1,5 @@
 /**
- * Local RPC entry guards shared by `studyclaw serve`'s node:http handler:
+ * Local RPC entry guards shared by `syllora serve`'s node:http handler:
  * bounded body buffering (correct multi-byte UTF-8 across TCP chunks) and a
  * loopback-only Origin allowlist that closes the drive-by browser vector.
  */

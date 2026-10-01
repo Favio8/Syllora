@@ -5,7 +5,7 @@
  * `updatedAt` stamping happens exactly once. Not re-exported from the package
  * entrypoint — consumers see only the `Workspace` interface.
  * Ported from dsh-workspace `src/entity.ts` without session accounting.
- * @module @studyclaw/workspace/src/entity
+ * @module @syllora/workspace/src/entity
  */
 
 import { stat } from 'node:fs/promises'

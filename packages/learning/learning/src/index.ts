@@ -1,44 +1,45 @@
+import { stateDirOf as workspaceStateDirOf } from '@syllora/course-builder'
 /**
  * Rubric evaluator + quiz selection + dynamic cards + memory + gitops +
  * heatmap metrics. Ported from Python evaluator.py/quiz.py/cards.py/
  * memory.py/gitops.py/metrics.py (M4 scope).
- * @module @studyclaw/learning/src/index
+ * @module @syllora/learning/src/index
  */
 
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { harnessTask, type HarnessTask } from '@studyclaw/course-builder'
-import { structuredCall, type StructuredCallClient } from '@studyclaw/course-builder'
-import { EVALUATOR_SYSTEM, DYNAMIC_CARD_SYSTEM } from '@studyclaw/course-builder'
-import { evaluatorUser } from '@studyclaw/course-builder'
-import { dynamicCardUser } from '@studyclaw/course-builder'
+import { harnessTask, type HarnessTask } from '@syllora/course-builder'
+import { structuredCall, type StructuredCallClient } from '@syllora/course-builder'
+import { EVALUATOR_SYSTEM, DYNAMIC_CARD_SYSTEM } from '@syllora/course-builder'
+import { evaluatorUser } from '@syllora/course-builder'
+import { dynamicCardUser } from '@syllora/course-builder'
 import { createUserMessage, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 
-import { loadTaskPool } from '@studyclaw/course-builder'
-import { enforceTaskQuality } from '@studyclaw/course-builder'
-import { loadProgressBoard, dueRecords } from '@studyclaw/course-builder'
-import { localDateKey } from '@studyclaw/course-builder'
+import { loadTaskPool } from '@syllora/course-builder'
+import { enforceTaskQuality } from '@syllora/course-builder'
+import { loadProgressBoard, dueRecords } from '@syllora/course-builder'
+import { localDateKey } from '@syllora/course-builder'
 
 // ---------------------------------------------------------------------------
 // Layout fallbacks (T-16)
 // ---------------------------------------------------------------------------
 
 /**
- * T-16：状态文件路径回退——v2 布局（`<root>/.studyclaw/<name>`）优先，旧布局
- * 根目录兜底。与 tools 的 resolveStateFile 同口径：硬编码 `.studyclaw/` 会让
+ * T-16：状态文件路径回退——v2 布局（`<root>/.syllora/<name>`）优先，旧布局
+ * 根目录兜底。与 tools 的 resolveStateFile 同口径：硬编码 `.syllora/` 会让
  * 未迁移旧布局的工作区"静默失效"（进度板读不到 → 到期调度恒空；history 读不到
  * → 热力图恒 0），且无任何告警。
  */
 async function stateFilePath(root: string, name: string): Promise<string> {
-  const v2 = join(root, '.studyclaw', name)
+  const v2 = join(workspaceStateDirOf(root), name)
   if ((await stat(v2).catch(() => null))?.isFile()) return v2
   return join(root, name)
 }
 
-/** T-16：会话历史目录回退（v2 `<root>/.studyclaw/history`，旧布局 `<root>/history`）。 */
+/** T-16：会话历史目录回退（v2 `<root>/.syllora/history`，旧布局 `<root>/history`）。 */
 async function historyDirOf(root: string): Promise<string> {
-  const v2 = join(root, '.studyclaw', 'history')
+  const v2 = join(workspaceStateDirOf(root), 'history')
   if ((await stat(v2).catch(() => null))?.isDirectory()) return v2
   const legacy = join(root, 'history')
   if ((await stat(legacy).catch(() => null))?.isDirectory()) return legacy
@@ -183,7 +184,7 @@ export async function pickTasks(
 ): Promise<HarnessTask[]> {
   const pool = (await loadTaskPool(courseDir)).filter(task => !task.deprecated)
   // T-16：进度板路径回退（v2 布局优先、旧布局根目录兜底）——硬编码
-  // `.studyclaw/` 让未迁移的旧布局工作区到期调度静默失效（板读不到 → 无到期）。
+  // `.syllora/` 让未迁移的旧布局工作区到期调度静默失效（板读不到 → 无到期）。
   const board = await loadProgressBoard(await stateFilePath(courseDir, 'progress.md'))
   const due = new Set(dueRecords(board, today).map(record => record.conceptId))
 
@@ -351,7 +352,7 @@ export async function readGlobalMemory(workspaceRoot: string): Promise<string> {
 
 /** Read the course memory pool evidence (sync audit lines). */
 export async function readCourseMemoryPool(courseDir: string): Promise<string[]> {
-  // P1-7：与写入侧一致——历史目录在 <课程根>/.studyclaw/history。
+  // P1-7：与写入侧一致——历史目录在 <课程根>/.syllora/history。
   // T-16：旧布局（根目录 history/）回退。
   const historyDir = await historyDirOf(courseDir)
   const hints: string[] = []
@@ -380,19 +381,19 @@ export async function readCourseMemoryPool(courseDir: string): Promise<string[]>
 
 /**
  * T-18：题池（含答案键）与评测幂等账本不进用户的 git 历史——gitops 的
- * `git add -A` 会把 .studyclaw 全量提交，答案/评分痕迹随之进入仓库历史且
+ * `git add -A` 会把 .syllora 全量提交，答案/评分痕迹随之进入仓库历史且
  * 无法真正"取消"。在状态目录落一份 .gitignore（幂等、best-effort）：只排除
  * 答案-bearing 文件，进度/大纲/会话历史仍按 gitops 设计照常提交。
  * 注意：已被历史提交跟踪的文件不会被 .gitignore 自动 untrack（需用户自行
  * `git rm --cached`），此处只防止未来的提交。
  */
 async function ensureStateGitignore(workspaceRoot: string): Promise<void> {
-  const stateDir = join(workspaceRoot, '.studyclaw')
+  const stateDir = workspaceStateDirOf(workspaceRoot)
   const gitignore = join(stateDir, '.gitignore')
   const existing = await readFile(gitignore, 'utf8').catch(() => null)
   if (existing !== null && existing.includes('tasks/')) return
   await mkdir(stateDir, { recursive: true })
-  await writeFile(gitignore, ['# studyclaw: 答案-bearing 状态文件不进 git 历史', 'tasks/', 'eval-ledger/', ''].join('\n'), 'utf8').catch(() => undefined)
+  await writeFile(gitignore, ['# syllora: 答案-bearing 状态文件不进 git 历史', 'tasks/', 'eval-ledger/', ''].join('\n'), 'utf8').catch(() => undefined)
 }
 
 /** Best-effort `git add` + commit of the workspace (silently degrades). */
@@ -404,7 +405,7 @@ export async function autoCommit(workspaceRoot: string, courseName: string, chan
     const { promisify } = await import('node:util')
     const exec = promisify(execFile)
     await exec('git', ['-C', workspaceRoot, 'add', '-A'], { timeout: 30_000 })
-    await exec('git', ['-C', workspaceRoot, 'commit', '-m', `📚 studyclaw: ${courseName} — ${changelog}`], { timeout: 30_000 })
+    await exec('git', ['-C', workspaceRoot, 'commit', '-m', `📚 syllora: ${courseName} — ${changelog}`], { timeout: 30_000 })
   } catch {
     // Not a git repo / no changes / git unavailable: silent by contract.
   }
@@ -456,7 +457,7 @@ export async function heatmap(workspaceRoot: string, weeks = 12): Promise<Heatma
     days.set(date, fresh)
     return fresh
   }
-  // 项目即课程：会话历史位于项目根 .studyclaw/history（P1-7 双轨制修复）。
+  // 项目即课程：会话历史位于项目根 .syllora/history（P1-7 双轨制修复）。
   // T-16：旧布局（根目录 history/）回退——硬编码让未迁移工作区热力图恒 0。
   const historyDir = await historyDirOf(workspaceRoot)
   const chatTurnsByDate = new Map<string, number>()
@@ -556,7 +557,7 @@ export interface HeatmapDayDetail {
 export async function heatmapDay(workspaceRoot: string, date: string): Promise<HeatmapDayDetail> {
   const changelog: string[] = []
   const events: HeatmapDayDetail['events'] = []
-  // 项目即课程：会话历史位于项目根 .studyclaw/history（P1-7 双轨制修复）。
+  // 项目即课程：会话历史位于项目根 .syllora/history（P1-7 双轨制修复）。
   // T-16：旧布局（根目录 history/）回退。
   const historyDir = await historyDirOf(workspaceRoot)
   if ((await (await import('node:fs/promises')).stat(historyDir).catch(() => null))?.isDirectory()) {
@@ -607,4 +608,4 @@ export async function heatmapDay(workspaceRoot: string, date: string): Promise<H
 // ---------------------------------------------------------------------------
 
 export { harnessTask }
-export type { ProgressBoard, ProgressRecord } from '@studyclaw/course-builder'
+export type { ProgressBoard, ProgressRecord } from '@syllora/course-builder'

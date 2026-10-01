@@ -51,6 +51,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@syllora/tools':
+        specifier: workspace:^
+        version: link:../../packages/tools/tools
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../vendor/cordis
@@ -63,31 +66,31 @@ importers:
       '@deepseek-ai/dsh-storage-json':
         specifier: workspace:^
         version: link:../../packages/storage/storage-json
-      '@studyclaw/acp':
+      '@syllora/acp':
         specifier: workspace:^
         version: link:../../packages/acp/acp
-      '@studyclaw/agent':
+      '@syllora/agent':
         specifier: workspace:^
         version: link:../../packages/agent/agent
-      '@studyclaw/apiproxy':
+      '@syllora/apiproxy':
         specifier: workspace:^
         version: link:../../packages/host/apiproxy
-      '@studyclaw/chat-service':
+      '@syllora/chat-service':
         specifier: workspace:^
         version: link:../../packages/host/chat-service
-      '@studyclaw/course-builder':
+      '@syllora/course-builder':
         specifier: workspace:^
         version: link:../../packages/course/builder
-      '@studyclaw/course-summary':
+      '@syllora/course-summary':
         specifier: workspace:^
         version: link:../../packages/course/summary
-      '@studyclaw/directory-picker-native':
+      '@syllora/directory-picker-native':
         specifier: workspace:^
         version: link:../../packages/host/directory-picker-native
-      '@studyclaw/session':
+      '@syllora/session':
         specifier: workspace:^
         version: link:../../packages/session/session
-      '@studyclaw/workspace':
+      '@syllora/workspace':
         specifier: workspace:^
         version: link:../../packages/workspace/workspace
       koffi:
@@ -190,7 +193,7 @@ importers:
 
   packages/agent/agent:
     dependencies:
-      '@studyclaw/session':
+      '@syllora/session':
         specifier: workspace:^
         version: link:../../session/session
 
@@ -214,7 +217,7 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
-      '@studyclaw/tools':
+      '@syllora/tools':
         specifier: workspace:^
         version: link:../../tools/tools
       js-yaml:
@@ -251,6 +254,9 @@ importers:
 
   packages/course/summary:
     dependencies:
+      '@syllora/tools':
+        specifier: workspace:^
+        version: link:../../tools/tools
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -269,17 +275,17 @@ importers:
 
   packages/host/apiproxy:
     dependencies:
-      '@studyclaw/chat-service':
+      '@syllora/chat-service':
         specifier: workspace:^
         version: link:../chat-service
-      '@studyclaw/course-summary':
+      '@syllora/course-summary':
         specifier: workspace:^
         version: link:../../course/summary
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
-      '@studyclaw/workspace':
+      '@syllora/workspace':
         specifier: workspace:^
         version: link:../../workspace/workspace
 
@@ -294,19 +300,19 @@ importers:
       '@deepseek-ai/dsh-llm-deepseek':
         specifier: workspace:^
         version: link:../../llm/llm-deepseek
-      '@studyclaw/agent':
+      '@syllora/agent':
         specifier: workspace:^
         version: link:../../agent/agent
-      '@studyclaw/course-builder':
+      '@syllora/course-builder':
         specifier: workspace:^
         version: link:../../course/builder
-      '@studyclaw/learning':
+      '@syllora/learning':
         specifier: workspace:^
         version: link:../../learning/learning
-      '@studyclaw/session':
+      '@syllora/session':
         specifier: workspace:^
         version: link:../../session/session
-      '@studyclaw/tools':
+      '@syllora/tools':
         specifier: workspace:^
         version: link:../../tools/tools
       js-yaml:
@@ -343,7 +349,7 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
-      '@studyclaw/course-builder':
+      '@syllora/course-builder':
         specifier: workspace:^
         version: link:../../course/builder
       zod:
@@ -424,7 +430,7 @@ importers:
 
   packages/session/session:
     dependencies:
-      '@studyclaw/tools':
+      '@syllora/tools':
         specifier: workspace:^
         version: link:../../tools/tools
       zod:

@@ -111,6 +111,13 @@ jobs:
         working-directory: apps/desktop
         env:
           SMOKE_STRICT: '1'
+          SYLLORA_SMOKE_ARTIFACTS: ${{ runner.temp }}/syllora-smoke
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: desktop-smoke-windows-diagnostics
+          path: ${{ runner.temp }}/syllora-smoke/
+          if-no-files-found: warn
 
   # 同上，但在 macOS runner 上跑——覆盖 POSIX 分支：main.cjs 新增的
   # SIGTERM/SIGINT → app.quit()（Windows 上 SIGINT 被映射为强杀，那条路径只在
@@ -138,3 +145,10 @@ jobs:
         working-directory: apps/desktop
         env:
           SMOKE_STRICT: '1'
+          SYLLORA_SMOKE_ARTIFACTS: ${{ runner.temp }}/syllora-smoke
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: desktop-smoke-macos-diagnostics
+          path: ${{ runner.temp }}/syllora-smoke/
+          if-no-files-found: warn

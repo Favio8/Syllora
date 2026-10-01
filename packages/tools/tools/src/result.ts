@@ -2,7 +2,7 @@
  * Tool execution result vocabulary: the three-state result the chat loop
  * feeds back to the model, plus the registry's rejection/error types.
  * Ported from Python `agent_tools.py` `ToolResult`/`ToolError`/`ToolRejected`.
- * @module @studyclaw/tools/src/result
+ * @module @syllora/tools/src/result
  */
 
 import { MAX_TOOL_MESSAGE_CHARS } from './specs.ts'

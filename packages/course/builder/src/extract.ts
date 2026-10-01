@@ -5,7 +5,7 @@
  * Python-parity degraded semantics — extraction failure or empty result raises
  * `ExtractionError` so the builder records `degraded` without crashing.
  * Plain `.md`/`.txt` reads as-is so their behavior is unchanged.
- * @module @studyclaw/course-builder/src/extract
+ * @module @syllora/course-builder/src/extract
  */
 
 import { readFile } from 'node:fs/promises'

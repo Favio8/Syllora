@@ -12,26 +12,26 @@ import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
-import WorkspaceRegistry from '@studyclaw/workspace'
-import { listCourseSummaries } from '@studyclaw/course-summary'
+import WorkspaceRegistry from '@syllora/workspace'
+import { listCourseSummaries } from '@syllora/course-summary'
 import { dispatch, type HostServices } from '../src/index.ts'
 
 async function seedWorkspace(root: string, name: string): Promise<string> {
   // 项目即课程：项目根即课程根（syllabus/progress/history 就地）。
   const dir = join(root, name)
-  await mkdir(join(dir, '.studyclaw'), { recursive: true })
+  await mkdir(join(dir, '.syllora'), { recursive: true })
   await writeFile(
-    join(dir, '.studyclaw', 'syllabus.json'),
+    join(dir, '.syllora', 'syllabus.json'),
     JSON.stringify({ course_id: name, title: `标题-${name}`, version: '1.0.0' }),
     'utf8',
   )
   await writeFile(
-    join(dir, '.studyclaw', 'progress.md'),
+    join(dir, '.syllora', 'progress.md'),
     `# 进度\n\n- **总体掌握度**：42%\n- **待复习卡片数**：3\n- **最后更新时间**：2026-08-20 10:00\n\n| 概念 | 掌握度 |\n|---|---|\n| 概念1 | 0.4 |\n`,
     'utf8',
   )
-  await mkdir(join(dir, '.studyclaw', 'history'), { recursive: true })
-  await writeFile(join(dir, '.studyclaw', 'history', 'session_20260820-100000.jsonl'), '{}' + '\n', 'utf8')
+  await mkdir(join(dir, '.syllora', 'history'), { recursive: true })
+  await writeFile(join(dir, '.syllora', 'history', 'session_20260820-100000.jsonl'), '{}' + '\n', 'utf8')
   return dir
 }
 interface Harness {
@@ -41,7 +41,7 @@ interface Harness {
 }
 
 async function setup(): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-apiproxy-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-apiproxy-'))
   const ctx = new Context()
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root })

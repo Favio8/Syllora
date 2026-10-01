@@ -2,7 +2,7 @@
  * Course domain models (zod), ported from Python `schemas.py` for the
  * builder/learning surface: Syllabus/Chapter/Concept/ConceptChunk/SourceRef,
  * HarnessTask/EvaluationCriteria/TaskHistory, and the ingest artifact.
- * @module @studyclaw/course-builder/src/models
+ * @module @syllora/course-builder/src/models
  */
 
 import { z } from 'zod'

@@ -10,7 +10,7 @@
  * - 容器尺寸为 0 时不初始化（右栏 Tab 常驻 hidden 修复）、ResizeObserver
  *   驱动「适配视图」自动缩放；
  * - 「适配视图 / 1:1」缩放模式切换 + 放大/缩小/展开全部/收起全部/导出 PNG；
- * - 节点样式全部走 globals.css `.studyclaw-mindmap` 作用域（Token 驱动）；
+ * - 节点样式全部走 globals.css `.syllora-mindmap` 作用域（Token 驱动）；
  * - focusConceptId 外部联动：自动展开父分支 + 选中 + 滚动定位；
  *   导图内点击不再强切回列表视图。
  *
@@ -37,7 +37,7 @@ const SCALE_MAX = 1.8;
 const FOCUS_RETRY = 3;
 
 const MINIMAP_THEME = {
-  name: "studyclaw",
+  name: "syllora",
   type: "light" as const,
   palette: [...CHAPTER_COLORS],
   cssVar: {
@@ -330,7 +330,7 @@ export default function SyllabusMindmap({
 
   return (
     <div className="relative h-[clamp(320px,62vh,640px)] w-full overflow-hidden rounded-lg border border-border-line bg-bg-root/60">
-      <div ref={containerRef} className="studyclaw-mindmap h-full w-full" data-testid="syllabus-mindmap" />
+      <div ref={containerRef} className="syllora-mindmap h-full w-full" data-testid="syllabus-mindmap" />
       {error ? (
         <p className="absolute inset-0 flex items-center justify-center text-[11px] text-accent-fail">思维导图初始化失败：{error}</p>
       ) : null}

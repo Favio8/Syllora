@@ -4,14 +4,14 @@
  * into the dsh Message vocabulary, streams chunks as text deltas, and
  * emits the final tool-call batch. Native reasoning deltas feed the same
  * text stream (the splitter separates `<think>`).
- * @module @studyclaw/chat-service/src/adapter
+ * @module @syllora/chat-service/src/adapter
  */
 
 import { CallId, createAssistantMessage, createToolResultMessage, createUserMessage, ReasoningEffortId, type ContentBlock, type LlmReasoningEffortInfo } from '@deepseek-ai/dsh-llm'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { DeepSeekAdapter, type DeepSeekConnectionOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import type { ToolCall, ToolLlmClient } from '@studyclaw/session'
-import type { StructuredCallClient } from '@studyclaw/course-builder'
+import type { ToolCall, ToolLlmClient } from '@syllora/session'
+import type { StructuredCallClient } from '@syllora/course-builder'
 import type { ResolvedChatConfig } from './config.ts'
 
 /** Static anonymous id (dsh adapters only use it for telemetry binding). */
@@ -30,7 +30,7 @@ export function createDeepSeekToolClient(config: ResolvedChatConfig): ToolLlmCli
 /** Return the adapter-owned effort choices for one provider/model route. */
 export async function reasoningEffortsForConfig(config: ResolvedChatConfig, model = config.model): Promise<Array<{ id: string; name: string; description?: string }>> {
   const adapter = createDeepSeekAdapter(config)
-  const resolved = await adapter.resolveModel(config.providerId || 'studyclaw', model)
+  const resolved = await adapter.resolveModel(config.providerId || 'syllora', model)
   return (resolved.reasoning?.efforts ?? []).map((effort: LlmReasoningEffortInfo) => ({
     id: String(effort.id),
     name: effort.name,
@@ -48,7 +48,7 @@ function createDeepSeekAdapter(config: ResolvedChatConfig): DeepSeekAdapter {
         : {}),
     },
     // 8192 会把推理型模型的思维链算进输出预算，正文常被截断、隐藏
-    // [STUDYCLAW_SYNC] 块无法送达（聊天掌握度回写因此失效）。config.yaml
+    // [SYLLORA_SYNC] 块无法送达（聊天掌握度回写因此失效）。config.yaml
     // 的 provider.max_tokens 可按路由覆写；缺省给推理+回复留足余量。
     maxTokens: config.maxTokens ?? 16_384,
     defaultContextWindow: 128_000,
@@ -105,7 +105,7 @@ class DeepSeekToolClient implements ToolLlmClient {
     const callsByIndex = new Map<number, { id: string; name: string; argumentsDelta: string }>()
 
     for await (const chunk of this.adapter.stream({
-      provider: this.config.providerId || 'studyclaw',
+      provider: this.config.providerId || 'syllora',
       model: this.config.model,
       system,
       messages: dshMessages,
@@ -182,7 +182,7 @@ function toDshMessages(messages: Array<Record<string, unknown>>): ReturnType<typ
       }
       return createAssistantMessage({
         content,
-        source: { provider: 'studyclaw', model: 'studyclaw' },
+        source: { provider: 'syllora', model: 'syllora' },
       }) as unknown as ReturnType<typeof createUserMessage>
     }
     if (role === 'tool') {

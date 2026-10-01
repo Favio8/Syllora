@@ -1,7 +1,7 @@
 {
-    "name":  "@studyclaw/apiproxy",
+    "name":  "@syllora/apiproxy",
     "version":  "0.1.0",
-    "description":  "StudyClaw RPC contract: method table, wire views, and business-error mapping over the workspace registry (M1 minimal set)",
+    "description":  "Syllora RPC contract: method table, wire views, and business-error mapping over the workspace registry (M1 minimal set)",
     "license":  "MIT",
     "type":  "module",
     "exports":  {
@@ -13,15 +13,15 @@
                     "./package.json":  "./package.json"
                 },
     "dependencies":  {
-                         "@studyclaw/chat-service":  "workspace:^",
-                         "@studyclaw/course-summary":  "workspace:^"
+                         "@syllora/chat-service":  "workspace:^",
+                         "@syllora/course-summary":  "workspace:^"
                      },
     "peerDependencies":  {
                              "@deepseek-ai/cordis":  "workspace:^",
-                             "@studyclaw/workspace":  "workspace:^"
+                             "@syllora/workspace":  "workspace:^"
                          },
     "devDependencies":  {
                             "@deepseek-ai/cordis":  "workspace:^",
-                            "@studyclaw/workspace":  "workspace:^"
+                            "@syllora/workspace":  "workspace:^"
                         }
 }

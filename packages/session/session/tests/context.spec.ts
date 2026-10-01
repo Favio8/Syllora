@@ -12,10 +12,10 @@ import { loadCourseState } from '../src/context.ts'
 
 describe('loadCourseState', () => {
   it('解析 emoji 掌握度单元格与 passRate（H4）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-context-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-context-'))
     const courseDir = join(root, 'course')
-    await mkdir(join(courseDir, '.studyclaw'), { recursive: true })
-    await writeFile(join(courseDir, '.studyclaw', 'progress.md'), [
+    await mkdir(join(courseDir, '.syllora'), { recursive: true })
+    await writeFile(join(courseDir, '.syllora', 'progress.md'), [
       '# 学习进度', '',
       '- **总体掌握度**：50%', '- **待复习卡片数**：1', '- **最后更新时间**：2026-08-20 10:00', '',
       '| concept_id | name | chapter | mastery | evals | pass_rate | ef | next_review_at | misattribution | streak |',

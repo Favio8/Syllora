@@ -21,7 +21,7 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 
-const USER_AGENT = 'StudyClaw/0.1'
+const USER_AGENT = 'Syllora/0.1'
 const FETCH_TIMEOUT_MS = 15_000
 /** 响应体上限：抓取内容会进学习上下文，8MB 已远超网页正文需要。 */
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024

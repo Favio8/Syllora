@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Agent, ApprovalQueue } from '../src/index.ts'
-import { SessionEventStore, utcTs } from '@studyclaw/session'
+import { SessionEventStore, utcTs } from '@syllora/session'
 
 async function setup(): Promise<{ root: string; agent: Agent }> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-agent-'))
   const events = new SessionEventStore(join(root, 'history'))
   const agent = new Agent({
     agentId: 'agent-1',
@@ -90,7 +90,7 @@ describe('Agent runtime', () => {
   })
 
   it('exposes a durable parent relation in the live status', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-parent-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-parent-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'child-agent',
@@ -119,7 +119,7 @@ describe('Agent runtime', () => {
   })
 
   it('persists an interrupted assistant prefix and structured abort cause', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-interrupted-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-interrupted-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'interrupted-agent',
@@ -147,7 +147,7 @@ describe('Agent runtime', () => {
   })
 
   it('records structured UNKNOWN failures while keeping the stream error', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-error-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-error-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'error-agent',
@@ -164,7 +164,7 @@ describe('Agent runtime', () => {
   })
 
   it('voids the user input of a failed turn that produced no visible output', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-void-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-void-'))
     const events = new SessionEventStore(join(root, 'history'))
     let attempts = 0
     const agent = new Agent({
@@ -196,7 +196,7 @@ describe('Agent runtime', () => {
   })
 
   it('keeps the user input visible when a failed turn already produced output', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-void-kept-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-void-kept-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'void-kept-agent',
@@ -238,7 +238,7 @@ describe('Agent runtime', () => {
   })
 
   it('keeps admitted steering inside the active turn as a second step', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-steering-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-steering-'))
     const events = new SessionEventStore(join(root, 'history'))
     let agent!: Agent
     const seen: string[] = []
@@ -275,7 +275,7 @@ describe('Agent runtime', () => {
   })
 
   it('does not replay an admitted steering item after host recovery', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-steering-recovery-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-steering-recovery-'))
     const events = new SessionEventStore(join(root, 'history'))
     await events.append('steering-recovery-session',
       { ts: utcTs(), type: 'inbox/queued', payload: { turnId: 'steer-1', target: 'next-step', content: 'already handled' } },
@@ -296,7 +296,7 @@ describe('Agent runtime', () => {
   })
 
   it('supports durable inbox prepend, replace, remove and clear operations', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-inbox-api-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-inbox-api-'))
     const events = new SessionEventStore(join(root, 'history'))
     let release!: () => void
     const gate = new Promise<void>(resolve => { release = resolve })
@@ -333,7 +333,7 @@ describe('Agent runtime', () => {
   })
 
   it('retries a failed runner through the Host retry policy before erroring', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-retry-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-retry-'))
     const events = new SessionEventStore(join(root, 'history'))
     let attempts = 0
     const agent = new Agent({
@@ -360,7 +360,7 @@ describe('Agent runtime', () => {
   })
 
   it('cancels a retry backoff without replaying user input', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-retry-cancel-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-retry-cancel-'))
     const events = new SessionEventStore(join(root, 'history'))
     let attempts = 0
     let retryStarted!: () => void
@@ -391,7 +391,7 @@ describe('Agent runtime', () => {
   })
 
   it('converges dispose after an abort-aware runner and gates maintenance on idle', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-maintenance-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-maintenance-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'maintenance-agent',
@@ -418,7 +418,7 @@ describe('Agent runtime', () => {
   })
 
   it('restores waiting state from durable ask/approval projection', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-restore-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-restore-'))
     const events = new SessionEventStore(join(root, 'history'))
     await events.append('20260822-120002',
       { ts: utcTs(), type: 'ask/pending', payload: { question: '继续吗？' } },
@@ -434,7 +434,7 @@ describe('Agent runtime', () => {
   })
 
   it('persists an inbox turn and rehydrates it after a live agent is replaced', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-inbox-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-inbox-'))
     const events = new SessionEventStore(join(root, 'history'))
     const first = new Agent({ agentId: 'first', sessionId: 'inbox-session', events, runner: async function* () {} })
     first.send({ content: 'survive restart', mode: 'debug', metadata: { source: 'test' } }, 'next-turn', false)
@@ -472,7 +472,7 @@ describe('Agent runtime', () => {
   })
 
   it('captures an explicit runtime scope and model per turn', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-runtime-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-runtime-'))
     const events = new SessionEventStore(join(root, 'history'))
     const seen: Array<{ cwd: string; model: string | null; preset: string }> = []
     const agent = new Agent({
@@ -482,7 +482,7 @@ describe('Agent runtime', () => {
       cwd: root,
       workspaceRoot: root,
       courseId: 'course-1',
-      preset: { id: 'studyclaw-learning', systemPrompt: 'base prompt' },
+      preset: { id: 'syllora-learning', systemPrompt: 'base prompt' },
       capabilities: [{ id: 'sandbox', available: false, reason: 'missing', installAction: 'install' }],
       modelSelection: { provider: 'mock', model: 'alpha' },
       runner: async function* (_input, context) {
@@ -496,8 +496,8 @@ describe('Agent runtime', () => {
     const second = agent.send({ content: 'second' })
     for await (const _event of second.events) { /* drain */ }
     expect(seen).toEqual([
-      { cwd: root, model: 'alpha', preset: 'studyclaw-learning' },
-      { cwd: root, model: 'beta', preset: 'studyclaw-learning' },
+      { cwd: root, model: 'alpha', preset: 'syllora-learning' },
+      { cwd: root, model: 'beta', preset: 'syllora-learning' },
     ])
     const projection = await agent.projection()
     expect(projection.agentRuntime).toMatchObject({ cwd: root, systemPrompt: 'base prompt' })
@@ -508,7 +508,7 @@ describe('Agent runtime', () => {
   })
 
   it('parks injected context across cancellation and exposes it at the next model boundary', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-injected-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-injected-'))
     const events = new SessionEventStore(join(root, 'history'))
     let started!: () => void
     const startedPromise = new Promise<void>(resolve => { started = resolve })
@@ -546,7 +546,7 @@ describe('Agent runtime', () => {
   })
 
   it('queues sends behind maintenance and replays a completed turn after its live handle is gone', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-maintenance-queue-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-maintenance-queue-'))
     const events = new SessionEventStore(join(root, 'history'))
     let releaseMaintenance!: () => void
     const maintenanceReady = new Promise<void>(resolve => { releaseMaintenance = resolve })
@@ -582,7 +582,7 @@ describe('Agent runtime', () => {
   })
 
   it('RV-11：restore 按原始入队次序重建（中断回合先于后入队的回合，不再倒置）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-restore-order-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-restore-order-'))
     const events = new SessionEventStore(join(root, 'history'))
     // 持久化日志序：A 入队 → A 出队（崩溃时在途）→ B 入队（等待）。
     // 旧实现 [...queued, ...interrupted] 重建出 pending=[B,A]——B 先跑。
@@ -609,7 +609,7 @@ describe('Agent runtime', () => {
   })
 
   it('RV-13：清理路径的 best-effort 审计行写失败时被吞（不升级 unhandledRejection 打崩宿主）', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'studyclaw-agent-appendfail-'))
+    const root = await mkdtemp(join(tmpdir(), 'syllora-agent-appendfail-'))
     const events = new SessionEventStore(join(root, 'history'))
     const agent = new Agent({
       agentId: 'appendfail-agent',

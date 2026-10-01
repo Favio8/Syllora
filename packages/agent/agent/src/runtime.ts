@@ -2,7 +2,7 @@
  * Agent-scoped runtime facts shared by Host, CLI, ACP, Web and presets.
  *
  * This is intentionally dependency-free. DSH keeps these facts on the live
- * Agent scope; StudyClaw exposes the same contract without requiring the
+ * Agent scope; Syllora exposes the same contract without requiring the
  * Cordis graph so every entry point can use one runtime object.
  */
 

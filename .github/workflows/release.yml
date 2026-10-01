@@ -104,7 +104,7 @@ jobs:
           if-no-files-found: error
 
   npm:
-    name: npm pack + publish @studyclaw/cli
+    name: npm pack + publish @syllora/cli
     needs: gate
     runs-on: ubuntu-latest
     steps:
@@ -132,7 +132,7 @@ jobs:
         # tarball 参数解析成 git remote 规格（`git ls-remote` 报 access rights）。
         run: |
           cd artifacts
-          tgz=$(ls studyclaw-cli-*.tgz | head -1)
+          tgz=$(ls syllora-cli-*.tgz | head -1)
           version=$(node -p "require('../apps/cli/package.json').version")
           tag_args=()
           if [[ "$version" == *-* ]]; then tag_args+=(--tag beta); fi
@@ -146,7 +146,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: release-npm-tgz
-          path: artifacts/studyclaw-cli-*.tgz
+          path: artifacts/syllora-cli-*.tgz
           if-no-files-found: error
 
   github-release:

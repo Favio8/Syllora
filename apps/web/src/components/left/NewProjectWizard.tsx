@@ -20,7 +20,7 @@ import { useFocusTrap } from "@/src/hooks/useFocusTrap";
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status >= 500 && /^HTTP \d+$/.test(error.message)) {
-      return `无法连接本地服务（${error.message}）：请确认 StudyClaw host 已启动后重试`;
+      return `无法连接本地服务（${error.message}）：请确认 Syllora host 已启动后重试`;
     }
     return `${error.code}: ${error.message}`;
   }

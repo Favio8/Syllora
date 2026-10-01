@@ -1,5 +1,5 @@
 /**
- * StudyClaw API 客户端（api_spec v1.5）。
+ * Syllora API 客户端（api_spec v1.5）。
  *
  * - REST：`fetch` + 错误协议统一解析（§1 `{error:{code,message}}`）；
  * - SSE：`POST` + `ReadableStream` 手写解析（EventSource 不支持 POST）。
@@ -50,11 +50,11 @@ export class ApiError extends Error {
 
 /**
  * FL-30：宿主启动参数（token 等）。两种注入来源：
- * 1. `studyclaw serve` 托管静态 UI 时由 index tap 注入（同源，生产路径）；
+ * 1. `syllora serve` 托管静态 UI 时由 index tap 注入（同源，生产路径）；
  * 2. `next dev` 时由根布局从 host.json 读取注入（开发路径）。
  */
 function bootstrapToken(): string | null {
-  const boot = (globalThis as unknown as { __STUDYCLAW__?: { token?: unknown } }).__STUDYCLAW__;
+  const boot = (globalThis as unknown as { __SYLLORA__?: { token?: unknown } }).__SYLLORA__;
   return typeof boot?.token === "string" && boot.token !== "" ? boot.token : null;
 }
 

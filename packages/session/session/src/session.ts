@@ -3,7 +3,7 @@
  * loop with mode-filtered schemas, streaming split (think/token/sync),
  * append-only persistence, and sync application. Ported from Python
  * `session.py::TutorSession`.
- * @module @studyclaw/session/src/session
+ * @module @syllora/session/src/session
  */
 
 import { stat } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import { SessionStore, SessionError, utcTs } from './store.ts'
 import { SessionEventStore } from './events.ts'
 import { ToolStreamSplitter, extractSync, type StreamEvent } from './splitter.ts'
 import { chatLine, askLine, toolLine, type ChatLine, type HistoryLine, type LearningMode } from './models.ts'
-import { LOOP_LIMIT_NAME, ToolResult, type ToolActions, type ToolContext, type ToolRegistry } from '@studyclaw/tools'
+import { LOOP_LIMIT_NAME, ToolResult, type ToolActions, type ToolContext, type ToolRegistry } from '@syllora/tools'
 
 export const DEFAULT_TOOL_LOOP_LIMIT = 8
 
@@ -145,7 +145,7 @@ export class TutorSession {
   private readonly toolMode: string | null
   /**
    * RV-12：sync 回写（progress.md RMW）的课程文件锁注入点。聊天回合的
-   * `[STUDYCLAW_SYNC]` 经 SyncApplier 对 progress.md 做「读板→改行→重算
+   * `[SYLLORA_SYNC]` 经 SyncApplier 对 progress.md 做「读板→改行→重算
    * 汇总→写板」的完整 RMW，此前全程在课程锁外——与锁内的 eval 提交
    * （course.ts 的 SM-2 RMW）竞争同一文件时，锁内的写会被锁外的陈旧全量写
    * 覆盖（学习进度丢更新）。宿主注入 withCourseLock，快写段上锁、LLM 慢调用

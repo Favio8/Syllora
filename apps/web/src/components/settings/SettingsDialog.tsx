@@ -21,7 +21,7 @@ type Draft = {
 };
 
 function draftFrom(payload: SettingsPayload): Draft {
-  const agent = payload.agent ?? { preset: "studyclaw-learning", presets: [] };
+  const agent = payload.agent ?? { preset: "syllora-learning", presets: [] };
   const permissions = payload.permissions ?? { preset: "workspace-write", presets: [] };
   const plugins = payload.plugins ?? { inventory: [] };
   return {
@@ -204,7 +204,7 @@ function GeneralSettings({
     <section className="flex max-w-[640px] flex-col gap-5">
       <div>
         <h3 className="text-[16px] font-medium text-text-primary">学习体验</h3>
-        <p className="mt-1 text-[13px] leading-5 text-text-muted">这些选项保存在当前项目的 `.studyclaw/config.yaml` 中。</p>
+        <p className="mt-1 text-[13px] leading-5 text-text-muted">这些选项保存在当前项目的 `.syllora/config.yaml` 中。</p>
       </div>
       <label className="flex flex-col gap-2 text-[13px] text-text-secondary">
         默认学习模式
@@ -217,7 +217,7 @@ function GeneralSettings({
         <h3 className="text-[14px] font-medium text-text-primary">当前应用</h3>
         <dl className="mt-3 grid grid-cols-[120px_1fr] gap-y-2 text-[13px]">
           <dt className="text-text-faint">配置文件</dt>
-          <dd className="truncate text-text-muted">.studyclaw/config.yaml</dd>
+          <dd className="truncate text-text-muted">.syllora/config.yaml</dd>
           <dt className="text-text-faint">配置范围</dt>
           <dd className="text-text-muted">当前打开的学习项目</dd>
         </dl>

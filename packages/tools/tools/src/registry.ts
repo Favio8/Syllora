@@ -3,7 +3,7 @@
  * mode-based policy filtering (M-C), lightweight JSON-Schema argument
  * validation, and three-state execution with timeout. Ported from Python
  * `agent_tools.py::ToolRegistry`.
- * @module @studyclaw/tools/src/registry
+ * @module @syllora/tools/src/registry
  */
 
 import { ToolError, ToolRejected, ToolResult } from './result.ts'

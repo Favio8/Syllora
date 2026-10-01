@@ -1,5 +1,5 @@
 /**
- * 从 artifacts/ 挑出最新的 studyclaw-cli tgz。文件名内嵌 semver，必须按数值
+ * 从 artifacts/ 挑出最新的 syllora-cli tgz。文件名内嵌 semver，必须按数值
  * 逐段比较版本——字典序在位数变化时会选错包（"1.2.9" > "1.2.10"），导致
  * publint/安装验证校验的是上一个旧版本。
  * @module scripts/release/latest-tgz
@@ -8,7 +8,7 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const TGZ_RE = /^studyclaw-cli-(\d+)\.(\d+)\.(\d+)(.*)\.tgz$/
+const TGZ_RE = /^syllora-cli-(\d+)\.(\d+)\.(\d+)(.*)\.tgz$/
 
 export interface CliTarball {
   /** 文件名（用于日志）。 */

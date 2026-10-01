@@ -3,7 +3,7 @@
  * lines, fixed column set with emoji mastery cells, parse/render round-trip,
  * atomic save, due records, and SM-2 scheduling. Ported from Python
  * `progress.py` + `scheduler.py`.
- * @module @studyclaw/learning/src/progress
+ * @module @syllora/learning/src/progress
  */
 
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'

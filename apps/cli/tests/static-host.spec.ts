@@ -15,7 +15,7 @@ afterEach(async () => {
 })
 
 async function makeDist(files: Record<string, string>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'studyclaw-static-'))
+  const root = await mkdtemp(join(tmpdir(), 'syllora-static-'))
   roots.push(root)
   for (const [name, content] of Object.entries(files)) {
     await mkdir(join(root, name, '..'), { recursive: true }).catch(() => undefined)
@@ -26,7 +26,7 @@ async function makeDist(files: Record<string, string>): Promise<string> {
 
 describe('createStaticHost', () => {
   it('dist 缺失时返回 null（宿主保持纯 API 行为）', async () => {
-    const host = await createStaticHost({ root: join(await mkdtemp(join(tmpdir(), 'studyclaw-empty-')), 'nope') })
+    const host = await createStaticHost({ root: join(await mkdtemp(join(tmpdir(), 'syllora-empty-')), 'nope') })
     expect(host).toBeNull()
   })
 
@@ -69,13 +69,13 @@ describe('createStaticHost', () => {
     const root = await makeDist({ 'index.html': '<html><head><meta charset="utf-8"></head><body></body></html>' })
     const host = (await createStaticHost({ root, bootstrap: { token: 'tk-123' } }))!
     const hit = await host.respond('/')
-    expect(String(hit?.body)).toContain('window.__STUDYCLAW__={"token":"tk-123"}')
+    expect(String(hit?.body)).toContain('window.__SYLLORA__={"token":"tk-123"}')
   })
 
   it('bootstrap 为 null 时不注入', async () => {
     const root = await makeDist({ 'index.html': '<html><head></head></html>' })
     const host = (await createStaticHost({ root, bootstrap: null }))!
-    expect(String((await host.respond('/'))?.body)).not.toContain('__STUDYCLAW__')
+    expect(String((await host.respond('/'))?.body)).not.toContain('__SYLLORA__')
   })
 
   it('C-12：HTML no-cache、hash 资产 immutable、全局 nosniff', async () => {

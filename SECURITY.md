@@ -11,12 +11,12 @@
 
 **请勿以公开 Issue / Discussion 披露安全问题。**
 
-优先使用 GitHub [私密安全公告](https://github.com/Favio8/studyclaw-next/security/advisories/new)上报；
+优先使用 GitHub [私密安全公告](https://github.com/Favio8/Syllora/security/advisories/new)上报；
 不便使用 GitHub 时可邮件联系 `favio9758@gmail.com`（主题注明 `[security]`）。
 
 请在报告中包含：
 
-- StudyClaw 版本（`studyclaw status` 输出里有）与操作系统；
+- Syllora 版本（`syllora status` 输出里有）与操作系统；
 - 复现步骤与最小化 PoC（如有）；
 - 你评估的影响范围。
 
@@ -24,7 +24,7 @@
 
 ## 本地安全模型（报告前请先读）
 
-StudyClaw 是**本地优先**工具：Host 默认只绑定 `127.0.0.1`，并做了以下防御：
+Syllora 是**本地优先**工具：Host 默认只绑定 `127.0.0.1`，并做了以下防御：
 
 - 启动生成随机访问 token，恒定时间比对；loopback Origin 白名单防跨站调用；
 - API Key 以 **AES-256-GCM** 加密落盘，主密钥与凭据分离存放（0600 权限、原子写入）；
@@ -34,7 +34,7 @@ StudyClaw 是**本地优先**工具：Host 默认只绑定 `127.0.0.1`，并做�
 
 ### 威胁模型边界（以下通常不算漏洞）
 
-- 攻击者已能在你的用户账户执行任意代码——它能读走 `~/.studyclaw` 下的一切，这与读你的 SSH 私钥没有区别；
+- 攻击者已能在你的用户账户执行任意代码——它能读走 `~/.syllora` 下的一切，这与读你的 SSH 私钥没有区别；
 - 你主动把 `--insecure-no-token` / 非回环绑定等显式降级开关打开后的暴露面；
 - 你配置的模型端点本身作恶（这是你选择服务商的问题，不过欢迎报告我们可缓解的部分）；
 - 拥有本机磁盘访问权的其他本地用户（Windows 下未对目录做 ACL 隔离）。
@@ -53,9 +53,9 @@ StudyClaw 是**本地优先**工具：Host 默认只绑定 `127.0.0.1`，并做�
    Web UI 页面也注入同一 token 供同源 JS 调用 API。这意味着访问 token
   防的是**跨站 drive-by 攻击**（恶意网页读不到同源页面与本地文件），而
   **不能**阻止能读取你磁盘的其他本地用户/进程——他们直接读 host.json 即可，
-  与"能读走 `~/.studyclaw` 下一切"同级。给静态页面再加一层 token 门禁对此
+  与"能读走 `~/.syllora` 下一切"同级。给静态页面再加一层 token 门禁对此
   类攻击者无效（凭证本就要落在他们可读的磁盘上），反而会破坏手动开浏览器的
   日常流程。如需防御同机多用户场景，请用 OS 层手段：以独立系统用户账户运行
-  Host、全盘加密、或为 `~/.studyclaw` 设置目录 ACL。
+  Host、全盘加密、或为 `~/.syllora` 设置目录 ACL。
 
 如果你不确定是否在边界内，宁可报出来——谢谢！

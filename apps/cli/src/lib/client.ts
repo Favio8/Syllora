@@ -1,16 +1,16 @@
 /**
- * StudyClaw CLI HTTP client: unary RPC envelope (`POST /api/<method>`, body
+ * Syllora CLI HTTP client: unary RPC envelope (`POST /api/<method>`, body
  * `{ payload }`) and SSE consumption for the three stream endpoints
  * (chat/stream, eval.submit, agents/answer/stream). The fetch implementation
  * and base URL are injectable for tests; production uses `fetch` + env.
  * FL-30/35：默认从 `<hostHome>/host.json` 自动发现端口与 token 并附加
  * `Authorization: Bearer` 头。Ported from apps/web/src/lib/api.ts frame parsing.
- * @module @studyclaw/cli/lib/client
+ * @module @syllora/cli/lib/client
  */
 
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { sylloraHome } from '@syllora/tools'
 
 export interface ClientDeps {
   baseUrl: string
@@ -46,7 +46,7 @@ function discoverHost(): HostDiscovery | null {
   if (discoveryCache !== null && Date.now() - discoveryCache.readAt < 5_000) return discoveryCache.value
   let value: HostDiscovery | null = null
   try {
-    const home = process.env.STUDYCLAW_HOME ?? join(homedir(), '.studyclaw')
+    const home = sylloraHome()
     const parsed = JSON.parse(readFileSync(join(home, 'host.json'), 'utf8')) as { port?: number; token?: string | null }
     if (typeof parsed.port === 'number' && Number.isFinite(parsed.port)) {
       value = {
@@ -63,15 +63,15 @@ function discoverHost(): HostDiscovery | null {
 
 export function defaultClientDeps(): ClientDeps {
   // FL-35：host.json 记录的实际端口优先（--port 0 随机端口也能发现）；
-  // 显式 STUDYCLAW_HOST_URL 仍最高优先（此时仅复用其 token）。
-  if (process.env.STUDYCLAW_HOST_URL === undefined) {
+  // 显式 SYLLORA_HOST_URL 仍最高优先（此时仅复用其 token）。
+  if (process.env.SYLLORA_HOST_URL === undefined) {
     const discovered = discoverHost()
     if (discovered !== null) {
       if (discovered.token === null) return { baseUrl: discovered.baseUrl }
       return { baseUrl: discovered.baseUrl, token: discovered.token }
     }
   }
-  const deps: ClientDeps = { baseUrl: (process.env.STUDYCLAW_HOST_URL ?? `http://127.0.0.1:${process.env.PORT ?? '8080'}`).replace(/\/$/, '') }
+  const deps: ClientDeps = { baseUrl: (process.env.SYLLORA_HOST_URL ?? `http://127.0.0.1:${process.env.PORT ?? '8080'}`).replace(/\/$/, '') }
   const discovered = discoverHost()
   if (discovered !== null && discovered.token !== null) deps.token = discovered.token
   return deps
@@ -86,7 +86,7 @@ async function doFetch(deps: ClientDeps, input: string, init: RequestInit): Prom
   try {
     return await (deps.fetch ?? fetch)(input, init)
   } catch {
-    throw new CliError('HOST_UNREACHABLE', `无法连接 host（${deps.baseUrl}），请先运行 studyclaw serve`)
+    throw new CliError('HOST_UNREACHABLE', `无法连接 host（${deps.baseUrl}），请先运行 syllora serve`)
   }
 }
 

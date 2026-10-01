@@ -1,4 +1,4 @@
-/** Explicit migration from StudyClaw JSONL history to Agent event JSONL. */
+/** Explicit migration from Syllora JSONL history to Agent event JSONL. */
 
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

@@ -2,7 +2,7 @@
  * SessionStore: one append-only JSONL file per session
  * (`history/session_<YYYYMMDD-HHMMSS>.jsonl`, meta line first, mtime decides
  * recency). Ported from Python `session.py::SessionStore`.
- * @module @studyclaw/session/src/store
+ * @module @syllora/session/src/store
  */
 
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
