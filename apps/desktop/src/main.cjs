@@ -7,6 +7,7 @@ const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron')
 const { spawn } = require('node:child_process')
 const { existsSync, readFileSync, mkdirSync, rmSync, appendFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { migrateLegacyData, managedDirectory } = require('./local-data.cjs')
 
 // 开发联调模式：设置 SYLLORA_DESKTOP_DEV_URL 后不拉起 sidecar，
 // 直接加载外部地址（配合 `pnpm serve` / `next dev` 热更新，plan 3.4）。
@@ -38,6 +39,12 @@ let win = null
 let host = null
 let hostHome = ''
 let hostJsonPath = ''
+/** Syllora 学习数据的落盘根。必须显式传给 Host：Host 的 `SYLLORA_DATA_DIR`
+ *  是它启动时"建并打开工作区"的唯一触发条件，而设置读写以 lastOpenedPath
+ *  为根——不注入时注册表为空，所有设置写操作都会被守卫拒绝（FL-03），症状
+ *  是"保存模型供应商失败，详见宿主日志"而日志里只有一句"没有已打开的工作区"。
+ *  开发态 scripts/syllora-serve.mjs 一直有注入，所以这个缺陷只在桌面壳暴露。 */
+let sylloraDataDir = ''
 let restartIdx = 0
 let quitting = false
 /** 5 分钟窗口内的崩溃重启计数（plan 4.3：超过 3 次停止重试并弹错）。 */
@@ -49,6 +56,9 @@ function paths() {
   // 不污染用户家目录的 ~/.syllora。
   hostHome = join(app.getPath('userData'), 'host-home')
   hostJsonPath = join(hostHome, 'host.json')
+  // 学习数据与宿主状态分开：host-home 存注册表/凭据/host.json/logs，
+  // syllora-data 存课程、资料、作答与生成作业。
+  sylloraDataDir = join(app.getPath('userData'), 'syllora-data')
   // 打包态：process.resourcesPath 已是 <app>/resources（extraResources to:host
   // 直接落在其下）；开发态：main.cjs 在 src/ 下一层，resources 与 src 平级。
   const resourcesRoot = app.isPackaged ? process.resourcesPath : join(__dirname, '..', 'resources')
@@ -89,8 +99,20 @@ function startHost() {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
     SYLLORA_HOME: hostHome,
+    SYLLORA_DATA_DIR: sylloraDataDir,
     SYLLORA_WEB_DIST: webDist,
     NODE_ENV: 'production',
+  }
+  try { mkdirSync(sylloraDataDir, { recursive: true }) } catch {}
+  // 一次性迁移：数据根由 host-home/syllora（无工作区时的旧回退路径）迁到
+  // syllora-data。只在目标缺失、源存在时复制一次，避免升级后用户已有课程
+  // 凭空消失。不删源文件——若新路径后续出问题，旧数据仍在原处可查。
+  try {
+    if (migrateLegacyData(hostHome, sylloraDataDir)) {
+      console.log('[desktop] migrated legacy syllora.json into syllora-data')
+    }
+  } catch (error) {
+    console.error('[desktop] legacy data migration failed:', error instanceof Error ? error.message : String(error))
   }
   host = spawn(process.execPath, [hostBundle, 'serve', '--port', '0'], {
     env,
@@ -246,23 +268,16 @@ function fatal(message) {
 }
 
 function buildMenu() {
-  const template = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    { role: 'fileMenu' },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    {
-      label: '帮助',
-      submenu: [
-        { label: '打开数据目录', click: () => shell.openPath(paths().hostHome) },
-        { label: '打开日志目录', click: () => shell.openPath(join(paths().hostHome, 'logs')) },
-        { type: 'separator' },
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
-      ],
-    },
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  // 不安装应用菜单：Windows/Linux 下 `Menu.setApplicationMenu` 会在窗口顶部
+  // 常驻一行 File/Edit/View 菜单栏（用户可见的 "File / Exit" 就是 fileMenu
+  // 里 quit 项的自动展开结果），与三栏工作台视觉无关且无处关闭。
+  // 原「帮助」里的「打开数据目录／打开日志目录」已移到设置弹窗的「诊断日志」
+  // 分区（见 syllora:open-path），功能没丢。
+  // 副作用：随菜单一起消失的还有 Ctrl+R / F12 等菜单快捷键——这是期望行为；
+  // 输入框的复制粘贴由 Chromium 原生处理，不受影响。
+  Menu.setApplicationMenu(process.platform === 'darwin'
+    ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }])
+    : null)
 }
 
 // 单实例：二次启动聚焦已有窗口（与 Host 的 host.lock 双保险，R8）。
@@ -323,5 +338,25 @@ if (!gotLock) { app.quit() } else {
 ipcMain.handle('syllora:host-info', () => {
   if (isDev) return { dev: true }
   const cfg = readHostConfig()
-  return { dev: false, port: cfg === null ? null : cfg.port }
+  // hostHome / logsDir / dataDir 只是目录路径，不含 token，可以透出：设置里的
+  // 「本机与诊断」要把它们显示给用户（排查模型配置失败第一步就是看宿主日志，
+  // 这是本次 FL-03 事故里用户拿不到的关键信息）。host.json 全文仍然不透出。
+  return {
+    dev: false,
+    port: cfg === null ? null : cfg.port,
+    hostHome: paths().hostHome,
+    logsDir: join(paths().hostHome, 'logs'),
+    dataDir: sylloraDataDir,
+  }
+})
+
+// 「打开数据目录／打开日志目录」的原入口是应用菜单的「帮助」，菜单已整体移除
+// （顶部 File/Exit 菜单栏），改由设置弹窗的「本机与诊断」分区经此 IPC 调用。
+// 只允许打开 hostHome 子树内的路径：这个通道一旦放开任意路径，页面里一段脚本
+// 就能用系统默认程序打开磁盘上任何位置（含可执行文件），是明确的提权面。
+ipcMain.handle('syllora:open-path', (_event, target) => {
+  try {
+    const directory = managedDirectory(app.getPath('userData'), target)
+    return shell.openPath(directory).then(error => error === '' ? { ok: true } : { ok: false, error })
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
 })

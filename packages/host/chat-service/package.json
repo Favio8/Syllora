@@ -17,6 +17,7 @@
                          "@deepseek-ai/dsh-credentials":  "workspace:^",
                          "@deepseek-ai/dsh-llm":  "workspace:^",
                          "@deepseek-ai/dsh-llm-deepseek":  "workspace:^",
+                         "@syllora/llm-anthropic":  "workspace:^",
                          "@syllora/session":  "workspace:^",
                          "@syllora/tools":  "workspace:^",
                          "js-yaml":  "^4.1.0",

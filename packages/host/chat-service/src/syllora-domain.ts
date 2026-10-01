@@ -1,9 +1,13 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
 export const RULE_VERSION = 'syllora-v1'
 export const HOUR = 3_600_000
-export interface Source { id: string; materialId: string; anchor: string; text: string }
-export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[] }
-export interface Point { id: string; chapter: string; name: string; sourceIds: string[] }
+export interface Source { id: string; materialId: string; anchor: string; text: string; version?: string; section?: string; context?: string; kind?: string; start?: number; end?: number; previousId?: string; nextId?: string }
+export type PageIssueReason = 'blank-page' | 'unextracted-text' | 'parse-failed'
+export interface PageIssue { num:number;reason:PageIssueReason }
+export interface MaterialFile { id:string;ext:string;bytes:number;name:string }
+export interface JobCoverage { sourcesUsed:number;sourcesTotal:number;charsUsed:number;charsTotal:number;materialsWithOmitted:string[];sourceIds:string[];revision:string|null }
+export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[]; path?: string; version?: string|number; revisionNumber?:number; versionOf?:string|null; file?:MaterialFile|null; pageIssues?:PageIssue[]; parseError?:string|null; history?: Source[]; missingOriginal?: boolean; warnings?: string[]; active?: boolean }
+export interface Point { id: string; chapter: string; name: string; sourceIds: string[]; originKey?: string }
 export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean }
 export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number }
 export interface Evidence { state: '未评估' | '待验证' | '待加强' | '初步掌握' | '复测通过'; count: number; streak: number; learnedAt: number | null; dueAt: number | null; interval: number; lastAt: number | null; reason: string; ruleVersion: string }
@@ -39,7 +43,7 @@ export interface NextAction {
   trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
   practice: { pointId: string; text: string } | null
 }
-export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number }
+export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; folder?: string; revision?: string; initializedAt?: number }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
 export function normalizeCourse(course: Course) {
@@ -47,6 +51,7 @@ export function normalizeCourse(course: Course) {
   if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
   if (!Array.isArray(course.changes)) course.changes = []
   if (course.notice === undefined) course.notice = null
+  course.materials=(course.materials??[]).map(material=>({...material,revisionNumber:material.revisionNumber??(typeof material.version==='number'?material.version:1),version:material.version??1,versionOf:material.versionOf??null,file:material.file??null,pageIssues:material.pageIssues??[],parseError:material.parseError??null}))
   course.plan = normalizePlan(course.plan)
   course.draft = normalizePlan(course.draft)
 }
@@ -65,7 +70,7 @@ function normalizePlan(plan: Plan | null): Plan | null {
 }
 
 export function usableSources(course: Course): Source[] {
-  return course.materials.filter(m => m.status !== 'deleted' && (m.status === 'ready' || m.accepted)).flatMap(m => m.sources)
+  return course.materials.filter(m => m.status !== 'deleted' && (m.status === 'ready' || m.accepted)).flatMap(m => [...m.sources, ...(m.history ?? [])])
 }
 
 export function evidence(course: Course, pointId: string): Evidence {
@@ -354,6 +359,7 @@ export function publicCourse(course: Course, now: number) {
   const stored = course.actions.at(-1)
   return {
     ...course,
+    materials:course.materials.map(material=>({...material,previewUrl:material.status!=='deleted'&&!material.missingOriginal&&(material.file||material.path?.toLowerCase().endsWith('.pdf'))?`/api/syllora/material-file?courseId=${encodeURIComponent(course.id)}&materialId=${encodeURIComponent(material.id)}`:null})),
     questions: course.questions.map(question => {
       const answered = course.attempts.some(attempt => attempt.questionId === question.id)
       const { answer, explanation, quote, ...safe } = question

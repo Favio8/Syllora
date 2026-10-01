@@ -11,6 +11,7 @@
     { "path": "./packages/host/directory-picker-native" },
     { "path": "./packages/llm/llm" },
     { "path": "./packages/llm/llm-deepseek" },
+    { "path": "./packages/llm/llm-anthropic" },
     { "path": "./packages/attachment/attachment" },
     { "path": "./packages/credentials/credentials" },
     { "path": "./packages/settings/settings" },

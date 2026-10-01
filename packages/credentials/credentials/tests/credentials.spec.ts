@@ -4,6 +4,11 @@ import { credentialRef } from '../src/index.ts'
 import type { CredentialRef } from '../src/index.ts'
 import { MemoryCredentials } from './memory.ts'
 
+/** Fixture values standing in for stored secrets; they carry no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+const PLACEHOLDER_SEEDED = 'placeholder-value-seeded'
+
 const REF = credentialRef('DEEPSEEK_API_KEY')
 
 async function boot(seed: Record<string, string> = {}): Promise<Context> {
@@ -28,8 +33,8 @@ describe('credentialRef', () => {
 
 describe('the credentials seam through the memory provider', () => {
   it('mounts as ctx.credentials and resolves a seeded reference with its source', async () => {
-    const ctx = await boot({ DEEPSEEK_API_KEY: 'sk-seeded' })
-    expect(await ctx.credentials.resolve(REF)).toEqual({ value: 'sk-seeded', source: 'memory' })
+    const ctx = await boot({ DEEPSEEK_API_KEY: PLACEHOLDER_SEEDED })
+    expect(await ctx.credentials.resolve(REF)).toEqual({ value: PLACEHOLDER_SEEDED, source: 'memory' })
     expect(await ctx.credentials.describe(REF)).toEqual({ configured: true, source: 'memory', writable: true })
   })
 
@@ -44,8 +49,8 @@ describe('the credentials seam through the memory provider', () => {
     const events: CredentialRef[] = []
     ctx.on('credentials/updated', ref => void events.push(ref))
 
-    await ctx.credentials.set(REF, 'sk-live')
-    expect(await ctx.credentials.resolve(REF)).toEqual({ value: 'sk-live', source: 'memory' })
+    await ctx.credentials.set(REF, PLACEHOLDER)
+    expect(await ctx.credentials.resolve(REF)).toEqual({ value: PLACEHOLDER, source: 'memory' })
     await ctx.credentials.unset(REF)
     expect(await ctx.credentials.resolve(REF)).toBeUndefined()
     expect(events).toEqual([REF, REF])

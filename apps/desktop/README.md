@@ -9,13 +9,15 @@ Electron 桌面壳：把现有「本地 HTTP Host + 静态 Web UI」原样装进
 ```
 Electron 主进程 (src/main.cjs)
  ├─ spawn sidecar：ELECTRON_RUN_AS_NODE=1 electron.exe resources/host/bin.js serve --port 0
- │    注入 SYLLORA_HOME=<userData>/host-home、SYLLORA_WEB_DIST=resources/web
+ │    注入 SYLLORA_HOME=<userData>/host-home、SYLLORA_DATA_DIR=<userData>/syllora-data、SYLLORA_WEB_DIST=resources/web
  ├─ 轮询 <userData>/host-home/host.json 拿随机端口
  └─ BrowserWindow → http://127.0.0.1:<port>/（index.html 由静态托管 tap 注入 token）
 ```
 
 - Host 业务代码零改造；壳只有生命周期胶水（单实例、崩溃退避重启、外链走系统浏览器）。
-- 数据落在各平台规范目录（Windows `%APPDATA%`）的 `host-home/` 下；课程数据仍在用户项目文件夹。
+- 宿主状态、主密钥和日志落在各平台规范目录（Windows `%APPDATA%`）的 `host-home/` 下；共享模型配置与最近课程位于 `syllora-data/.syllora/`，每门课程的数据位于用户课程文件夹的 `.syllora/`。
+- 首次升级保留并复制旧 `host-home/syllora/syllora.json` 与管理的 PDF 原件到 `syllora-data/`；首页仍需逐课程选择目标文件夹迁移，已有目标不会覆盖。
+- Windows/Linux 隐藏应用菜单；macOS 保留原生应用及编辑菜单用于退出和复制粘贴。诊断日志由工作台设置导出，目录打开桥仅允许应用已知目录，不允许打开任意文件。
 
 ## 常用命令
 

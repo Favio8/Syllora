@@ -19,6 +19,9 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
+import { fixturePdf } from "../../../scripts/syllora-fixture.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -209,6 +212,62 @@ const auth = (token: string | null = host!.token): Record<string, string> => ({
 });
 
 describe("serve HTTP 边界（集成）", () => {
+  it('requires authentication for diagnostics and returns only a bounded log tail', async () => {
+    const logs=join(host!.home,'logs'), name='host-9999-12-31.log'
+    mkdirSync(logs,{recursive:true});writeFileSync(join(logs,name),'prefix-removed\n'+'x'.repeat(300*1024)+'\nrecent-log-tail')
+    const denied=await fetch(`${base()}/api/diagnostics.logs`,{method:'POST',headers:auth(null),body:JSON.stringify({payload:{}})})
+    expect(denied.status).toBe(401)
+    const response=await fetch(`${base()}/api/diagnostics.logs`,{method:'POST',headers:auth(),body:JSON.stringify({payload:{}})})
+    const body=await response.json() as any
+    expect(response.status).toBe(200);expect(body.result.files.length).toBeLessThanOrEqual(7)
+    const file=body.result.files.find((f:{name:string})=>f.name===name)
+    expect(file.truncated).toBe(true);expect(file.text.endsWith('recent-log-tail')).toBe(true)
+    expect(file.text).not.toContain('prefix-removed');expect(Buffer.byteLength(file.text)).toBeLessThan(257*1024)
+  })
+  it('previews initialized PDF originals with authentication, ownership and version checks',async()=>{
+    const previewHost=await startHost(),previewBase=()=>`http://127.0.0.1:${previewHost.port}`,previewAuth=()=>({authorization:`Bearer ${previewHost.token}`,'content-type':'application/json'})
+    const mock=createServer((request,response)=>{
+      let raw='';request.on('data',part=>raw+=String(part));request.on('end',()=>{
+        try {
+          const last=JSON.parse(raw).messages.at(-1).content,text=typeof last==='string'?last:last.map((p:{text?:string})=>p.text??'').join('')
+          const sources=JSON.parse(text.slice(text.indexOf('所选资料：\n')+'所选资料：\n'.length)) as Array<{id:string;text:string}>
+          const output={chapter:'PDF fixture',intro:{text:'Local test fixture.',sourceIds:sources.map(s=>s.id)},concepts:[{name:'Original PDF',text:'Local test fixture.',quote:sources[0]!.text.trim().slice(0,20),sourceIds:[sources[0]!.id]}],examples:[],connections:[],analogies:[]}
+          response.writeHead(200,{'Content-Type':'text/event-stream'});response.end(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',model:'fixture',choices:[{index:0,delta:{content:JSON.stringify(output)},finish_reason:null}]})}\n\ndata: [DONE]\n\n`)
+        } catch {response.writeHead(500);response.end('fixture failed')}
+      })
+    })
+    await new Promise<void>(r=>mock.listen(0,'127.0.0.1',r))
+    const rpc=async(method:string,payload:unknown)=>{
+      const response=await fetch(`${previewBase()}/api/${method}`,{method:'POST',headers:previewAuth(),body:JSON.stringify({payload}),signal:AbortSignal.timeout(20000)})
+      const body=await response.json() as any;expect(body.error).toBeUndefined();return body.result
+    }
+    try {
+      const port=(mock.address() as {port:number}).port
+      await rpc('settings.saveProvider',{id:'preview-fixture',name:'Local preview fixture',model:'fixture',baseUrl:`http://127.0.0.1:${port}/v1`})
+      await rpc('settings.setCredential',{providerId:'preview-fixture',apiKey:'fixture-only'})
+      await rpc('settings.activateProvider',{providerId:'preview-fixture'})
+      await rpc('syllora/preferences',{consent:true})
+      const folder=join(previewHost.home,'preview-course');mkdirSync(folder)
+      const course=await rpc('syllora/openCourse',{path:folder}),courseId=course.id
+      const bytes=fixturePdf(['Original PDF preview integration.'])
+      const uploaded=await rpc('syllora/import',{courseId,name:'讲义.pdf',base64:bytes.toString('base64')})
+      const started=await rpc('syllora/initialize',{courseId,requestId:randomUUID(),paths:[uploaded.path]})
+      let state:any
+      for(let i=0;i<200;i++){state=await rpc('syllora/state',{});if(state.jobs.find((j:any)=>j.id===started.jobId)?.state!=='running')break;await sleep(50)}
+      expect(state.jobs.find((j:any)=>j.id===started.jobId).state).toBe('succeeded')
+      const material=state.courses.find((c:any)=>c.id===courseId).materials[0],url=`${previewBase()}${material.previewUrl}`
+      expect((await fetch(url)).status).toBe(401)
+      const response=await fetch(url,{headers:previewAuth()});expect(response.status).toBe(200);expect(response.headers.get('Content-Type')).toBe('application/pdf');expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes)
+      const head=await fetch(url,{method:'HEAD',headers:previewAuth()});expect(head.status).toBe(200);expect((await head.arrayBuffer()).byteLength).toBe(0)
+      expect((await fetch(url.replace(material.id,randomUUID()),{headers:previewAuth()})).status).toBe(404)
+      expect((await fetch(`${previewBase()}/api/syllora/material-file?courseId=%25&materialId=${material.id}`,{headers:previewAuth()})).status).toBe(400)
+      expect((await fetch(url,{headers:{...previewAuth(),Origin:'https://evil.example'}})).status).toBe(403)
+      writeFileSync(join(folder,uploaded.path),fixturePdf(['Changed PDF.']))
+      expect((await fetch(url,{headers:previewAuth()})).status).toBe(409)
+      await rpc('syllora/deleteMaterial',{courseId,materialId:material.id,confirmed:true})
+      expect((await fetch(url,{headers:previewAuth()})).status).toBe(404);expect(existsSync(join(folder,uploaded.path))).toBe(true)
+    } finally {stop(previewHost);await new Promise<void>((resolve,reject)=>mock.close(e=>e?reject(e):resolve()))}
+  },30000)
   it("health 免 token 可达", async () => {
     const res = await fetch(`${base()}/api/health`, { signal: AbortSignal.timeout(8_000) });
     expect(res.status).toBe(200);

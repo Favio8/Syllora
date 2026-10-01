@@ -132,10 +132,26 @@ describe('Syllora persistence and boundaries',()=>{
     await expect(svc.handle('rename',{courseId:randomUUID(),name:'越权'})).rejects.toThrow('课程不存在');
     const restored=new SylloraService(root);const state=await restored.handle('state') as any;expect(state.courses).toHaveLength(1);expect(state.courses[0].materials).toHaveLength(1);
   })
-  it('blocks unconsented model calls and zero budgets before contacting the model',async()=>{
+  it('blocks unconsented model calls before contacting the model',async()=>{
     let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:'{}'}}};const {svc}=await service(client);const courseId=await create(svc);
     await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('确认允许');
-    await svc.handle('preferences',{consent:true,callLimit:0});await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('上限');expect(calls).toBe(0);
+    expect(calls).toBe(0);
+  })
+  it('ignores persisted local caps and legacy preferences while retaining provider diagnostics',async()=>{
+    let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:JSON.stringify({text:'单位矩阵的主对角线元素为一。',sourceIds:[],insufficient:true})}}};
+    const {svc,root}=await service();const courseId=await create(svc);
+    const stored=JSON.parse(await readFile(join(root,'syllora.json'),'utf8'));
+    stored.consent=true;stored.callLimit=0;stored.calls=10001;
+    await writeFile(join(root,'syllora.json'),JSON.stringify(stored));
+    const restored=new SylloraService(root,{config:async()=>config,client:()=>client});
+    await restored.handle('preferences',{consent:true,callLimit:0});
+    await restored.handle('generate',{courseId,requestId:randomUUID(),kind:'answer',prompt:'什么是单位矩阵？'});
+    const state=await waitJob(restored);expect(state.jobs.at(-1).state).toBe('succeeded');expect(calls).toBe(1);
+    expect(state.settings).toEqual({consent:true,calls:10002});
+    expect(JSON.parse(await readFile(join(root,'syllora.json'),'utf8'))).not.toHaveProperty('callLimit');
+    await restored.handle('preferences',{consent:false});
+    await expect(restored.handle('generate',{courseId,requestId:randomUUID(),kind:'answer',prompt:'再解释一次'})).rejects.toThrow('确认允许');
+    expect(calls).toBe(1);
   })
   it('runs generation, plan confirmation, fixed grading and dispute replay',async()=>{
     let n=0;const client:StructuredCallClient={async *stream(options){
