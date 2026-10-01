@@ -7,10 +7,45 @@ export interface Point { id: string; chapter: string; name: string; sourceIds: s
 export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean }
 export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number }
 export interface Evidence { state: '未评估' | '待验证' | '待加强' | '初步掌握' | '复测通过'; count: number; streak: number; learnedAt: number | null; dueAt: number | null; interval: number; lastAt: number | null; reason: string; ruleVersion: string }
-export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; date: string; minutes: number; status: 'todo' | 'in_progress' | 'completed' | 'skipped'; explained: boolean; slots: number; cycle: number | null }
+export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; date: string; minutes: number; status: 'todo' | 'in_progress' | 'completed' | 'skipped'; explained: boolean; slots: number; cycle: number | null; immediate?: boolean }
 export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: string[]; dailyMinutes: number; feasible: boolean }
 export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number }
-export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; createdAt: number }
+export interface AnswerDraft { questionId: string; option: number }
+export interface Drafts { prompt: string; answers: AnswerDraft[] }
+export interface PlanDiff {
+  scopeAdded: string[]
+  scopeRemoved: string[]
+  tasksAdded: Array<{ id: string; pointId: string; date: string; minutes: number; immediate: boolean }>
+  tasksRemoved: Array<{ id: string; pointId: string; date: string; minutes: number }>
+  tasksMoved: Array<{ id: string; pointId: string; from: string; to: string }>
+  minutesBefore: number
+  minutesAfter: number
+}
+export interface DenominatorChange { id: string; at: number; planVersion: number; activityBefore: number; activityAfter: number; scopeBefore: number; scopeAfter: number; skipped: number; text: string; diff: PlanDiff }
+export interface ScheduleNotice { kind: 'due' | 'restore' | 'immediate'; pointIds: string[]; text: string }
+export interface NextAction {
+  id: string
+  kind: 'continue' | 'retest' | 'review' | 'planned' | 'summary' | 'prepare' | 'archived'
+  text: string
+  reason: string
+  pointId: string | null
+  taskId: string | null
+  evidenceState: Evidence['state'] | null
+  evidenceCount: number | null
+  availableAt: number | null
+  at: number
+  trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
+  practice: { pointId: string; text: string } | null
+}
+export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number }
+export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
+
+export function normalizeCourse(course: Course) {
+  if (!Array.isArray(course.actions)) course.actions = []
+  if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
+  if (!Array.isArray(course.changes)) course.changes = []
+  if (course.notice === undefined) course.notice = null
+}
 
 export function usableSources(course: Course): Source[] {
   return course.materials.filter(m => m.status !== 'deleted' && (m.status === 'ready' || m.accepted)).flatMap(m => m.sources)
@@ -93,29 +128,180 @@ export function buildPlan(course: Course, input: { scope: string[]; dailyMinutes
   return { id: id(), version: (course.plan?.version ?? 0) + 1, baseVersion: course.plan?.version ?? 0, scope: input.scope, tasks, overflow, dailyMinutes: input.dailyMinutes, feasible: !overflow.length && !!input.scope.length }
 }
 
+function evidenceSnap(course: Course, pointId: string | null) {
+  if (!pointId) return { evidenceState: null, evidenceCount: null }
+  const current = evidence(course, pointId)
+  return { evidenceState: current.state, evidenceCount: current.count }
+}
+
+export function recommend(course: Course, now: number): Omit<NextAction, 'id' | 'at' | 'trigger'> {
+  const practiceId = course.scope.find(id => {
+    if (evidence(course, id).state !== '待加强') return false
+    const last = [...course.attempts].reverse().find(attempt => {
+      const question = course.questions.find(item => item.id === attempt.questionId)
+      return question?.pointId === id && question.status === 'valid' && !attempt.assisted
+    })
+    return last?.correct === false
+  })
+  const practice = practiceId ? { pointId: practiceId, text: '可选：生成即时巩固草案，确认后才进入日程' } : null
+  if (course.archived) return { kind: 'archived', text: '课程已归档，恢复后可继续学习', reason: '归档课程不新增推荐或提醒', pointId: null, taskId: null, ...evidenceSnap(course, null), availableAt: null, practice: null }
+  const active = course.plan?.tasks.find(task => task.status === 'in_progress')
+  if (active) return { kind: 'continue', text: '继续当前任务', reason: `先完成进行中的${active.kind === 'review' ? '复习' : '学习'}，再处理队列中的其他事项`, pointId: active.pointId, taskId: active.id, ...evidenceSnap(course, active.pointId), availableAt: null, practice }
+  const invalid = course.scope.find(id => course.questions.some(question => question.pointId === id && question.status !== 'valid' && course.attempts.some(attempt => attempt.questionId === question.id)) && evidence(course, id).count < 2)
+  if (invalid) return { kind: 'retest', text: '评估依据有变更，进行补测', reason: '争议或失效题目已移出证据，剩余有效作答不足，需要补测', pointId: invalid, taskId: null, ...evidenceSnap(course, invalid), availableAt: null, practice }
+  const due = course.scope.map(id => ({ id, item: evidence(course, id) })).filter(entry => entry.item.dueAt !== null && entry.item.dueAt <= now).sort((a, b) => a.item.dueAt! - b.item.dueAt!)[0]
+  if (due) return { kind: 'review', text: '该知识点已到复习时间', reason: `证据为${due.item.state}，到期复习优先于新的计划内容`, pointId: due.id, taskId: null, ...evidenceSnap(course, due.id), availableAt: due.item.dueAt ?? now, practice }
+  const todo = course.plan?.tasks.find(task => task.status === 'todo')
+  if (todo) return { kind: 'planned', text: '按已确认计划继续学习', reason: `计划 v${course.plan?.version ?? 0} 的下一项尚未开始`, pointId: todo.pointId, taskId: todo.id, ...evidenceSnap(course, todo.pointId), availableAt: null, practice }
+  if (course.scope.length) {
+    const nextDue = course.scope.map(id => evidence(course, id).dueAt).filter((at): at is number => at !== null).sort((a, b) => a - b)[0] ?? null
+    return { kind: 'summary', text: '本轮任务已结束，可查看下次复习时间或补充学习范围', reason: nextDue === null ? '当前范围没有未完成任务' : '未到期复习可以查看，提前练习只记为即时巩固', pointId: null, taskId: null, evidenceState: null, evidenceCount: null, availableAt: nextDue, practice }
+  }
+  return { kind: 'prepare', text: '导入资料，确认大纲与学习计划', reason: '还没有确认的学习范围', pointId: null, taskId: null, evidenceState: null, evidenceCount: null, availableAt: null, practice: null }
+}
+
+export function recordNext(course: Course, now: number, makeId: () => string, trigger: NextAction['trigger'], force = false): boolean {
+  normalizeCourse(course)
+  const recommendation = recommend(course, now)
+  const last = course.actions.at(-1)
+  if (!force && last && last.kind === recommendation.kind && last.pointId === recommendation.pointId && last.taskId === recommendation.taskId && last.text === recommendation.text && last.evidenceState === recommendation.evidenceState && last.reason === recommendation.reason && last.practice?.pointId === recommendation.practice?.pointId && last.availableAt === recommendation.availableAt) return false
+  course.actions.push({ ...recommendation, id: makeId(), at: now, trigger })
+  if (course.actions.length > 40) course.actions.splice(0, course.actions.length - 40)
+  return true
+}
+
+function sameAction(left: Omit<NextAction, 'id' | 'at' | 'trigger'>, right: Omit<NextAction, 'id' | 'at' | 'trigger'>) {
+  return left.kind === right.kind && left.pointId === right.pointId && left.taskId === right.taskId && left.text === right.text && left.evidenceState === right.evidenceState && left.reason === right.reason && left.practice?.pointId === right.practice?.pointId && left.availableAt === right.availableAt
+}
+
+export function nextSyncTrigger(course: Course, now: number): NextAction['trigger'] | null {
+  normalizeCourse(course)
+  if (!course.actions.length) return 'init'
+  const last = course.actions.at(-1)!
+  const current = recommend(course, now)
+  if (sameAction(last, current)) return null
+  const earlier = recommend(course, last.at)
+  return current.kind === 'review' && earlier.kind !== 'review' ? 'due' : 'sync'
+}
+
+const scheduledMinutes = (tasks: Task[]) => tasks.filter(task => task.status !== 'skipped').reduce((sum, task) => sum + task.minutes, 0)
+
+export function planDiff(before: Plan | null, after: Plan): PlanDiff {
+  const previous = before?.tasks ?? []
+  const previousById = new Map(previous.map(task => [task.id, task]))
+  const nextById = new Map(after.tasks.map(task => [task.id, task]))
+  const previousScope = new Set(before?.scope ?? [])
+  return {
+    scopeAdded: after.scope.filter(id => !previousScope.has(id)),
+    scopeRemoved: [...previousScope].filter(id => !after.scope.includes(id)),
+    tasksAdded: after.tasks.filter(task => !previousById.has(task.id)).map(task => ({ id: task.id, pointId: task.pointId, date: task.date, minutes: task.minutes, immediate: task.immediate === true })),
+    tasksRemoved: previous.filter(task => !nextById.has(task.id)).map(task => ({ id: task.id, pointId: task.pointId, date: task.date, minutes: task.minutes })),
+    tasksMoved: after.tasks.flatMap(task => {
+      const older = previousById.get(task.id)
+      return older && older.date !== task.date ? [{ id: task.id, pointId: task.pointId, from: older.date, to: task.date }] : []
+    }),
+    minutesBefore: scheduledMinutes(previous),
+    minutesAfter: scheduledMinutes(after.tasks),
+  }
+}
+
+export function describeDiff(diff: PlanDiff, name: (id: string) => string): string {
+  const parts = [
+    ...diff.scopeAdded.map(id => `新增范围 ${name(id)}`),
+    ...diff.scopeRemoved.map(id => `移出范围 ${name(id)}，作答仍保留`),
+    ...diff.tasksAdded.map(task => `新增${task.immediate ? '即时巩固' : '任务'} ${name(task.pointId)} ${task.date} ${task.minutes} 分钟`),
+    ...diff.tasksRemoved.map(task => `移出任务 ${name(task.pointId)} ${task.date}`),
+    ...diff.tasksMoved.map(task => `移动 ${name(task.pointId)} ${task.from} → ${task.to}`),
+    `估时 ${diff.minutesBefore} → ${diff.minutesAfter} 分钟`,
+  ]
+  return parts.join('；')
+}
+
+export function proposeReviews(course: Course, pointIds: string[], now: number, makeId: () => string): Plan {
+  const base = course.plan
+  if (!base) throw new Error('没有已确认计划')
+  const today = localDate(now, course.timezone)
+  const tasks = structuredClone(base.tasks)
+  const overflow: string[] = []
+  for (const pointId of pointIds) {
+    const current = evidence(course, pointId)
+    const used = tasks.filter(task => task.date === today && task.status !== 'skipped').reduce((sum, task) => sum + task.minutes, 0)
+    if (used + 10 > base.dailyMinutes) overflow.push(pointId)
+    tasks.push({ id: makeId(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: current.dueAt, immediate: current.dueAt === null || current.dueAt > now })
+  }
+  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0 }
+}
+
+export function restoreNotice(course: Course, now: number): ScheduleNotice | null {
+  const due = duePointIds(course, now)
+  return due.length ? { kind: 'restore', pointIds: due, text: `恢复后有 ${due.length} 项复习已到期。确认新日程前，原计划保持不变。` } : null
+}
+
+export function duePointIds(course: Course, now: number): string[] {
+  return course.scope.filter(id => {
+    const current = evidence(course, id)
+    return current.dueAt !== null && current.dueAt <= now && !course.plan?.tasks.some(task => task.pointId === id && task.kind === 'review' && task.status !== 'completed' && task.status !== 'skipped')
+  })
+}
+
+export function refreshNotice(course: Course, now: number): boolean {
+  if (!course.notice) return false
+  const pending = course.notice.pointIds.filter(id => {
+    const scheduled = course.plan?.tasks.some(task => task.pointId === id && task.kind === 'review' && task.status !== 'completed' && task.status !== 'skipped')
+    if (scheduled) return false
+    if (course.notice?.kind === 'immediate') return true
+    const current = evidence(course, id)
+    return current.dueAt !== null && current.dueAt <= now
+  })
+  if (!pending.length) { course.notice = null; return true }
+  if (pending.length === course.notice.pointIds.length) return false
+  course.notice = { ...course.notice, pointIds: pending, text: course.notice.kind === 'restore' ? `恢复后有 ${pending.length} 项复习已到期。确认新日程前，原计划保持不变。` : course.notice.text }
+  return true
+}
+
+export function noteChange(course: Course, now: number, makeId: () => string, before: Plan | null) {
+  normalizeCourse(course)
+  const after = course.plan
+  if (!after) return
+  const diff = planDiff(before, after)
+  const name = (id: string) => course.points.find(point => point.id === id)?.name ?? '知识点'
+  const skipped = after.tasks.filter(task => task.status === 'skipped').length
+  const text = `计划 v${after.version}：任务 ${before?.tasks.length ?? 0} → ${after.tasks.length}，范围 ${before?.scope.length ?? 0} → ${after.scope.length}。${describeDiff(diff, name)}。跳过 ${skipped} 项单独列出，不记入完成。`
+  course.changes.push({ id: makeId(), at: now, planVersion: after.version, activityBefore: before?.tasks.length ?? 0, activityAfter: after.tasks.length, scopeBefore: before?.scope.length ?? 0, scopeAfter: after.scope.length, skipped, text, diff })
+  if (course.changes.length > 20) course.changes.splice(0, course.changes.length - 20)
+}
+
 export function nextAction(course: Course, now: number): { text: string; pointId: string | null; taskId: string | null } {
-  if (course.archived) return { text: '课程已归档，恢复后可继续学习', pointId: null, taskId: null }
-  const active = course.plan?.tasks.find(t => t.status === 'in_progress')
-  if (active) return { text: '继续当前任务', pointId: active.pointId, taskId: active.id }
-  const invalid = course.scope.find(id => course.questions.some(q => q.pointId === id && q.status !== 'valid' && course.attempts.some(a => a.questionId === q.id)) && evidence(course,id).count < 2)
-  if (invalid) return { text: '评估依据有变更，进行补测', pointId: invalid, taskId: null }
-  const due = course.scope.map(id => ({ id, e: evidence(course,id) })).filter(x => x.e.dueAt !== null && x.e.dueAt <= now).sort((a,b) => a.e.dueAt! - b.e.dueAt!)[0]
-  if (due) return { text: '该知识点已到复习时间', pointId: due.id, taskId: null }
-  const todo = course.plan?.tasks.find(t => t.status === 'todo')
-  if (todo) return { text: '按已确认计划继续学习', pointId: todo.pointId, taskId: todo.id }
-  return { text: course.scope.length ? '本轮任务已结束，可查看下次复习时间或补充学习范围' : '导入资料，确认大纲与学习计划', pointId: null, taskId: null }
+  const current = course.actions?.at(-1) ?? recommend(course, now)
+  return { text: current.text, pointId: current.pointId, taskId: current.taskId }
 }
 
 export function publicCourse(course: Course, now: number) {
+  normalizeCourse(course)
+  const distribution = Object.fromEntries(EVIDENCE_STATES.map(state => [state, course.scope.filter(id => evidence(course, id).state === state).length])) as Record<(typeof EVIDENCE_STATES)[number], number>
+  const completed = course.plan?.tasks.filter(task => task.status === 'completed').length ?? 0
+  const total = course.plan?.tasks.length ?? 0
+  const stored = course.actions.at(-1)
   return {
     ...course,
-    questions: course.questions.map(q => {
-      const answered = course.attempts.some(a => a.questionId === q.id)
-      const { answer, explanation, quote, ...safe } = q
-      return answered || q.assisted ? { ...safe, answer, explanation, quote } : safe
+    questions: course.questions.map(question => {
+      const answered = course.attempts.some(attempt => attempt.questionId === question.id)
+      const { answer, explanation, quote, ...safe } = question
+      return answered || question.assisted ? { ...safe, answer, explanation, quote } : safe
     }),
-    evidence: Object.fromEntries(course.points.map(p => [p.id, evidence(course,p.id)])),
-    next: nextAction(course, now),
-    progress: { completed: course.plan?.tasks.filter(t => t.status === 'completed').length ?? 0, total: course.plan?.tasks.length ?? 0, covered: course.scope.filter(id => evidence(course,id).count > 0).length, scope: course.scope.length },
+    evidence: Object.fromEntries(course.points.map(point => [point.id, evidence(course, point.id)])),
+    next: stored ?? { ...recommend(course, now), id: '', at: now, trigger: 'init' as const },
+    draftDiff: course.draft ? planDiff(course.plan, course.draft) : null,
+    progress: {
+      completed,
+      total,
+      skipped: course.plan?.tasks.filter(task => task.status === 'skipped').length ?? 0,
+      covered: course.scope.filter(id => evidence(course, id).count > 0).length,
+      scope: course.scope.length,
+      activityLabel: total === 0 ? '暂无任务' : null,
+      scopeLabel: course.scope.length === 0 ? '暂无范围' : null,
+      distribution,
+      change: course.changes.at(-1)?.text ?? null,
+    },
   }
 }
