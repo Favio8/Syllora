@@ -26,8 +26,9 @@ const mock=createServer((req,res)=>{
       const request=JSON.parse(body)
       const last=request.messages.at(-1).content
       const text=typeof last==='string'?last:last.map((p:{text?:string})=>p.text??'').join('')
-      const start=text.indexOf('[{"id":')
-      const sources=JSON.parse(text.slice(start))
+      const start=Math.max(text.lastIndexOf('\n所选资料（'),text.lastIndexOf('\n所选资料：'))
+      assert.ok(start>=0,'fixture source block header')
+      const sources=JSON.parse(text.slice(text.indexOf('\n',start+1)+1))
       const sourceId=(sources.find((s:{text:string})=>s.text.includes('主对角线'))??sources[0]).id
       let output:unknown
       if(text.includes('初始化整理课程讲义')) output=fixtureLecture(sources,sourceId)
@@ -47,7 +48,7 @@ const address=mock.address() as {port:number}
 await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`})
 await setCredential(data,'syllora-test','test-only-not-a-real-secret')
 await activateProvider(data,'syllora-test')
-const startHost=()=>spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
+const startHost=()=>spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data,SYLLORA_SYNTHETIC_RUN:'1'},windowsHide:true,stdio:['ignore','pipe','pipe']})
 let host=startHost()
 let hostOutput='';host.stdout.on('data',b=>{hostOutput+=String(b)});host.stderr.on('data',b=>{hostOutput+=String(b)})
 let browser:any
@@ -168,6 +169,12 @@ try {
   await rpc('rejectPlan',{courseId:courseId.id})
   checks.push('task-progress change rejects stale draft')
 
+  // Settings page pair: A keeps its dirty draft after B changes the authoritative revision.
+  await page.getByRole('tab',{name:'复习',exact:true}).click();await page.getByText('复习间隔设置',{exact:true}).click();await page.getByLabel('首次补强与复测（小时）').fill('48');await page.getByLabel('会话闲置关闭（分钟）').fill('45');
+  await pageB.getByRole('tab',{name:'复习',exact:true}).click();await pageB.getByText('复习间隔设置',{exact:true}).click();await pageB.getByLabel('首次补强与复测（小时）').fill('72');await pageB.getByLabel('复测通过后的间隔（小时）').fill('120');await pageB.getByLabel('后续复习间隔（小时）').fill('240');await pageB.getByLabel('会话闲置关闭（分钟）').fill('60');await pageB.getByRole('button',{name:'保存未来复习间隔',exact:true}).click();
+  await page.getByText(/你的未保存输入和原修订号已保留/).waitFor();assert.equal(await page.getByLabel('首次补强与复测（小时）').inputValue(),'48');assert.equal(await page.getByLabel('会话闲置关闭（分钟）').inputValue(),'45');const conflictResponse=page.waitForResponse(response=>response.url().endsWith('/api/syllora/learningSettings')&&response.request().method()==='POST');await page.getByRole('button',{name:'保存未来复习间隔',exact:true}).click();assert.equal((await (await conflictResponse).json()).error.code,'VERSION_CONFLICT');await page.locator('.sy-error').filter({hasText:'学习设置已被另一页面修改'}).waitFor();
+  state=await rpcState();assert.deepEqual(state.courses.find((course:{id:string})=>course.id===courseId.id).learningSettings,{revision:1,reviewHours:[72,120,240],sessionIdleMinutes:60});await shot(page,'03c-settings-draft-conflict.png');await page.getByRole('button',{name:'放弃草稿并载入最新设置',exact:true}).click();assert.equal(await page.getByLabel('首次补强与复测（小时）').inputValue(),'72');assert.equal(await page.getByLabel('会话闲置关闭（分钟）').inputValue(),'60');evidence.settingsConflict={retainedDraft:{reviewHours:[48,72,168],sessionIdleMinutes:45,baseVersion:0},authoritativeRevision:1,rejectedCode:'VERSION_CONFLICT'};checks.push('dual-page settings preserves draft and original baseVersion until explicit reload');
+
   // Scenario 2: a failed draft save must keep the user on the current course.
   await page.route('**/api/syllora/saveDraft',route=>route.abort())
   await promptBox().fill('这条草稿保存会失败')
@@ -228,7 +235,7 @@ try {
   await shot(page,'05d-restore-confirmed.png')
   checks.push('archive protection and restore draft flow')
 
-  const unexpectedFailures=failedResponses.filter(entry=>!entry.includes('/api/syllora/confirmPlan'))
+  const unexpectedFailures=failedResponses.filter(entry=>!entry.includes('/api/syllora/confirmPlan')&&!entry.includes('/api/syllora/learningSettings'))
   assert.deepEqual(unexpectedFailures,[])
   assert.deepEqual(errors,[])
   await contextB.close()

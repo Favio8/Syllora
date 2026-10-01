@@ -48,6 +48,11 @@ describe('course folder initialization',()=>{
     const result=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(result.lectures).toHaveLength(40);expect(result.lectures.at(-1).chapter).toBe('第40章')
     const manifest=JSON.parse(await readFile(join(s.folder,'.syllora','revisions',state.courses[0].revision,'manifest.json'),'utf8'));expect(manifest.coveredSourceCount).toBe(manifest.sourceCount)
     expect(await readFile(join(s.folder,'long.md'),'utf8')).toBe(doc)
+    const ids=state.courses[0].points.map((point:any)=>point.id),calls=s.calls();
+    const replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(calls);expect(replay.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids)
+    await writeFile(join(s.folder,'long.md'),doc.replace('主题40的定义。','主题40的定义，新增尾章依据。'))
+    const changed=await initialize(s);expect(changed.job.state).toBe('succeeded');expect(s.calls()-calls).toBe(1);expect(changed.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids);expect(new Set(changed.state.courses[0].points.map((point:any)=>point.id)).size).toBe(40)
+    const latest=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(latest.lectures.at(-1).concepts[0].quote).toContain('新增尾章依据')
   })
   it('counts all parsed characters including whitespace before sending any model request',async()=>{
     const s=await setup();await writeFile(join(s.folder,'oversized.txt'),'正文依据。'+'\n'.repeat(100001))

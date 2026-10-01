@@ -217,7 +217,15 @@ export async function saveProgressBoard(path: string, board: ProgressBoard, now 
   const tmp = `${path}.${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`
   await writeFile(tmp, rows.join('\n'), 'utf8')
   try {
-    await rename(tmp, path)
+    // Readers/scanners on Windows can briefly deny replacement; preserve the target throughout.
+    for (let attempt = 0; ; attempt++) {
+      try { await rename(tmp, path); break }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (!['EPERM','EACCES','EBUSY'].includes(code ?? '') || attempt >= 5) throw error
+        await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt))
+      }
+    }
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => undefined)
     throw error

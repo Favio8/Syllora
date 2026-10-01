@@ -7,7 +7,8 @@
  */
 
 import { createHash } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
+import { atomicText } from './syllora-files.ts'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
@@ -144,12 +145,8 @@ async function readConfig(workspaceRoot: string): Promise<ConfigYaml> {
 
 async function writeConfig(workspaceRoot: string, config: ConfigYaml): Promise<void> {
   const path = configPath(workspaceRoot)
-  const { mkdir } = await import('node:fs/promises')
-  await mkdir(workspaceStateDirOf(workspaceRoot), { recursive: true })
-  const tmp = path + '.tmp'
   const text = yaml.dump(config, { sortKeys: false, noRefs: true })
-  await writeFile(tmp, text, 'utf8')
-  await rename(tmp, path)
+  await atomicText(path, text)
 }
 
 /** Workspace-wide read/modify/write serialization for credentials.json. */

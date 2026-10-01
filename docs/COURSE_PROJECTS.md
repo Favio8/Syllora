@@ -88,6 +88,7 @@ PDF 预览读取课程中的原文件，经课程／资料归属、路径边界�
 | `lectures` | `courseId` | `revision`、`lectures` |
 | `materialFile` | `courseId`、`materialId` | 原文件元信息和 `base64`（兼容 RPC 客户端） |
 | `migrateCourse` | 旧 `courseId`、目标 `path` | `id`、`path`、`migrated` |
+| `restorePointSources` | `courseId`、原 `pointId`、用户确认支持同一概念的 `replacementPointId` | 保存结果；原节点、任务与作答 ID 保留 |
 
 任务 `progress` 包含扫描／解析／整理／校验阶段、`done/total`、`failures` 与说明。
 扫描发生在调用模型之前，初始化请求立即返回持久化任务。兼容旧自动化客户端的
@@ -112,3 +113,44 @@ PDF 原字节，沿用 token／Origin 门禁，包含 `nosniff` 与 `private, no
 `revisions/` 与 `.staging/` 并移除最近课程记录。根目录、原资料、上传正文和继承
 模块其他 `.syllora` 文件保留。删除单份资料会使引用失效并清理整理版本，需重新
 初始化讲义；用户原文件仍留在目录中。
+
+## 2026-10-02 恢复与诊断契约
+
+`state.courses[].blockedPointIds` 列出缺少当前活跃来源的节点。历史来源可维护旧记录，
+但不用于新学习生成。`NextAction.kind` 新增 `waiting` 和 `blocked`；前者的
+`availableAt` 是任务日期在课程时区的起点（含夏令时），后者指向补充资料入口。
+`start`、打开既有复习及任务绑定生成会在服务端检查计划日期和当前来源，提前执行
+返回 `TASK_NOT_DUE`，来源失效返回 `NO_USABLE_SOURCE`。
+
+`restorePointSources` 校验两节点均属于当前课程且替代节点有当前可用来源；只复制
+用户明确确认的来源关联，不改原节点名称、任务和作答，也不复活已失效旧题。
+新增复习保留原计划占用，按日窗口与休息日排入剩余容量；确认前原计划不变。
+错答反馈 `planAdjustment.code` 可为 `SKIPPED_EXISTING_REVIEW`，表示已有未完成
+复习，不新建空草案；原有 `GENERATED` 与 `SKIPPED_EXISTING_DRAFT` 行为保留。
+
+Job 新增可选诊断字段 `promptVersion`、`ruleVersion`、`finishedAt`、`elapsedMs`、
+`errorCode`。来源整理 prompt 标记 `lecture-v1`，问答／题目标记
+`syllora-teaching-v2`，当前证据规则为 `syllora-v1`。旧 Job 无字段时不伪造值。
+故障代码包括 `QUOTA_EXCEEDED`、`RATE_LIMITED`、`UPSTREAM_TIMEOUT`、`CANCELLED`、
+`MODEL_AUTH_FAILED`、`OUTPUT_TRUNCATED`、`STORAGE_ERROR` 和校验类错误；不持久化
+任意供应商响应作为用户错误说明。争议题新增可选 `dispute.reason/at` 审计信息。
+
+最近课程注册表新增可选 `deletion: pending|failed`。清理前先持久化删除意图并
+排空/取消学习任务，阻止已进入但尚未创建 Job 的迟到请求和后续事务。中途失败
+保留注册表标记，重启后仍拒绝普通读写及重新打开；`state.projects` 展示错误与
+重试入口。重复并发删除返回 `DELETING`，已标记的课程可用确认删除请求继续清理。
+只有清理和注册表移除均成功才返回完成。旧注册表无需手动迁移。
+
+课程 JSON 与共享配置 YAML 均使用唯一临时文件、刷盘和原子替换；Windows 临时
+占用（EPERM/EACCES/EBUSY）最多追加 5 次短暂退避。永久失败保留正式文件并清理
+自己的临时文件，不通过先删除正式文件实现覆盖。文件格式与供应商写锁顺序不变。
+
+## 学习记录兼容
+
+课程仍保留原有 ID 与 JSON 快照。新增可选会话/观测、参数修订及新作答的规则/资料/计划快照；不改写历史作答、旧资料 ID 和原文件。缺少这些字段的旧课程可打开，旧作答不伪造会话，旧规则仍按默认重放。参数与会话契约见 [LEARNING_OBSERVATIONS.md](LEARNING_OBSERVATIONS.md)。
+
+## 单份资料删除与并发初始化
+
+同一 Host 内，`deleteMaterial`、`initialize`、全部 `generate`（包括 `kind: outline` 兼容入口）与 `import` 共享课程级操作守卫。删除单份资料从标记失效、取消并排空旧 Job 到清理 `revisions/`、`.staging/` 完成一直持有守卫；新初始化不能在清理期间发布随后被删除的版本。初始化在配置读取等尚未创建 Job 的阶段也持有守卫。冲突明确返回 `COURSE_BUSY`，客户端应查询原操作结果后重试；普通查询和其他课程不受此守卫阻断，完成或失败后释放守卫。
+
+删除整门课程在单份资料清理期间同样返回 `COURSE_BUSY`；其原有持久化删除意图及迟到请求阻断不变。这是单 Host 内的保护，不支持多个进程共享可写课程目录。确定性测试覆盖两种初始化入口、排空旧任务、实际清理阶段、Job 前等待、另一课程可用及清理后成功重建。
