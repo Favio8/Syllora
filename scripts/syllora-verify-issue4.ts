@@ -123,6 +123,7 @@ try {
   // Scenario 3 (page pair): page B is frozen on a stale state snapshot while page A confirms live.
   await rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:1})
   const frozenBody=JSON.stringify({result:await rpcState()})
+  const expectedDraft=JSON.parse(frozenBody).result.courses[0].draft.id
   const contextB=await browser.newContext()
   const pageB=await contextB.newPage()
   await pageB.route('**/api/syllora/state',route=>route.fulfill({contentType:'application/json',body:frozenBody}))
@@ -132,6 +133,8 @@ try {
   await pageB.getByRole('tab',{name:'计划',exact:true}).click()
   await pageB.getByRole('button',{name:'确认生效',exact:true}).waitFor()
   await page.getByRole('tab',{name:'计划',exact:true}).click()
+  // Wrong answers now create a proposal. Wait for the explicit replacement draft before confirming.
+  await page.locator(`.sy-draft[data-draft-id="${expectedDraft}"]`).waitFor()
   await page.getByRole('button',{name:'确认生效',exact:true}).waitFor()
   await page.getByRole('button',{name:'确认生效',exact:true}).click()
   await page.getByRole('button',{name:'确认生效',exact:true}).waitFor({state:'detached'})

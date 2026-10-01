@@ -6,7 +6,7 @@ import { structuredCall, type StructuredCallClient } from '@syllora/course-build
 import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { loadChatConfig, type ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient } from './adapter.ts'
-import { buildPlan, duePointIds, localDate, nextSyncTrigger, normalizeCourse, noteChange, proposeReviews, publicCourse, recordNext, refreshNotice, restoreNotice, usableSources, type Course, type Message, type Question, type Source } from './syllora-domain.ts'
+import { diffPlan, placeTasks, buildPlan, duePointIds, localDate, nextSyncTrigger, normalizeCourse, noteChange, proposeReviews, publicCourse, recordNext, refreshNotice, restoreNotice, usableSources, type Course, type Message, type Question, type Source } from './syllora-domain.ts'
 
 const key = z.string().uuid()
 const title = z.string().trim().min(1).max(60)
@@ -84,6 +84,11 @@ export class SylloraService {
         settings: { consent: db.consent, callLimit: db.callLimit, calls: db.calls, cost: null },
       }), false)
     }
+    if (action === 'planDiff') return this.transaction(db => {
+      const p = z.object({ courseId: key }).parse(payload)
+      const course = this.course(db, p.courseId, false)
+      return { diff: course.draft ? diffPlan(course.plan, course.draft) : null, oldPlan: course.plan, newDraft: course.draft }
+    }, false)
     if (action === 'preferences') {
       const p = z.object({ consent: z.boolean(), callLimit: z.number().int().min(0).max(10000) }).parse(payload)
       return this.transaction(db => { db.consent = p.consent; db.callLimit = p.callLimit; return { saved: true } })
@@ -141,20 +146,31 @@ export class SylloraService {
           recordNext(course, this.now(), id, 'material')
           break
         }
+        case 'reorderPoints': {
+          const ids = z.array(key).parse(base['pointIds'])
+          if (ids.length !== course.points.length || new Set(ids).size !== ids.length || !ids.every(id => course.points.some(p => p.id === id))) fail('INPUT_INVALID','知识点顺序无效，请刷新后重试')
+          const order = new Map(ids.map((id, i) => [id, i]))
+          course.points.sort((a, b) => order.get(a.id)! - order.get(b.id)!)
+          break
+        }
         case 'point': {
           const point = course.points.find(p => p.id === base['pointId']) ?? fail('NOT_FOUND','知识点不存在')
           point.name = title.parse(base['name']); break
         }
         case 'plan': {
-          const p = z.object({ scope: z.array(key).min(1), dailyMinutes: z.number().int().min(1).max(720), days: z.number().int().min(1).max(90), restDays: z.array(z.number().int().min(0).max(6)).default([]), baseVersion: z.number().int(), deadline: z.iso.date('目标日期必须是有效的 YYYY-MM-DD 日期').nullish(), estimates: z.record(z.string().uuid(), z.number().int().min(5).max(240)).optional() }).parse(base)
+          const p = z.object({ scope: z.array(key).min(1), dailyMinutes: z.number().int().min(1).max(720), days: z.number().int().min(1).max(90).optional(), targetDate: z.iso.date('目标日期必须是有效的 YYYY-MM-DD 日期').optional(), restDays: z.array(z.number().int().min(0).max(6)).default([]), baseVersion: z.number().int(), deadline: z.iso.date('目标日期必须是有效的 YYYY-MM-DD 日期').nullish(), estimates: z.record(z.string().uuid(), z.number().int().min(5).max(240)).optional() }).parse(base)
+          if (p.deadline && p.targetDate && p.deadline !== p.targetDate) fail('INPUT_INVALID','目标日期参数不一致')
+          p.deadline = p.deadline ?? p.targetDate ?? null
+          if (!p.days && !p.deadline) fail('INPUT_INVALID','请指定天数或目标日期')
           if (p.baseVersion !== (course.plan?.version ?? 0)) fail('VERSION_CONFLICT','计划已更新，请刷新后查看最新版本')
           if (p.deadline && p.deadline < localDate(this.now(), course.timezone)) fail('PAST_DEADLINE','目标日期已过，无法在该日期前完成；请调整目标日期后重新生成')
           if (p.deadline && Math.round((Date.parse(`${p.deadline}T12:00:00Z`) - Date.parse(`${localDate(this.now(), course.timezone)}T12:00:00Z`)) / 86400000) >= 366) fail('LIMIT_EXCEEDED','目标日期超出 366 天排程窗口，请缩短日期范围')
           const available = new Set(usableSources(course).map(s => s.id))
           p.scope = [...new Set(p.scope)]
           for (const pointId of p.scope) if (!course.points.some(k => k.id === pointId && k.sourceIds.some(s => available.has(s)))) fail('NO_USABLE_SOURCE','所选知识点缺少有效来源，请补充资料')
+          p.scope = course.points.filter(point => p.scope.includes(point.id)).map(point => point.id)
           const estimates = Object.fromEntries(Object.entries(p.estimates ?? {}).filter(([pointId]) => p.scope.includes(pointId)))
-          course.draft = buildPlan(course,{ scope: p.scope, dailyMinutes: p.dailyMinutes, days: p.days, restDays: p.restDays, deadline: p.deadline ?? null, estimates },this.now(),id)
+          course.draft = buildPlan(course,{ scope: p.scope, dailyMinutes: p.dailyMinutes, days: p.days ?? 7, restDays: p.restDays, deadline: p.deadline ?? null, estimates },this.now(),id)
           break
         }
         case 'confirmPlan': {
@@ -172,12 +188,26 @@ export class SylloraService {
           break
         }
         case 'rejectPlan': {
+          if (base['draftId'] !== undefined && base['draftId'] !== course.draft?.id) fail('VERSION_CONFLICT','另一页面更新了草案，请查看最新差异后决定')
           const proposed = course.draft?.tasks.filter(task => task.kind === 'review' && !course.plan?.tasks.some(current => current.id === task.id)) ?? []
           course.draft = null
           if (proposed.length) {
             const immediate = proposed.every(task => task.immediate)
             course.notice = { kind: immediate ? 'immediate' : 'due', pointIds: [...new Set(proposed.map(task => task.pointId))], text: immediate ? '即时巩固未排入日程，原复习时间保持不变。' : '有到期复习未排入日程。原计划保持不变。' }
           }
+          break
+        }
+        case 'adjustTaskMinutes': {
+          const a = z.object({ taskId: key, draftId: key, minutes: z.number().int().min(1).max(720) }).parse(base)
+          const draft = course.draft ?? fail('NOT_FOUND','没有待确认草案')
+          if (a.draftId !== draft.id) fail('VERSION_CONFLICT','另一页面更新了草案，请查看最新差异后调整')
+          const task = draft.tasks.find(t => t.id === a.taskId && t.status === 'todo') ?? fail('NOT_FOUND','任务不存在或已开始')
+          task.minutes = a.minutes
+          if (task.kind === 'learn') draft.estimates[task.pointId] = a.minutes
+          const placed = placeTasks(draft.tasks.filter(t => t.status !== 'todo'), draft.tasks.filter(t => t.status === 'todo'), draft, localDate(this.now(), course.timezone))
+          draft.tasks = placed.tasks; draft.overflow = placed.overflow
+          draft.feasible = !placed.overflow.length && !!draft.scope.length
+          draft.id = id()
           break
         }
         case 'start': {
@@ -212,10 +242,10 @@ export class SylloraService {
         case 'submit': {
           const p = z.object({ questionId: key, requestId: key, option: z.number().int().min(0).max(3) }).parse(base)
           const replay = course.attempts.find(a => a.id === p.requestId)
-          if (replay) { if (replay.questionId !== p.questionId || replay.option !== p.option) fail('IDEMPOTENCY_CONFLICT','同一提交编号不能用于不同答案'); return replay }
+          if (replay) { if (replay.questionId !== p.questionId || replay.option !== p.option) fail('IDEMPOTENCY_CONFLICT','同一提交编号不能用于不同答案'); return { ...replay, planAdjustment: null } }
           const q = course.questions.find(q => q.id === p.questionId && q.status === 'valid') ?? fail('QUESTION_INVALID','题目已失效，请换题')
           const previous = course.attempts.find(a => a.questionId === q.id)
-          if (previous) return previous
+          if (previous) return { ...previous, planAdjustment: null }
           const available = new Set(usableSources(course).map(s => s.id))
           if (q.sourceIds.some(s => !available.has(s))) fail('NO_USABLE_SOURCE','题目来源已失效')
           const attempt = { id: p.requestId, questionId: q.id, option: p.option, correct: p.option === q.answer, assisted: q.assisted || course.attempts.some(a => a.questionId === q.id), at: this.now(), sequence: course.attempts.length }
@@ -223,7 +253,18 @@ export class SylloraService {
           course.drafts.answers = course.drafts.answers.filter(answer => answer.questionId !== q.id)
           this.finishTask(course,q.taskId)
           recordNext(course, this.now(), id, 'grade')
-          return attempt
+          let planAdjustment: { ok: boolean; code: 'GENERATED' | 'SKIPPED_EXISTING_DRAFT' | 'FAILED'; message?: string; draftId: string | null } | null = null
+          if (!attempt.correct && !attempt.assisted && course.plan && course.scope.includes(q.pointId)) {
+            if (course.draft) planAdjustment = { ok: false, code: 'SKIPPED_EXISTING_DRAFT', draftId: course.draft.id, message: '已有待确认草案，本次未重复生成' }
+            else {
+              const proposed = proposeReviews(course, [q.pointId], this.now(), id)
+              const placed = placeTasks(proposed.tasks.filter(t => t.status !== 'todo'), proposed.tasks.filter(t => t.status === 'todo'), proposed, localDate(this.now(), course.timezone))
+              proposed.tasks = placed.tasks; proposed.overflow = placed.overflow; proposed.feasible = !placed.overflow.length
+              course.draft = proposed
+              planAdjustment = { ok: true, code: 'GENERATED', draftId: proposed.id }
+            }
+          }
+          return { ...attempt, planAdjustment }
         }
         case 'dispute': {
           const q = course.questions.find(q => q.id === base['questionId']) ?? fail('NOT_FOUND','题目不存在')

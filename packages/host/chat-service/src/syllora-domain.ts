@@ -10,7 +10,7 @@ export interface Evidence { state: '未评估' | '待验证' | '待加强' | '�
 export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; date: string; minutes: number; status: 'todo' | 'in_progress' | 'completed' | 'skipped'; explained: boolean; slots: number; cycle: number | null; immediate?: boolean }
 export interface OverflowEntry { pointId: string; reason: 'window-full' | 'task-too-large' }
 export interface PlanInput { scope: string[]; dailyMinutes: number; days: number; restDays: number[]; deadline?: string | null; estimates?: Record<string, number> }
-export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: OverflowEntry[]; dailyMinutes: number; feasible: boolean; deadline: string | null; restDays: number[]; estimates: Record<string, number> }
+export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: OverflowEntry[]; dailyMinutes: number; feasible: boolean; days: number; deadline: string | null; restDays: number[]; estimates: Record<string, number> }
 export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number }
 export interface AnswerDraft { questionId: string; option: number }
 export interface Drafts { prompt: string; answers: AnswerDraft[] }
@@ -53,6 +53,10 @@ export function normalizeCourse(course: Course) {
 
 function normalizePlan(plan: Plan | null): Plan | null {
   if (!plan) return plan
+  if (!Number.isInteger(plan.days) || plan.days < 1) {
+    const dates = plan.tasks.map(task => task.date).sort()
+    plan.days = dates.length ? Math.max(1, Math.round((Date.parse(`${dates.at(-1)}T12:00:00Z`) - Date.parse(`${dates[0]}T12:00:00Z`)) / 86400000) + 1) : 7
+  }
   if (plan.deadline === undefined) plan.deadline = null
   if (!Array.isArray(plan.restDays)) plan.restDays = []
   if (!plan.estimates || typeof plan.estimates !== 'object' || Array.isArray(plan.estimates)) plan.estimates = {}
@@ -112,31 +116,27 @@ export function addDate(day: string, days: number): string {
   return new Date(Date.parse(`${day}T12:00:00Z`) + days * 24 * HOUR).toISOString().slice(0, 10)
 }
 
-export function buildPlan(course: Course, input: PlanInput, now: number, id: () => string): Plan {
-  const today = localDate(now, course.timezone)
-  // A deadline pins the window to its inclusive end in the course timezone; without one the rolling window applies.
+export function planWindowDays(input: Pick<PlanInput, 'days' | 'deadline'>, today: string): number {
   let windowDays = input.days
   if (input.deadline) windowDays = Math.round((Date.parse(`${input.deadline}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000) + 1
-  windowDays = Math.max(1, Math.min(windowDays, 366))
-  const preserved = course.plan?.tasks.filter(t => t.status === 'completed' || t.status === 'in_progress' || t.status === 'skipped') ?? []
-  const tasks = structuredClone(preserved)
-  // Future todo tasks keep their identity across regenerations so diffs show moves instead of remove+add.
-  const reusable = new Map<string, string>()
-  for (const task of course.plan?.tasks ?? []) if (task.status === 'todo') reusable.set(`${task.kind}:${task.pointId}:${task.cycle ?? ''}`, task.id)
-  const pending: Task[] = []
-  for (const pointId of input.scope) {
-    const e = evidence(course, pointId)
-    if (e.dueAt !== null && e.dueAt <= now && !tasks.some(t => t.pointId === pointId && t.kind === 'review' && t.cycle === e.dueAt)) {
-      pending.push({ id: reusable.get(`review:${pointId}:${e.dueAt}`) ?? id(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: e.dueAt })
+  return Math.max(0, Math.min(windowDays, 366))
+}
+
+export function placeTasks(base: Task[], pending: Task[], input: Pick<PlanInput, 'dailyMinutes' | 'days' | 'restDays' | 'deadline'>, today: string): { tasks: Task[]; overflow: OverflowEntry[] } {
+  const tasks = structuredClone(base)
+  const unplaced: Task[] = []
+  const overflow: OverflowEntry[] = []
+  const windowDays = planWindowDays(input, today)
+  for (const day of new Set(base.filter(task => task.date >= today && task.status !== 'skipped').map(task => task.date))) {
+    const fixed = base.filter(task => task.date === day && task.status !== 'skipped')
+    if (fixed.reduce((sum, task) => sum + task.minutes, 0) > input.dailyMinutes) {
+      for (const task of fixed) overflow.push({ pointId: task.pointId, reason: task.minutes > input.dailyMinutes ? 'task-too-large' : 'window-full' })
     }
   }
-  pending.sort((a,b) => (a.cycle ?? 0) - (b.cycle ?? 0))
-  for (const pointId of input.scope) {
-    if (!tasks.some(t => t.pointId === pointId && t.kind === 'learn')) pending.push({ id: reusable.get(`learn:${pointId}:`) ?? id(), pointId, kind: 'learn', date: today, minutes: input.estimates?.[pointId] ?? 20, status: 'todo', explained: false, slots: 2, cycle: null })
-  }
-  const overflow: OverflowEntry[] = []
   for (const task of pending) {
-    if (task.minutes > input.dailyMinutes) { overflow.push({ pointId: task.pointId, reason: 'task-too-large' }); continue }
+    if (task.minutes > input.dailyMinutes) {
+      overflow.push({ pointId: task.pointId, reason: 'task-too-large' }); unplaced.push({ ...task }); continue
+    }
     let placed = false
     for (let offset = 0; offset < windowDays; offset++) {
       const day = addDate(today, offset)
@@ -144,9 +144,37 @@ export function buildPlan(course: Course, input: PlanInput, now: number, id: () 
       const used = tasks.filter(t => t.date === day && t.status !== 'skipped').reduce((n,t) => n + t.minutes, 0)
       if (used + task.minutes <= input.dailyMinutes) { tasks.push({ ...task, date: day }); placed = true; break }
     }
-    if (!placed) overflow.push({ pointId: task.pointId, reason: 'window-full' })
+    // Keep unscheduled tasks editable so lowering their minutes can repair an infeasible draft.
+    if (!placed) { overflow.push({ pointId: task.pointId, reason: 'window-full' }); unplaced.push({ ...task }) }
   }
-  return { id: id(), version: (course.plan?.version ?? 0) + 1, baseVersion: course.plan?.version ?? 0, scope: input.scope, tasks, overflow, dailyMinutes: input.dailyMinutes, feasible: !overflow.length && !!input.scope.length, deadline: input.deadline ?? null, restDays: input.restDays, estimates: input.estimates ?? {} }
+  return { tasks: [...tasks, ...unplaced], overflow }
+}
+
+export function buildPlan(course: Course, input: PlanInput, now: number, id: () => string): Plan {
+  const today = localDate(now, course.timezone)
+  const preserved = course.plan?.tasks.filter(t => t.status === 'completed' || t.status === 'in_progress' || t.status === 'skipped') ?? []
+  const tasks = structuredClone(preserved)
+  // Future todo tasks keep their identity across regenerations so diffs show moves instead of remove+add.
+  const reusable = new Map<string, string>()
+  const todoMinutes = new Map<string, number>()
+  for (const task of course.plan?.tasks ?? []) if (task.status === 'todo') {
+    const key = `${task.kind}:${task.pointId}:${task.cycle ?? ''}`
+    reusable.set(key, task.id); todoMinutes.set(key, task.minutes)
+  }
+  const pending: Task[] = []
+  for (const pointId of input.scope) {
+    const e = evidence(course, pointId)
+    if (e.dueAt !== null && e.dueAt <= now && !tasks.some(t => t.pointId === pointId && t.kind === 'review' && t.cycle === e.dueAt)) {
+      pending.push({ id: reusable.get(`review:${pointId}:${e.dueAt}`) ?? id(), pointId, kind: 'review', date: today, minutes: todoMinutes.get(`review:${pointId}:${e.dueAt}`) ?? 10, status: 'todo', explained: true, slots: 1, cycle: e.dueAt })
+    }
+  }
+  pending.sort((a,b) => (a.cycle ?? 0) - (b.cycle ?? 0))
+  for (const pointId of input.scope) {
+    if (!tasks.some(t => t.pointId === pointId && t.kind === 'learn')) pending.push({ id: reusable.get(`learn:${pointId}:`) ?? id(), pointId, kind: 'learn', date: today, minutes: input.estimates?.[pointId] ?? todoMinutes.get(`learn:${pointId}:`) ?? 20, status: 'todo', explained: false, slots: 2, cycle: null })
+  }
+  const placed = placeTasks(tasks, pending, input, today)
+  const estimates = Object.fromEntries(placed.tasks.filter(task => task.kind === 'learn' && input.scope.includes(task.pointId)).map(task => [task.pointId, task.minutes]))
+  return { id: id(), version: (course.plan?.version ?? 0) + 1, baseVersion: course.plan?.version ?? 0, scope: input.scope, tasks: placed.tasks, overflow: placed.overflow, dailyMinutes: input.dailyMinutes, feasible: !placed.overflow.length && !!input.scope.length, days: input.days, deadline: input.deadline ?? null, restDays: input.restDays, estimates }
 }
 
 function evidenceSnap(course: Course, pointId: string | null) {
@@ -250,7 +278,7 @@ export function proposeReviews(course: Course, pointIds: string[], now: number, 
     if (used + 10 > base.dailyMinutes) overflow.push({ pointId, reason: base.dailyMinutes < 10 ? 'task-too-large' : 'window-full' })
     tasks.push({ id: makeId(), pointId, kind: 'review', date: today, minutes: 10, status: 'todo', explained: true, slots: 1, cycle: current.dueAt, immediate: current.dueAt === null || current.dueAt > now })
   }
-  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0, deadline: base.deadline, restDays: base.restDays, estimates: base.estimates }
+  return { id: makeId(), version: base.version + 1, baseVersion: base.version, scope: [...base.scope], tasks, overflow, dailyMinutes: base.dailyMinutes, feasible: overflow.length === 0 && pointIds.length > 0, days: base.days, deadline: base.deadline, restDays: base.restDays, estimates: base.estimates }
 }
 
 export function restoreNotice(course: Course, now: number): ScheduleNotice | null {
@@ -297,6 +325,27 @@ export function nextAction(course: Course, now: number): { text: string; pointId
   return { text: current.text, pointId: current.pointId, taskId: current.taskId }
 }
 
+export interface DetailedPlanDiff { added: Task[]; removed: Task[]; moved: Task[]; changed: { from: Task; to: Task }[]; unchanged: Task[] }
+
+export function diffPlan(oldPlan: Plan | null, newDraft: Plan): DetailedPlanDiff {
+  const added: Task[] = []; const removed: Task[] = []; const moved: Task[] = []; const changed: { from: Task; to: Task }[] = []; const unchanged: Task[] = []
+  if (!oldPlan) return { added: newDraft.tasks, removed: [], moved: [], changed: [], unchanged: [] }
+  const oldById = new Map(oldPlan.tasks.map(t => [t.id, t]))
+  const oldUnfinished = new Set(oldPlan.tasks.filter(t => t.status === 'todo').map(t => t.id))
+  const used = new Set<string>()
+  for (const t of newDraft.tasks) {
+    const matched = oldById.get(t.id)
+    if (!matched) { added.push(t); continue }
+    used.add(matched.id)
+    if (!oldUnfinished.has(matched.id)) { unchanged.push(t); continue }
+    if (matched.date !== t.date) { moved.push(t); continue }
+    if (matched.minutes !== t.minutes) { changed.push({ from: matched, to: t }); continue }
+    unchanged.push(t)
+  }
+  for (const [id, t] of oldById) if (oldUnfinished.has(id) && !used.has(id)) removed.push(t)
+  return { added, removed, moved, changed, unchanged }
+}
+
 export function publicCourse(course: Course, now: number) {
   normalizeCourse(course)
   const distribution = Object.fromEntries(EVIDENCE_STATES.map(state => [state, course.scope.filter(id => evidence(course, id).state === state).length])) as Record<(typeof EVIDENCE_STATES)[number], number>
@@ -313,6 +362,7 @@ export function publicCourse(course: Course, now: number) {
     evidence: Object.fromEntries(course.points.map(point => [point.id, evidence(course, point.id)])),
     next: stored ?? { ...recommend(course, now), id: '', at: now, trigger: 'init' as const },
     draftDiff: course.draft ? planDiff(course.plan, course.draft) : null,
+    detailedDraftDiff: course.draft ? diffPlan(course.plan, course.draft) : null,
     progress: {
       completed,
       total,

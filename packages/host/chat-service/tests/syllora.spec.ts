@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SylloraService } from '../src/syllora.ts'
-import { buildPlan, duePointIds, evidence, HOUR, noteChange, planDiff, proposeReviews, publicCourse, recommend, recordNext, refreshNotice, restoreNotice, type Course, type Question } from '../src/syllora-domain.ts'
+import { buildPlan, diffPlan, duePointIds, evidence, HOUR, noteChange, planDiff, proposeReviews, publicCourse, recommend, recordNext, refreshNotice, restoreNotice, type Course, type Plan, type Question } from '../src/syllora-domain.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 import type { StructuredCallClient } from '@syllora/course-builder'
 
@@ -81,7 +81,7 @@ describe('Syllora plan deadlines and estimates',()=>{
     const c=fixture();const utc=structuredClone(c);utc.timezone='UTC'
     const now=Date.UTC(2026,9,1,23,30) // 2026-10-01 23:30 UTC is already 2026-10-02 in Asia/Shanghai
     const shanghai=buildPlan(c,{scope:['p'],dailyMinutes:40,days:7,restDays:[],deadline:'2026-10-03'},now,randomUUID)
-    expect(shanghai.deadline).toBe('2026-10-03');expect(shanghai.tasks[0]!.date).toBe('2026-10-02');expect(shanghai.restDays).toEqual([]);expect(shanghai.estimates).toEqual({})
+    expect(shanghai.deadline).toBe('2026-10-03');expect(shanghai.tasks[0]!.date).toBe('2026-10-02');expect(shanghai.restDays).toEqual([]);expect(shanghai.estimates).toEqual({p:20})
     const utcPlan=buildPlan(utc,{scope:['p'],dailyMinutes:40,days:7,restDays:[],deadline:'2026-10-03'},now,randomUUID)
     expect(utcPlan.tasks[0]!.date).toBe('2026-10-01')
     const sameDay=buildPlan(c,{scope:['p'],dailyMinutes:40,days:7,restDays:[],deadline:'2026-10-02'},now,randomUUID)
@@ -91,6 +91,15 @@ describe('Syllora plan deadlines and estimates',()=>{
     const c=fixture();const now=Date.UTC(2026,9,1)
     const allRest=buildPlan(c,{scope:['p'],dailyMinutes:40,days:7,restDays:[0,1,2,3,4,5,6]},now,randomUUID)
     expect(allRest.feasible).toBe(false);expect(allRest.overflow).toEqual([{pointId:'p',reason:'window-full'}])
+  })
+  it('counts preserved activities against the current daily budget without rewriting history',()=>{
+    const c=fixture();const now=Date.UTC(2026,9,1)
+    c.plan=buildPlan(c,{scope:['p'],dailyMinutes:40,days:7,restDays:[],estimates:{p:35}},now,randomUUID)
+    c.plan.tasks[0]!.status='in_progress'
+    const draft=buildPlan(c,{scope:['p'],dailyMinutes:20,days:7,restDays:[]},now,randomUUID)
+    expect(draft.feasible).toBe(false);expect(draft.overflow).toEqual([{pointId:'p',reason:'task-too-large'}]);expect(draft.tasks).toEqual(c.plan.tasks)
+    c.plan.tasks[0]!.status='completed';c.plan.tasks[0]!.date='2026-09-30'
+    expect(buildPlan(c,{scope:['p'],dailyMinutes:20,days:7,restDays:[]},now,randomUUID).feasible).toBe(true)
   })
   it('applies per-point estimates without changing slot counts',()=>{
     const c=fixture();const now=Date.UTC(2026,9,1)
@@ -241,5 +250,150 @@ describe('Syllora persistence and boundaries',()=>{
     const restored=new SylloraService(root);const state=await restored.handle('state') as any;
     const plan=state.courses.find((c:any)=>c.id===courseId).plan;
     expect(plan.overflow).toEqual([{pointId:'p',reason:'window-full'}]);expect(plan.deadline).toBeNull();expect(plan.restDays).toEqual([]);expect(plan.estimates).toEqual({});
+  })
+})
+
+describe('Syllora new features',()=>{
+  // Helper: create a course with an outline point (matching existing test pattern)
+  async function createWithPoint():Promise<{svc:SylloraService;courseId:string}>{
+    let n=0;const client:StructuredCallClient={async *stream(options){
+      const serialized=JSON.stringify(options.messages);const match=serialized.match(/\\"id\\":\\"([a-f0-9-]+)\\"/);const sourceId=match?.[1];
+      const value=n++===0?{points:[{chapter:'矩阵',name:'单位矩阵',sourceIds:[sourceId]}]}:{valid:true,reason:'ok'};
+      yield {type:'text-delta',text:JSON.stringify(value)};
+    }};
+    const {svc}=await service(client);const courseId=await create(svc);await svc.handle('preferences',{consent:true,callLimit:10});
+    await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'});
+    const settled=await waitJob(svc);
+    const job=settled.jobs.find((j:any)=>j.courseId===courseId);
+    if(job?.state!=='succeeded')throw new Error(`outline gen failed: ${job?.message}`);
+    return {svc,courseId}
+  }
+  describe('adjustTaskMinutes',()=>{
+    it('preserves adjusted minutes and invalidates stale draft confirmations',async()=>{
+      const {svc,courseId}=await createWithPoint();
+      const state=await svc.handle('state') as any;const pid=state.courses[0].points[0].id;
+      await svc.handle('plan',{courseId,scope:[pid],dailyMinutes:40,days:7,restDays:[],baseVersion:0});
+      const s1=await svc.handle('state') as any;const draft=s1.courses[0].draft;const taskId=draft.tasks.find((t:any)=>t.status==='todo').id;const oldId=draft.id;const oldVersion=draft.version;
+      await svc.handle('adjustTaskMinutes',{courseId,taskId,draftId:oldId,minutes:35});
+      const s2=await svc.handle('state') as any;const d2=s2.courses[0].draft;
+      const updated=d2.tasks.find((t:any)=>t.id===taskId);expect(updated.minutes).toBe(35);
+      expect(d2.id).not.toBe(oldId);expect(d2.version).toBe(oldVersion);
+      expect(updated.slots).toBe(2);expect(d2.estimates[pid]).toBe(35);
+      await expect(svc.handle('confirmPlan',{courseId,baseVersion:0,draftId:oldId})).rejects.toThrow('另一页面更新了草案');
+      await expect(svc.handle('adjustTaskMinutes',{courseId,draftId:oldId,taskId,minutes:20})).rejects.toThrow('另一页面更新了草案');
+      await svc.handle('confirmPlan',{courseId,baseVersion:0,draftId:d2.id});
+      await svc.handle('plan',{courseId,scope:[pid],dailyMinutes:40,days:7,baseVersion:1});
+      const regenerated=(await svc.handle('state') as any).courses[0].draft;
+      expect(regenerated.tasks[0].id).toBe(taskId);expect(regenerated.tasks[0].minutes).toBe(35);
+
+    })
+    it('recomputes overflow when minutes exceed the daily budget',async()=>{
+      const {svc,courseId}=await createWithPoint();
+      const pid=(await svc.handle('state') as any).courses[0].points[0].id;
+      await svc.handle('plan',{courseId,scope:[pid],dailyMinutes:40,days:7,restDays:[],baseVersion:0});
+      let s=await svc.handle('state') as any;
+      expect(s.courses[0].draft.overflow).toHaveLength(0);
+      expect(s.courses[0].draft.feasible).toBe(true);
+      const taskId=s.courses[0].draft.tasks.find((t:any)=>t.status==='todo').id;
+      await svc.handle('adjustTaskMinutes',{courseId,taskId,draftId:s.courses[0].draft.id,minutes:50});
+      s=await svc.handle('state') as any;
+      expect(s.courses[0].draft.overflow.length).toBeGreaterThan(0);
+      expect(s.courses[0].draft.feasible).toBe(false);
+      expect(s.courses[0].draft.tasks.find((t:any)=>t.id===taskId).minutes).toBe(50);
+      await svc.handle('adjustTaskMinutes',{courseId,taskId,draftId:s.courses[0].draft.id,minutes:25});
+      s=await svc.handle('state') as any;
+      expect(s.courses[0].draft.feasible).toBe(true);expect(s.courses[0].draft.tasks.find((t:any)=>t.id===taskId).minutes).toBe(25);
+      expect(s.courses[0].draft.overflow).toEqual([]);
+
+    })
+  })
+  describe('wrong-answer planAdjustment',()=>{
+    async function seeded() {
+      const root=await mkdtemp(join(tmpdir(),'syllora-test-'));roots.push(root);
+      const now=Date.UTC(2026,9,1);const course=fixture();course.id=randomUUID();
+      course.points[0]!.id=randomUUID();course.scope=[course.points[0]!.id];
+      course.plan=buildPlan(course,{scope:course.scope,dailyMinutes:40,days:7,restDays:[0,6],deadline:'2026-10-07',estimates:{[course.scope[0]!]:35}},now,randomUUID);
+      course.plan.tasks[0]!.status='in_progress';course.plan.tasks[0]!.explained=true;
+      const q=addAttempt(course,now,true);q.pointId=course.scope[0]!;q.taskId=course.plan.tasks[0]!.id;course.attempts=[];
+      await writeFile(join(root,'syllora.json'),JSON.stringify({version:1,consent:false,callLimit:0,calls:0,courses:[course],jobs:[]}));
+      const svc=new SylloraService(root,{now:()=>now});
+      return {svc,course,q,root,now}
+    }
+    it('adds an immediate strengthening task without changing the active plan or schedule inputs',async()=>{
+      const {svc,course,q}=await seeded();const requestId=randomUUID();
+      const result=await svc.handle('submit',{courseId:course.id,questionId:q.id,requestId,option:1}) as any;
+      expect(result.planAdjustment.code).toBe('GENERATED');
+      const current=(await svc.handle('state') as any).courses[0];
+      expect(current.plan).toEqual(course.plan);expect(current.draft.deadline).toBe('2026-10-07');expect(current.draft.restDays).toEqual([0,6]);
+      expect(current.draft.tasks.find((t:any)=>t.id===course.plan!.tasks[0]!.id)).toEqual(course.plan!.tasks[0]);
+      expect(current.draft.tasks.some((t:any)=>t.kind==='review'&&t.immediate&&t.pointId===q.pointId)).toBe(true);
+      expect(current.draft.feasible).toBe(true);expect(current.draft.tasks.find((t:any)=>t.kind==='review').date).toBe('2026-10-02');
+      expect(current.evidence[q.pointId].state).toBe('待加强');
+      expect((await svc.handle('submit',{courseId:course.id,questionId:q.id,requestId,option:1}) as any).planAdjustment).toBeNull();
+      expect((await svc.handle('state') as any).courses[0].draft.id).toBe(current.draft.id);
+    })
+    it('keeps an existing draft and skips assisted submissions',async()=>{
+      const {svc,course,q,root,now}=await seeded();
+      await svc.handle('plan',{courseId:course.id,scope:course.scope,dailyMinutes:40,days:7,baseVersion:1});
+      const draft=(await svc.handle('state') as any).courses[0].draft;
+      const result=await svc.handle('submit',{courseId:course.id,questionId:q.id,requestId:randomUUID(),option:1}) as any;
+      expect(result.planAdjustment.code).toBe('SKIPPED_EXISTING_DRAFT');expect((await svc.handle('state') as any).courses[0].draft).toEqual(draft);
+      const disk=JSON.parse(await readFile(join(root,'syllora.json'),'utf8'));disk.courses[0].attempts=[];disk.courses[0].draft=null;disk.courses[0].questions[0].assisted=true;
+      await writeFile(join(root,'syllora.json'),JSON.stringify(disk));
+      const assisted=new SylloraService(root,{now:()=>now});
+      expect((await assisted.handle('submit',{courseId:course.id,questionId:q.id,requestId:randomUUID(),option:1}) as any).planAdjustment).toBeNull();
+      expect((await assisted.handle('state') as any).courses[0].draft).toBeNull();
+    })
+  })
+  describe('diffPlan pure function',()=>{
+    const id=()=>randomUUID();const now=Date.UTC(2026,9,1);
+    const makeCourse=(overrides?:Partial<Course>):Course=>({id:'c',name:'代数',timezone:'Asia/Shanghai',archived:false,createdAt:0,actions:[],drafts:{prompt:'',answers:[]},changes:[],notice:null,
+      materials:[{id:'m',name:'讲义.txt',fingerprint:'hash',status:'ready',accepted:true,pages:0,sources:[{id:'s',materialId:'m',anchor:'段落1',text:'单位矩阵的主对角线元素为一，其余元素为零。'}]}],
+      points:[{id:'a',name:'单位矩阵',chapter:'矩阵',sourceIds:['s']},{id:'b',name:'转置',chapter:'矩阵',sourceIds:['s']}],scope:['a','b'],
+      plan:null,draft:null,questions:[],attempts:[],messages:[],...overrides})
+    it('returns all tasks as added when oldPlan is null',()=>{
+      const c=makeCourse();c.plan=buildPlan(c,{scope:['a','b'],dailyMinutes:40,days:7,restDays:[]},now,id);
+      const result=diffPlan(null,c.plan);expect(result.added.length).toBeGreaterThan(0);expect(result.removed).toHaveLength(0);expect(result.moved).toHaveLength(0);
+    })
+    it('same plan compared to itself yields only unchanged',()=>{
+      const c=makeCourse();c.plan=buildPlan(c,{scope:['a'],dailyMinutes:40,days:7,restDays:[]},now,id);
+      const result=diffPlan(c.plan,c.plan);expect(result.unchanged.length).toBeGreaterThan(0);expect(result.added).toHaveLength(0);expect(result.removed).toHaveLength(0);
+    })
+    it('date change results in moved tasks',()=>{
+      const c=makeCourse();c.plan=buildPlan(c,{scope:['a'],dailyMinutes:40,days:7,restDays:[]},now,id);
+      const oldPlan=JSON.parse(JSON.stringify(c.plan)) as Plan;
+      c.plan.tasks.forEach(t=>{if(t.status==='todo')t.date='2026-10-10'});
+      const result=diffPlan(oldPlan,c.plan);expect(result.added).toHaveLength(0);expect(result.moved.length).toBeGreaterThan(0);
+    })
+    it('removed todo task appears in removed',()=>{
+      const c=makeCourse();c.plan=buildPlan(c,{scope:['a'],dailyMinutes:40,days:1,restDays:[]},now,id);
+      const oldPlan=JSON.parse(JSON.stringify(c.plan)) as Plan;
+      c.plan.tasks=c.plan.tasks.filter(t=>t.status!=='todo');
+      const result=diffPlan(oldPlan,c.plan);expect(result.removed.length).toBeGreaterThan(0);
+    })
+    it('different cycle review tasks are not conflated',()=>{
+      const c=makeCourse();
+      const t1={id:'r1',pointId:'a',kind:'review' as const,date:'2026-10-02',minutes:10,status:'todo' as const,explained:true,slots:1,cycle:1000};
+      const t2={id:'r2',pointId:'a',kind:'review' as const,date:'2026-10-03',minutes:10,status:'todo' as const,explained:true,slots:1,cycle:2000};
+      c.plan={id:'p1',version:1,baseVersion:0,scope:['a'],tasks:[t1,t2],overflow:[],dailyMinutes:40,feasible:true,days:7,restDays:[],deadline:null,estimates:{}};
+      const newDraft={id:'p2',version:2,baseVersion:1,scope:['a'],tasks:[t1,t2],overflow:[],dailyMinutes:40,feasible:true,days:7,restDays:[],deadline:null,estimates:{}};
+      const result=diffPlan(c.plan,newDraft);expect(result.moved).toHaveLength(0);expect(result.unchanged.length).toBe(2);
+    })
+  })
+  describe('reorderPoints validation',()=>{
+    it('rejects incomplete, duplicate or foreign point id arrays',async()=>{
+      const {svc,courseId}=await createWithPoint();
+      const state=await svc.handle('state') as any;const pid=state.courses[0].points[0].id;
+      await expect(svc.handle('reorderPoints',{courseId,pointIds:[pid]})).resolves.toEqual({saved:true});
+      await expect(svc.handle('reorderPoints',{courseId,pointIds:[pid,pid]})).rejects.toThrow('知识点顺序无效');
+      await expect(svc.handle('reorderPoints',{courseId,pointIds:['00000000-0000-0000-0000-000000000000']})).rejects.toThrow('知识点顺序无效');
+    })
+  })
+  describe('targetDate timezone-aware',()=>{
+    it('rejects dates beyond the shared deadline limit',async()=>{
+      const {svc,courseId}=await createWithPoint();
+      const state=await svc.handle('state') as any;const pid=state.courses[0].points[0].id;
+      await expect(svc.handle('plan',{courseId,scope:[pid],dailyMinutes:40,targetDate:'2030-01-01',restDays:[],baseVersion:0})).rejects.toThrow('366 天');
+    })
   })
 })
