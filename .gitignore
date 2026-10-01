@@ -41,3 +41,6 @@ apps/desktop/dist/
 apps/desktop/dist*/
 apps/desktop/host-runtime/node_modules/
 apps/desktop/host-runtime/package-lock.json
+
+# Claude Code 工具目录（worktree 等，勿提交）
+.claude/
