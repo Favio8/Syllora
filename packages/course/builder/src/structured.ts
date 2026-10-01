@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 import type { GenerateOptions, StreamChunk, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { CallId, HarnessError } from '@deepseek-ai/dsh-llm'
 
 export interface StructuredCallClient {
   stream(options: GenerateOptions): AsyncIterable<StreamChunk>
@@ -101,6 +101,7 @@ export async function structuredCall<S extends z.ZodType>(
   }
   const tools = [...(options.tools ?? []), toolSchema]
   let feedback = ''
+  let lastError: unknown
   for (let attempt = 0; attempt < maxRetries; attempt += 1) {
     if (attempt > 0) await retryBackoffDelay(attempt - 1)
     const system = `${options.system ?? ''}\n\n只允许调用 ${EMIT_TOOL} 工具输出结果，不要输出解释文字。${feedback !== '' ? `\n\n上一次失败原因：${feedback}` : ''}`
@@ -108,16 +109,21 @@ export async function structuredCall<S extends z.ZodType>(
       const raw = await callOnce(client, { ...options, system, tools })
       return schema.parse(raw) as z.infer<S>
     } catch (error) {
+      lastError = error
       feedback = error instanceof Error ? error.message : String(error)
+      if (options.signal?.aborted) { lastError = options.signal.reason instanceof Error ? options.signal.reason : error; break }
     }
   }
-  throw new Error(`结构化输出重试 ${maxRetries} 次仍失败：${feedback}`)
+  throw new Error(`结构化输出尝试 ${maxRetries} 次仍失败：${feedback}`, { cause:lastError })
 }
 
 async function callOnce(client: StructuredCallClient, options: GenerateOptions): Promise<unknown> {
+  options.signal?.throwIfAborted()
   const calls = new Map<number, { id: string; name: string; argumentsDelta: string }>()
   const textParts: string[] = []
   for await (const chunk of client.stream(options)) {
+    if (chunk.type === 'finish' && (chunk.reason.kind === 'error' || chunk.reason.kind === 'aborted')) throw new HarnessError('模型调用未完成', chunk.reason.failure.code)
+    if (chunk.type === 'finish' && chunk.reason.kind === 'max-tokens') throw new HarnessError('模型输出已截断', 'OUTPUT_TRUNCATED')
     if (chunk.type === 'text-delta') textParts.push(chunk.text)
     else if (chunk.type === 'reasoning-delta') textParts.push(chunk.text)
     else if (chunk.type === 'tool-call-delta') {
@@ -126,8 +132,12 @@ async function callOnce(client: StructuredCallClient, options: GenerateOptions):
       if (chunk.name !== undefined) existing.name = chunk.name
       existing.argumentsDelta += chunk.argumentsDelta
       calls.set(chunk.index, existing)
+    } else if (chunk.type === 'block-end' && chunk.block.type === 'tool-call') {
+      // Anthropic can deliver complete input with no incremental argument deltas.
+      calls.set(chunk.index, { id:String(chunk.block.id), name:chunk.block.name, argumentsDelta:chunk.block.arguments })
     }
   }
+  options.signal?.throwIfAborted()
   for (const call of [...calls.values()].sort((a, b) => a.id.localeCompare(b.id))) {
     if (call.name === EMIT_TOOL) {
       return extractJsonObject(call.argumentsDelta)

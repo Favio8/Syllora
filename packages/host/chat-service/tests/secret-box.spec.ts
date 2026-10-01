@@ -14,6 +14,11 @@ import { sealCredentials, unsealCredentials } from '../src/secret-box.ts'
 
 const home = await mkdtemp(join(tmpdir(), 'syllora-secretbox-'))
 
+/** Fixture values standing in for stored secrets; none carries a provider's
+ *  key shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+const PLACEHOLDER_ALT = 'placeholder-value-alt'
+
 afterAll(() => rm(home, { recursive: true, force: true }))
 
 describe('unsealCredentials 密封判定', () => {
@@ -28,7 +33,7 @@ describe('unsealCredentials 密封判定', () => {
   it('密封信封往返：seal → unseal 恢复原始键值', async () => {
     process.env.SYLLORA_HOME = home
     try {
-      const credentials = { deepseek: 'sk-test-abc123', openai: 'sk-xyz' }
+      const credentials = { deepseek: PLACEHOLDER, openai: PLACEHOLDER_ALT }
       const sealed = await sealCredentials(credentials)
       const result = await unsealCredentials(sealed)
       expect(result.wasPlaintext).toBe(false)

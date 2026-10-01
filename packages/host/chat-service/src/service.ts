@@ -185,7 +185,7 @@ export async function sessionModels(workspaceRoot: string, courseId: string, ses
     if (provider.models.length > 0 || provider.baseUrl === null || provider.baseUrl === '' || !provider.apiKeyConfigured) return { provider, models: [] as SessionModelEntry[] }
     try {
       const config = await loadChatConfig(workspaceRoot, { providerId: provider.id })
-      const models = await discoverModels({ baseUrl: provider.baseUrl, apiKey: config.apiKey, apiKeyEnv: provider.apiKeyEnv })
+      const models = await discoverModels({ baseUrl: provider.baseUrl, apiKey: config.apiKey, apiKeyEnv: provider.apiKeyEnv, protocol: provider.protocol })
       return { provider, models: models.filter(model => model.id !== '' && !deprecatedModel(model.id)).map(model => ({ id: model.id, name: model.name || model.id })) }
     } catch (error) {
       failures.push({ id: provider.id, name: provider.name || provider.id, message: error instanceof Error ? error.message : String(error) })

@@ -149,11 +149,19 @@ export interface HostServices {
     get(): Promise<Record<string, unknown>>
     update(partial: Record<string, unknown>): Promise<Record<string, unknown>>
     catalog(): Promise<Array<Record<string, unknown>>>
-    discover(input: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null }): Promise<Array<Record<string, unknown>>>
+    discover(input: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; protocol?: 'openai' | 'anthropic' }): Promise<Array<Record<string, unknown>>>
     save(input: Record<string, unknown>): Promise<Record<string, unknown>>
     remove(providerId: string): Promise<Record<string, unknown>>
     activate(providerId: string): Promise<Record<string, unknown>>
     credential(providerId: string, apiKey: string): Promise<Record<string, unknown>>
+  }
+  /**
+   * Host-side diagnostics. Logs live under the host home (`logs/host-*.log`),
+   * which only the host process can read — the renderer has no filesystem
+   * access, so the content must come through here. New-to-old, size-capped.
+   */
+  readonly diagnosticsService: {
+    logs(): Promise<{ files: Array<{ name: string; bytes: number; text: string; truncated: boolean }> }>
   }
   /** Course build/learning surface over the active workspace. */
   readonly courseService: {
@@ -550,10 +558,16 @@ const handlers = {
       return ok({ catalog: await services.settingsService.catalog() })
     },
   },
+  'diagnostics.logs': {
+    payload: null,
+    async run(_payload: void, services: HostServices): Promise<RpcResponse<{ files: Array<{ name: string; bytes: number; text: string; truncated: boolean }> }>> {
+      return ok(await services.diagnosticsService.logs())
+    },
+  },
   'settings.discoverModels': {
-    payload: z.object({ baseUrl: z.string().min(1), apiKey: z.string().nullish(), apiKeyEnv: z.string().nullish(), providerId: z.string().nullish() }),
+    payload: z.object({ baseUrl: z.string().min(1), apiKey: z.string().nullish(), apiKeyEnv: z.string().nullish(), providerId: z.string().nullish(), protocol: z.enum(['openai', 'anthropic']).optional() }),
     async run(
-      payload: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null },
+      payload: { baseUrl: string; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; protocol?: 'openai' | 'anthropic' },
       services: HostServices,
     ): Promise<RpcResponse<{ models: Array<Record<string, unknown>> }>> {
       return ok({ models: await services.settingsService.discover(payload) })
@@ -566,6 +580,8 @@ const handlers = {
       name: z.string(),
       model: z.string(),
       baseUrl: z.string().nullish(),
+      // 协议：缺省（含旧前端不传）走 openai，向后兼容。
+      protocol: z.enum(['openai', 'anthropic']).optional(),
       // 加固1：数值范围（同 settings.update）。
       temperature: z.number().min(0).max(2).optional(),
       maxConcurrency: z.number().int().min(1).max(32).optional(),
@@ -777,6 +793,11 @@ export async function dispatch(
       || message.startsWith('不支持的内容类型')
       || message.startsWith('来源服务器未声明 Content-Type')
       || message.startsWith('抓取失败: HTTP')
+      // 设置落盘的前置守卫（bin.ts requireWorkspaceRootForSettings）。这类文案
+      // 只说明"缺一个已打开的工作区"，不含路径/密钥，且是用户唯一能据以自救的
+      // 信息——旧实现把它吞成"请求失败（详见宿主日志）"，桌面端用户既看不到
+      // 真因、也无从执行补救动作（Syllora 界面没有打开项目入口）。
+      || message.startsWith('请先在左栏添加/打开一个项目')
     ) {
       return err('invalid-request', message)
     }

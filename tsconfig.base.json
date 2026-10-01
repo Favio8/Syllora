@@ -27,6 +27,7 @@
     "noUnusedParameters": true,
     "types": ["node"],
     "paths": {
+      "@syllora/llm-anthropic": ["./packages/llm/llm-anthropic/src"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],

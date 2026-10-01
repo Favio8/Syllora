@@ -1,3 +1,4 @@
+import { fixtureLecture } from './syllora-fixture.ts'
 /** Issue #4 browser scenarios not covered by syllora-e2e.ts: stale polling, save failure, dual-page plan confirmation, legacy snapshot load, archive/restore. Uses the same clearly labelled local model fixture; no paid API calls. */
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -25,11 +26,13 @@ const mock=createServer((req,res)=>{
       const request=JSON.parse(body)
       const last=request.messages.at(-1).content
       const text=typeof last==='string'?last:last.map((p:{text?:string})=>p.text??'').join('')
-      const start=text.indexOf('[{"id":')
-      const sources=JSON.parse(text.slice(start))
+      const start=Math.max(text.lastIndexOf('\n所选资料（'),text.lastIndexOf('\n所选资料：'))
+      assert.ok(start>=0,'fixture source block header')
+      const sources=JSON.parse(text.slice(text.indexOf('\n',start+1)+1))
       const sourceId=(sources.find((s:{text:string})=>s.text.includes('主对角线'))??sources[0]).id
       let output:unknown
-      if(text.includes('从资料生成课程')) output={points:[{chapter:'矩阵与线性变换',name:'单位矩阵',sourceIds:[sourceId]}]}
+      if(text.includes('初始化整理课程讲义')) output=fixtureLecture(sources,sourceId)
+      else if(text.includes('从资料生成课程')) output={points:[{chapter:'矩阵与线性变换',name:'单位矩阵',sourceIds:[sourceId]}]}
       else if(text.includes('审查下面的题目')) output={valid:true,reason:'测试服务：单一标准答案'}
       else if(text.includes('生成一道四选一题')) {sequence++;output={stem:`练习 ${sequence}：单位矩阵的主对角线元素等于什么？`,options:['1','0','2','3'],answer:0,explanation:'依据本次导入讲义：主对角线为 1，其余元素为 0。',sourceIds:[sourceId],quote:'单位矩阵的主对角线元素为 1'}}
       else output={text:'单位矩阵的主对角线元素为 **1**，其余元素为 **0**。\n\n例如二阶单位矩阵保持二维向量不变。这是教学示例。',sourceIds:[sourceId],insufficient:false}
@@ -45,7 +48,7 @@ const address=mock.address() as {port:number}
 await saveProvider(data,{id:'syllora-test',name:'自动化测试服务',model:'syllora-test-fixture',baseUrl:`http://127.0.0.1:${address.port}/v1`})
 await setCredential(data,'syllora-test','test-only-not-a-real-secret')
 await activateProvider(data,'syllora-test')
-const startHost=()=>spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data},windowsHide:true,stdio:['ignore','pipe','pipe']})
+const startHost=()=>spawn(process.execPath,['--import','tsx','apps/cli/src/bin.ts','serve','--port','0'],{cwd:root,env:{...process.env,TSX_TSCONFIG_PATH:join(root,'tsconfig.base.json'),SYLLORA_HOME:home,SYLLORA_DATA_DIR:data,SYLLORA_SYNTHETIC_RUN:'1'},windowsHide:true,stdio:['ignore','pipe','pipe']})
 let host=startHost()
 let hostOutput='';host.stdout.on('data',b=>{hostOutput+=String(b)});host.stderr.on('data',b=>{hostOutput+=String(b)})
 let browser:any
@@ -61,19 +64,19 @@ const rpc=async(action:string,payload:Record<string,unknown>={})=>{let lastError
 const waitUntil=async(ok:()=>Promise<boolean>|boolean,timeout=30000)=>{const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await ok())return;await sleep(200)}throw new Error('waitUntil timeout')}
 try {
   // Bootstrap over the real HTTP envelope: course, material, outline, plan v1, one wrong answer.
-  await rpc('preferences',{consent:true,callLimit:20})
+  await rpc('preferences',{consent:true})
   const courseId=(await rpc('create',{name:'issue4 验证课程',requestId:uuid(),timezone:'Asia/Shanghai'})) as {id:string}
   await rpc('import',{courseId:courseId.id,name:'讲义.txt',text:'自有测试讲义：单位矩阵\n\n单位矩阵的主对角线元素为 1，其余元素为 0。单位矩阵与维度匹配的向量相乘，得到原向量。'})
   await rpc('generate',{courseId:courseId.id,kind:'outline',requestId:uuid()})
-  await waitUntil(async()=>((await rpcState()).courses[0].points as unknown[]).length>0)
-  let state=await rpcState();const pointId=state.courses[0].points[0].id
+  await waitUntil(async()=>((await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).points as unknown[]).length>0)
+  let state=await rpcState();const pointId=state.courses.find((c:{id:string})=>c.id===courseId.id).points[0].id
   await rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:0})
-  state=await rpcState();await rpc('confirmPlan',{courseId:courseId.id,baseVersion:0,draftId:state.courses[0].draft.id})
-  const taskId=(await rpcState()).courses[0].plan.tasks[0].id
+  state=await rpcState();await rpc('confirmPlan',{courseId:courseId.id,baseVersion:0,draftId:state.courses.find((c:{id:string})=>c.id===courseId.id).draft.id})
+  const taskId=(await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).plan.tasks[0].id
   await rpc('start',{courseId:courseId.id,taskId})
   await rpc('generate',{courseId:courseId.id,kind:'question',requestId:uuid(),taskId,slot:0})
-  await waitUntil(async()=>((await rpcState()).courses[0].questions as Array<{status:string}>)?.some?.(q=>q.status==='valid'))
-  state=await rpcState();const questionId=state.courses[0].questions[0].id
+  await waitUntil(async()=>((await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).questions as Array<{status:string}>)?.some?.(q=>q.status==='valid'))
+  state=await rpcState();const questionId=state.courses.find((c:{id:string})=>c.id===courseId.id).questions[0].id
   const attempt=await rpc('submit',{courseId:courseId.id,questionId,option:1,requestId:uuid()}) as {id:string;correct:boolean}
   assert.equal(attempt.correct,false)
   evidence.bootstrap={courseId:courseId.id,pointId,taskId,questionId,attemptId:attempt.id}
@@ -107,7 +110,7 @@ try {
   await pollHeld
   await promptBox().fill('旧轮询不应覆盖的草稿')
   await sleep(1200)
-  await waitUntil(async()=>(await rpcState()).courses[0].drafts.prompt==='旧轮询不应覆盖的草稿')
+  await waitUntil(async()=>(await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).drafts.prompt==='旧轮询不应覆盖的草稿')
   await sleep(3000)
   assert.equal(await promptBox().inputValue(),'旧轮询不应覆盖的草稿')
   await page.getByRole('button',{name:/issue4 第二门课程.*0 个知识点/}).click()
@@ -115,20 +118,22 @@ try {
   await page.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
   await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='旧轮询不应覆盖的草稿')
   await shot(page,'01-stale-poll-guard.png')
-  await page.unroute('**/api/syllora/state')
+  await page.unrouteAll({behavior:'wait'})
   await page.reload()
+  await page.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
   await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[aria-label="向课程资料提问"]')?.value==='旧轮询不应覆盖的草稿')
   checks.push('stale polling keeps saved draft')
 
   // Scenario 3 (page pair): page B is frozen on a stale state snapshot while page A confirms live.
   await rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:1})
   const frozenBody=JSON.stringify({result:await rpcState()})
-  const expectedDraft=JSON.parse(frozenBody).result.courses[0].draft.id
+  const expectedDraft=JSON.parse(frozenBody).result.courses.find((c:{id:string})=>c.id===courseId.id).draft.id
   const contextB=await browser.newContext()
   const pageB=await contextB.newPage()
   await pageB.route('**/api/syllora/state',route=>route.fulfill({contentType:'application/json',body:frozenBody}))
   await pageB.setViewportSize({width:1440,height:1000})
   await pageB.goto(origin)
+  await pageB.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
   await pageB.getByRole('heading',{name:'issue4 验证课程',exact:true}).waitFor()
   await pageB.getByRole('tab',{name:'计划',exact:true}).click()
   await pageB.getByRole('button',{name:'确认生效',exact:true}).waitFor()
@@ -138,14 +143,14 @@ try {
   await page.getByRole('button',{name:'确认生效',exact:true}).waitFor()
   await page.getByRole('button',{name:'确认生效',exact:true}).click()
   await page.getByRole('button',{name:'确认生效',exact:true}).waitFor({state:'detached'})
-  state=await rpcState();assert.equal(state.courses[0].plan.version,2);assert.equal(state.courses[0].draft,null)
+  state=await rpcState();assert.equal(state.courses.find((c:{id:string})=>c.id===courseId.id).plan.version,2);assert.equal(state.courses.find((c:{id:string})=>c.id===courseId.id).draft,null)
   await shot(pageB,'03a-dual-page-frozen-draft.png')
   await pageB.getByRole('button',{name:'确认生效',exact:true}).click()
   await pageB.locator('.sy-error').filter({hasText:'没有待确认计划'}).waitFor()
   await rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:2})
   await pageB.getByRole('button',{name:'确认生效',exact:true}).click()
   await pageB.locator('.sy-error').filter({hasText:'另一页面更新了草案'}).waitFor()
-  state=await rpcState();assert.equal(state.courses[0].plan.version,2);assert.ok(state.courses[0].draft)
+  state=await rpcState();assert.equal(state.courses.find((c:{id:string})=>c.id===courseId.id).plan.version,2);assert.ok(state.courses.find((c:{id:string})=>c.id===courseId.id).draft)
   await pageB.unroute('**/api/syllora/state')
   await pageB.getByText('待确认草案 · v3').waitFor()
   await shot(pageB,'03b-dual-page-conflict.png')
@@ -156,13 +161,19 @@ try {
   await rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:2})
   await rpc('explainDone',{courseId:courseId.id,taskId})
   await rpc('generate',{courseId:courseId.id,kind:'question',requestId:uuid(),taskId,slot:1})
-  await waitUntil(async()=>{const q=((await rpcState()).courses[0].questions as Array<{slot:number;status:string}>).filter(item=>item.slot===1&&item.status==='valid');return q.length>0})
-  state=await rpcState();const question2=state.courses[0].questions.find((q:{slot:number})=>q.slot===1)
+  await waitUntil(async()=>{const q=((await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).questions as Array<{slot:number;status:string}>).filter(item=>item.slot===1&&item.status==='valid');return q.length>0})
+  state=await rpcState();const question2=state.courses.find((c:{id:string})=>c.id===courseId.id).questions.find((q:{slot:number})=>q.slot===1)
   await rpc('submit',{courseId:courseId.id,questionId:question2.id,option:0,requestId:uuid()})
-  state=await rpcState();assert.equal(state.courses[0].plan.tasks[0].status,'completed')
-  await assert.rejects(rpc('confirmPlan',{courseId:courseId.id,baseVersion:2,draftId:state.courses[0].draft.id}),/任务进度已变化/)
+  state=await rpcState();assert.equal(state.courses.find((c:{id:string})=>c.id===courseId.id).plan.tasks[0].status,'completed')
+  await assert.rejects(rpc('confirmPlan',{courseId:courseId.id,baseVersion:2,draftId:state.courses.find((c:{id:string})=>c.id===courseId.id).draft.id}),/任务进度已变化/)
   await rpc('rejectPlan',{courseId:courseId.id})
   checks.push('task-progress change rejects stale draft')
+
+  // Settings page pair: A keeps its dirty draft after B changes the authoritative revision.
+  await page.getByRole('tab',{name:'复习',exact:true}).click();await page.getByText('复习间隔设置',{exact:true}).click();await page.getByLabel('首次补强与复测（小时）').fill('48');await page.getByLabel('会话闲置关闭（分钟）').fill('45');
+  await pageB.getByRole('tab',{name:'复习',exact:true}).click();await pageB.getByText('复习间隔设置',{exact:true}).click();await pageB.getByLabel('首次补强与复测（小时）').fill('72');await pageB.getByLabel('复测通过后的间隔（小时）').fill('120');await pageB.getByLabel('后续复习间隔（小时）').fill('240');await pageB.getByLabel('会话闲置关闭（分钟）').fill('60');await pageB.getByRole('button',{name:'保存未来复习间隔',exact:true}).click();
+  await page.getByText(/你的未保存输入和原修订号已保留/).waitFor();assert.equal(await page.getByLabel('首次补强与复测（小时）').inputValue(),'48');assert.equal(await page.getByLabel('会话闲置关闭（分钟）').inputValue(),'45');const conflictResponse=page.waitForResponse(response=>response.url().endsWith('/api/syllora/learningSettings')&&response.request().method()==='POST');await page.getByRole('button',{name:'保存未来复习间隔',exact:true}).click();assert.equal((await (await conflictResponse).json()).error.code,'VERSION_CONFLICT');await page.locator('.sy-error').filter({hasText:'学习设置已被另一页面修改'}).waitFor();
+  state=await rpcState();assert.deepEqual(state.courses.find((course:{id:string})=>course.id===courseId.id).learningSettings,{revision:1,reviewHours:[72,120,240],sessionIdleMinutes:60});await shot(page,'03c-settings-draft-conflict.png');await page.getByRole('button',{name:'放弃草稿并载入最新设置',exact:true}).click();assert.equal(await page.getByLabel('首次补强与复测（小时）').inputValue(),'72');assert.equal(await page.getByLabel('会话闲置关闭（分钟）').inputValue(),'60');evidence.settingsConflict={retainedDraft:{reviewHours:[48,72,168],sessionIdleMinutes:45,baseVersion:0},authoritativeRevision:1,rejectedCode:'VERSION_CONFLICT'};checks.push('dual-page settings preserves draft and original baseVersion until explicit reload');
 
   // Scenario 2: a failed draft save must keep the user on the current course.
   await page.route('**/api/syllora/saveDraft',route=>route.abort())
@@ -176,9 +187,10 @@ try {
   checks.push('save failure keeps user on current course')
 
   // Scenario 4: restart on a legacy snapshot (no actions/drafts/changes/notice) with an aged attempt.
+  const courseFolder=(await rpcState()).courses.find((c:{id:string})=>c.id===courseId.id).folder
   host.kill();await new Promise<void>(r=>host.on('exit',r))
   await rm(join(home,'host.lock'),{force:true})
-  const snapshotPath=join(data,'syllora.json')
+  const snapshotPath=join(courseFolder,'.syllora','course.json')
   const db=JSON.parse(await readFile(snapshotPath,'utf8')) as {courses:Array<Record<string,unknown>>}
   for (const course of db.courses) {delete course.actions;delete course.drafts;delete course.changes;delete course.notice;for (const attemptItem of course.attempts as Array<{at:number}>) attemptItem.at-=25*3_600_000}
   await writeFile(snapshotPath,JSON.stringify(db))
@@ -186,6 +198,7 @@ try {
   await rpcState()
   const restarted=JSON.parse(await readFile(join(home,'host.json'),'utf8')) as {port:number}
   await page.goto(`http://127.0.0.1:${restarted.port}`)
+  await page.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
   await page.getByRole('heading',{name:'issue4 验证课程',exact:true}).waitFor()
   state=await rpcState();const loaded=state.courses.find((c:{id:string})=>c.id===courseId.id)
   assert.ok(Array.isArray(loaded.actions)&&loaded.actions.length>0)
@@ -222,7 +235,7 @@ try {
   await shot(page,'05d-restore-confirmed.png')
   checks.push('archive protection and restore draft flow')
 
-  const unexpectedFailures=failedResponses.filter(entry=>!entry.includes('/api/syllora/confirmPlan'))
+  const unexpectedFailures=failedResponses.filter(entry=>!entry.includes('/api/syllora/confirmPlan')&&!entry.includes('/api/syllora/learningSettings'))
   assert.deepEqual(unexpectedFailures,[])
   assert.deepEqual(errors,[])
   await contextB.close()

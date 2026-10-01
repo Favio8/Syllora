@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
+import { normalizeProtocol, type ProviderProtocol } from './settings.ts'
 
 export interface ResolvedChatConfig {
   readonly providerId: string
@@ -21,6 +22,8 @@ export interface ResolvedChatConfig {
   /** 判题思考档位：`llm.judge_reasoning_effort`；null=判题路径缺省 off（关思考）。 */
   readonly judgeEffort?: 'off' | 'low' | 'high' | 'max' | null
   readonly baseUrl: string
+  /** Wire protocol of the active provider; selects the LLM adapter. */
+  readonly protocol: ProviderProtocol
   readonly apiKeyEnv: string | null
   readonly apiKey: string | null
   readonly temperature: number
@@ -38,6 +41,8 @@ interface ConfigYaml {
   readonly active_provider?: string
   readonly providers?: Record<string, {
     readonly base_url?: string | null
+    /** Wire protocol; absent (every config written before this field existed) reads as openai. */
+    readonly protocol?: string | null
     readonly model?: string
     readonly api_key_env?: string | null
     readonly temperature?: number
@@ -53,6 +58,7 @@ interface ConfigYaml {
 /** Read one provider entry's connection facts from the config shape. */
 export function providerFacts(config: ConfigYaml, providerId: string): {
   baseUrl: string | null
+  protocol: ProviderProtocol
   model: string | null
   apiKeyEnv: string | null
   temperature: number | null
@@ -62,6 +68,7 @@ export function providerFacts(config: ConfigYaml, providerId: string): {
   const entry = config.providers?.[providerId]
   return {
     baseUrl: entry?.base_url ?? null,
+    protocol: normalizeProtocol(entry?.protocol),
     model: entry?.model ?? null,
     apiKeyEnv: entry?.api_key_env ?? null,
     temperature: entry?.temperature ?? null,
@@ -106,6 +113,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
       judgeModel: null,
       judgeEffort: null,
       baseUrl: '',
+      protocol: 'openai',
       apiKeyEnv: null,
       apiKey: null,
       temperature: 0.3,
@@ -146,6 +154,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
     judgeModel: config.llm?.judge_model ?? null,
     judgeEffort,
     baseUrl,
+    protocol: direct.protocol,
     apiKeyEnv,
     apiKey,
     temperature,

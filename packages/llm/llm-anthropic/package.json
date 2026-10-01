@@ -1,0 +1,31 @@
+{
+    "name":  "@syllora/llm-anthropic",
+    "description":  "Anthropic Messages API (x-api-key + /v1/messages + named SSE events) adapter for the dsh LLM seam",
+    "version":  "0.1.0",
+    "license":  "MIT",
+    "private":  true,
+    "type":  "module",
+    "main":  "lib/types/index.js",
+    "types":  "lib/types/index.d.ts",
+    "exports":  {
+                    ".":  {
+                              "types":  "./lib/types/index.d.ts",
+                              "default":  "./lib/types/index.js"
+                          },
+                    "./src/*":  "./src/*",
+                    "./package.json":  "./package.json"
+                },
+    "dependencies":  {
+                         "eventsource-parser":  "^3.1.0"
+                     },
+    "peerDependencies":  {
+                             "@deepseek-ai/dsh-llm":  "workspace:^",
+                             "@deepseek-ai/dsh-timeout":  "workspace:^",
+                             "@deepseek-ai/dsh-anonymous-user-id":  "workspace:^"
+                         },
+    "devDependencies":  {
+                            "@deepseek-ai/dsh-llm":  "workspace:^",
+                            "@deepseek-ai/dsh-timeout":  "workspace:^",
+                            "@deepseek-ai/dsh-anonymous-user-id":  "workspace:^"
+                        }
+}

@@ -27,6 +27,19 @@ describe('Syllora evidence replay',()=>{
     addAttempt(c,due,true);expect(evidence(c,'p').state).toBe('复测通过');expect(evidence(c,'p').dueAt).toBe(due+72*HOUR);
     addAttempt(c,due+72*HOUR,true);expect(evidence(c,'p').dueAt).toBe(due+72*HOUR+168*HOUR);
   })
+  it.each([-1000,0,1000])('handles the delayed-test boundary at dueAt %+i milliseconds',offset=>{
+    const c=fixture();addAttempt(c,0,true);addAttempt(c,1000,true);const due=1000+24*HOUR;
+    addAttempt(c,due+offset,true);
+    expect(evidence(c,'p').state).toBe(offset<0?'初步掌握':'复测通过');
+    expect(evidence(c,'p').dueAt).toBe(offset<0?due:due+offset+72*HOUR);
+  })
+  it('replays removal of the sole correct answer and the delayed retest without deleting attempts',()=>{
+    const c=fixture();const first=addAttempt(c,0,true);first.status='disputed';
+    expect(evidence(c,'p').state).toBe('未评估');expect(c.attempts).toHaveLength(1);
+    first.status='valid';addAttempt(c,1000,true);const due=1000+24*HOUR;const retest=addAttempt(c,due,true);
+    expect(evidence(c,'p').state).toBe('复测通过');retest.status='disputed';
+    expect(evidence(c,'p').state).toBe('初步掌握');expect(evidence(c,'p').dueAt).toBe(due);expect(c.attempts).toHaveLength(3);
+  })
   it('resets after failure and does not skip the two-answer recovery',()=>{
     const c=fixture();addAttempt(c,0,true);addAttempt(c,1,true);addAttempt(c,24*HOUR+1,true);addAttempt(c,25*HOUR,false);expect(evidence(c,'p').state).toBe('待加强');
     addAttempt(c,26*HOUR,true);expect(evidence(c,'p').state).toBe('待加强');addAttempt(c,27*HOUR,true);expect(evidence(c,'p').state).toBe('初步掌握');expect(evidence(c,'p').dueAt).toBe(51*HOUR);
@@ -68,7 +81,7 @@ describe('Syllora evidence replay',()=>{
     const diff=planDiff(c.plan,moved);expect(diff.tasksMoved[0]!.from).toBe(c.plan.tasks[0]!.date);expect(diff.tasksMoved[0]!.to).toBe('2026-10-03');expect(diff.scopeRemoved).toEqual(['p']);
     const active=c.plan.tasks.length;const draft=proposeReviews(c,['p'],now,()=>'review');
     expect(c.plan.tasks).toHaveLength(active);expect(draft.tasks.at(-1)!.immediate).toBe(true);expect(draft.feasible).toBe(true);
-    c.plan.dailyMinutes=20;const tight=proposeReviews(c,['p'],now,()=>'tight');expect(tight.feasible).toBe(false);expect(tight.overflow).toEqual([{pointId:'p',reason:'window-full'}]);expect(c.plan.tasks).toHaveLength(active);
+    c.plan.dailyMinutes=20;c.plan.days=1;const tight=proposeReviews(c,['p'],now,()=>'tight');expect(tight.feasible).toBe(false);expect(tight.overflow).toEqual([{pointId:'p',reason:'window-full'}]);expect(c.plan.tasks).toHaveLength(active);
     addAttempt(c,now,false);expect(duePointIds(c,now+24*HOUR)).toEqual(['p']);expect(proposeReviews(c,['p'],now+24*HOUR,()=>'due').tasks.at(-1)!.immediate).toBe(false);
     expect(restoreNotice(c,now+24*HOUR)?.text).toContain('恢复后有 1 项复习已到期');expect(c.plan.tasks).toHaveLength(active);
     c.notice={kind:'due',pointIds:['p'],text:'有到期复习未排入日程。原计划保持不变。'};expect(refreshNotice(c,now+24*HOUR)).toBe(false);expect(c.notice?.kind).toBe('due');expect(refreshNotice(c,now)).toBe(true);expect(c.notice).toBeNull();
@@ -132,10 +145,26 @@ describe('Syllora persistence and boundaries',()=>{
     await expect(svc.handle('rename',{courseId:randomUUID(),name:'越权'})).rejects.toThrow('课程不存在');
     const restored=new SylloraService(root);const state=await restored.handle('state') as any;expect(state.courses).toHaveLength(1);expect(state.courses[0].materials).toHaveLength(1);
   })
-  it('blocks unconsented model calls and zero budgets before contacting the model',async()=>{
+  it('blocks unconsented model calls before contacting the model',async()=>{
     let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:'{}'}}};const {svc}=await service(client);const courseId=await create(svc);
     await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('确认允许');
-    await svc.handle('preferences',{consent:true,callLimit:0});await expect(svc.handle('generate',{courseId,requestId:randomUUID(),kind:'outline'})).rejects.toThrow('上限');expect(calls).toBe(0);
+    expect(calls).toBe(0);
+  })
+  it('ignores persisted local caps and legacy preferences while retaining provider diagnostics',async()=>{
+    let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:JSON.stringify({text:'单位矩阵的主对角线元素为一。',sourceIds:[],insufficient:true})}}};
+    const {svc,root}=await service();const courseId=await create(svc);
+    const stored=JSON.parse(await readFile(join(root,'syllora.json'),'utf8'));
+    stored.consent=true;stored.callLimit=0;stored.calls=10001;
+    await writeFile(join(root,'syllora.json'),JSON.stringify(stored));
+    const restored=new SylloraService(root,{config:async()=>config,client:()=>client});
+    await restored.handle('preferences',{consent:true,callLimit:0});
+    await restored.handle('generate',{courseId,requestId:randomUUID(),kind:'answer',prompt:'什么是单位矩阵？'});
+    const state=await waitJob(restored);expect(state.jobs.at(-1).state).toBe('succeeded');expect(calls).toBe(1);
+    expect(state.settings).toEqual({consent:true,calls:10002});
+    expect(JSON.parse(await readFile(join(root,'syllora.json'),'utf8'))).not.toHaveProperty('callLimit');
+    await restored.handle('preferences',{consent:false});
+    await expect(restored.handle('generate',{courseId,requestId:randomUUID(),kind:'answer',prompt:'再解释一次'})).rejects.toThrow('确认允许');
+    expect(calls).toBe(1);
   })
   it('runs generation, plan confirmation, fixed grading and dispute replay',async()=>{
     let n=0;const client:StructuredCallClient={async *stream(options){
@@ -162,6 +191,7 @@ describe('Syllora persistence and boundaries',()=>{
     state=await svc.handle('state') as any;expect(state.courses[0].attempts).toHaveLength(1);expect(state.courses[0].evidence[pointId].state).toBe('待加强');
     expect(state.courses[0].actions.at(-1).trigger).toBe('grade');expect(state.courses[0].next.practice.pointId).toBe(pointId);expect(state.courses[0].progress.distribution['待加强']).toBe(1);
     await svc.handle('dispute',{courseId,questionId:q.id,reason:'来源不支持'});state=await svc.handle('state') as any;expect(state.courses[0].evidence[pointId].state).toBe('未评估');expect(state.courses[0].attempts).toHaveLength(1);
+    expect(state.courses[0].questions.find((item:any)=>item.id===q.id).dispute).toMatchObject({reason:'来源不支持',at:expect.any(Number)});
     expect(state.courses[0].next.kind).toBe('retest');expect(state.courses[0].actions.at(-1).trigger).toBe('dispute');expect(state.courses[0].actions.length).toBeGreaterThan(1);
     const disk=JSON.parse(await readFile(join(root,'syllora.json'),'utf8'));expect(disk.calls).toBe(3);
   })
@@ -331,6 +361,18 @@ describe('Syllora new features',()=>{
       expect(current.evidence[q.pointId].state).toBe('待加强');
       expect((await svc.handle('submit',{courseId:course.id,questionId:q.id,requestId,option:1}) as any).planAdjustment).toBeNull();
       expect((await svc.handle('state') as any).courses[0].draft.id).toBe(current.draft.id);
+    })
+    it('retains an unfinished review after another wrong answer without creating an empty draft',async()=>{
+      const {svc,course,q,root,now}=await seeded();
+      const disk=JSON.parse(await readFile(join(root,'syllora.json'),'utf8'));
+      disk.courses[0].plan.tasks.push({id:randomUUID(),pointId:q.pointId,kind:'review',date:'2026-10-02',minutes:10,status:'todo',explained:true,slots:1,cycle:null,immediate:true});
+      await writeFile(join(root,'syllora.json'),JSON.stringify(disk));
+      const reloaded=new SylloraService(root,{now:()=>now});
+      const result=await reloaded.handle('submit',{courseId:course.id,questionId:q.id,requestId:randomUUID(),option:1}) as any;
+      expect(result.planAdjustment).toMatchObject({code:'SKIPPED_EXISTING_REVIEW',draftId:null});
+      const current=(await reloaded.handle('state') as any).courses[0];
+      expect(current.draft).toBeNull();expect(current.plan.tasks.filter((task:any)=>task.kind==='review')).toHaveLength(1);
+      expect(current.attempts).toHaveLength(1);expect(current.evidence[q.pointId].state).toBe('待加强');
     })
     it('keeps an existing draft and skips assisted submissions',async()=>{
       const {svc,course,q,root,now}=await seeded();

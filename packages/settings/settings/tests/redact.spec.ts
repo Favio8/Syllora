@@ -4,6 +4,10 @@ import z from '@deepseek-ai/schemastery'
 import { redactSecrets, settingsNamespace } from '../src/index.ts'
 import { MemorySettings } from './memory.ts'
 
+/** Fixture value standing in for a stored secret; carries no provider's key
+ *  shape, so the repository holds no credential-shaped literal. */
+const PLACEHOLDER = 'placeholder-value'
+
 const Profile = z.object({
   apiKey: z.string().role('secret'),
   apiKeyEnv: z.string().role('credential-ref'),
@@ -24,7 +28,7 @@ describe('redactSecrets', () => {
     const { value, secrets } = redactSecrets(Adapter as z<never>, {
       apiKey: 'top-secret',
       providers: {
-        openai: { apiKey: 'sk-live', apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://x' },
+        openai: { apiKey: PLACEHOLDER, apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://x' },
         anthropic: { apiKeyEnv: 'ANTHROPIC_API_KEY' },
       },
       fallbacks: [{ apiKey: 'fb', baseURL: 'https://y' }],
