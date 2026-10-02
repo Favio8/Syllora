@@ -1,6 +1,7 @@
 /**
- * Default registry assembly: all 13 specs registered with file, interactive,
- * and host-injected learning-action handlers.
+ * Default registry assembly: all 18 specs registered with file, interactive,
+ * and host-injected learning-action handlers (13 ported from Python
+ * `agent_tools.py` plus 5 Syllora course-snapshot reads).
  * @module @syllora/tools
  */
 
@@ -11,7 +12,12 @@ import {
   handlerGenerateDynamicCard,
   handlerGetCourseState,
   handlerGetMemory,
+  handlerGetMistakes,
+  handlerGetProgressReport,
+  handlerGetStudyPlan,
   handlerGetTaskPool,
+  handlerReadMaterial,
+  handlerReadNotes,
   handlerReadSource,
   handlerRunQuiz,
   handlerRunReview,
@@ -64,6 +70,11 @@ export function defaultToolRegistry(courseDir: string, workspaceRoot: string): T
       case 'sync_sources': handler = handlerSyncSources; break
       case 'write_note': handler = handlerWriteNote; break
       case 'ask_user_question': handler = handlerAskUserQuestion; break
+      case 'read_notes': handler = handlerReadNotes; break
+      case 'read_material': handler = handlerReadMaterial; break
+      case 'get_study_plan': handler = handlerGetStudyPlan; break
+      case 'get_mistakes': handler = handlerGetMistakes; break
+      case 'get_progress_report': handler = handlerGetProgressReport; break
       default: throw new Error(`未知默认工具: ${spec.name}`)
     }
     registry.register(spec, handler)

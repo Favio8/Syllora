@@ -405,6 +405,97 @@ describe('ToolRegistry', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  it('exposes the five read-only study tools in every learning mode', async () => {
+    const { root, courseDir, wsRoot } = await setup()
+    const registry = defaultToolRegistry(courseDir, wsRoot)
+    const study = ['read_notes', 'read_material', 'get_study_plan', 'get_mistakes', 'get_progress_report']
+    for (const name of study) {
+      expect(registry.spec(name)).toMatchObject({ policy: 'read', execution: 'parallel', requiresApproval: false })
+    }
+    for (const mode of ['socratic', 'quick', 'feynman', 'debug']) {
+      expect(registry.namesForMode(mode)).toEqual(expect.arrayContaining(study))
+    }
+    // general 预设与未知模式（fail-closed 只读回落）不暴露课程快照工具。
+    expect(registry.namesForMode('general')).not.toContain('get_study_plan')
+    expect(registry.namesForMode('bogus')).toEqual(['get_course_state', 'read_source', 'search_sources'])
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('read_notes filters, caps and falls back to the migrated .syllora location', async () => {
+    const { root, courseDir, wsRoot } = await setup()
+    const registry = defaultToolRegistry(courseDir, wsRoot)
+    const ctx = { courseDir, workspaceRoot: wsRoot }
+    const lines = [
+      '- 2026-10-01T00:00:00.000Z 第一条',
+      '- 2026-10-01T00:01:00.000Z [c_1] 封装是隐藏实现',
+      '- 2026-10-01T00:02:00.000Z [c_2] 继承是复用',
+    ]
+    await writeFile(join(courseDir, 'notes.md'), `${lines.join('\n')}\n`, 'utf8')
+    const all = await registry.execute('read_notes', {}, ctx)
+    expect(all.status).toBe('success')
+    expect((all.data['lines'] as Array<{ text: string }>).map(line => line.text)).toEqual(lines)
+    const capped = await registry.execute('read_notes', { maxLines: 2 }, ctx)
+    expect((capped.data['lines'] as unknown[])).toHaveLength(2)
+    const byConcept = await registry.execute('read_notes', { conceptId: 'c_1' }, ctx)
+    expect((byConcept.data['lines'] as Array<{ text: string }>).map(line => line.text)).toEqual([lines[1]])
+    const byKeyword = await registry.execute('read_notes', { keyword: '继承' }, ctx)
+    expect(byKeyword.summary).toContain('关键词「继承」')
+    expect((byKeyword.data['lines'] as unknown[])).toHaveLength(1)
+
+    await rm(join(courseDir, 'notes.md'), { force: true })
+    const missing = await registry.execute('read_notes', {}, ctx)
+    expect(missing.status).toBe('success')
+    expect(missing.summary).toContain('还没有笔记')
+
+    // 旧布局迁移会把根 notes.md 搬进 .syllora/，读侧必须同样可见。
+    await mkdir(join(wsRoot, '.syllora'), { recursive: true })
+    await writeFile(join(wsRoot, '.syllora', 'notes.md'), '- 2026-10-01T00:03:00.000Z [c_1] 迁移后的笔记\n', 'utf8')
+    const legacy = await registry.execute('read_notes', {}, ctx)
+    expect(legacy.summary).toContain('.syllora/notes.md')
+    expect((legacy.data['lines'] as unknown[])).toHaveLength(1)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('routes the snapshot reads through injected ToolActions', async () => {
+    const { root, courseDir, wsRoot } = await setup()
+    const registry = defaultToolRegistry(courseDir, wsRoot)
+    const calls: string[] = []
+    const actions: ToolActions = {
+      getTaskPool: async () => ['', {}],
+      createCard: async () => ['', {}],
+      generateDynamicCard: async () => ['', {}],
+      runReview: async () => ['', {}],
+      runQuiz: async () => ['', {}],
+      evaluateAnswer: async () => ['', {}],
+      syncSources: async () => ['', {}],
+      readMaterial: async (_ctx, args) => { calls.push(`read_material:${String(args['query'] ?? '')}`); return ['资料片段', { text: '正文' }] },
+      getStudyPlan: async () => { calls.push('get_study_plan'); return ['计划 v1', { text: '今天 1 项' }] },
+      getMistakes: async () => { calls.push('get_mistakes'); return ['错题 1 题', { text: '题干' }] },
+      getProgressReport: async () => { calls.push('get_progress_report'); return ['复盘', { text: '完成 1/2' }] },
+    }
+    const ctx = { courseDir, workspaceRoot: wsRoot, actions }
+    for (const [name, args] of [
+      ['read_material', { query: '调度' }],
+      ['get_study_plan', {}],
+      ['get_mistakes', {}],
+      ['get_progress_report', {}],
+    ] as const) {
+      const result = await registry.execute(name, args, ctx)
+      expect(result.status, name).toBe('success')
+    }
+    expect(calls).toEqual(['read_material:调度', 'get_study_plan', 'get_mistakes', 'get_progress_report'])
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('degrades snapshot reads when the host has no snapshot actions', async () => {
+    const { root, courseDir, wsRoot } = await setup()
+    const registry = defaultToolRegistry(courseDir, wsRoot)
+    const result = await registry.execute('get_study_plan', {}, { courseDir, workspaceRoot: wsRoot })
+    expect(result.status).toBe('degraded')
+    expect(result.summary).toContain('工具动作未注入')
+    await rm(root, { recursive: true, force: true })
+  })
+
   it('generic filesystem tools enforce workspace containment and approval', async () => {
     const { root, courseDir, wsRoot } = await setup()
     const registry = agentToolRegistry(courseDir, wsRoot)

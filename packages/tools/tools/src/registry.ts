@@ -41,12 +41,15 @@ export interface ToolRuntimeMiddleware {
   readonly postExecute?: (execution: ToolRuntimeExecution, result: ToolResult) => Promise<void> | void
 }
 
-/** Four-mode policy table (Sprint 8 M-C): mode → allowed tool names. */
+/** Four-mode policy table (Sprint 8 M-C): mode → allowed tool names.
+ *  The five read-only Syllora snapshot tools (read_notes, read_material,
+ *  get_study_plan, get_mistakes, get_progress_report) are available in every
+ *  learning mode: they cannot mutate course state and never need approval. */
 export const MODE_TOOL_SETS: Record<string, string[]> = {
-  socratic: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'get_memory', 'ask_user_question', 'plan', 'todo'],
-  quick: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'run_review', 'run_quiz', 'evaluate_answer', 'ask_user_question', 'plan', 'todo'],
-  feynman: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'write_note', 'write_file', 'ask_user_question', 'plan', 'todo'],
-  debug: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'generate_dynamic_card', 'run_quiz', 'evaluate_answer', 'write_file', 'run_command', 'fetch_url', 'search_web', 'spawn_agent', 'ask_user_question', 'plan', 'todo'],
+  socratic: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'get_memory', 'read_notes', 'read_material', 'get_study_plan', 'get_mistakes', 'get_progress_report', 'ask_user_question', 'plan', 'todo'],
+  quick: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'run_review', 'run_quiz', 'evaluate_answer', 'read_notes', 'read_material', 'get_study_plan', 'get_mistakes', 'get_progress_report', 'ask_user_question', 'plan', 'todo'],
+  feynman: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'write_note', 'write_file', 'read_notes', 'read_material', 'get_study_plan', 'get_mistakes', 'get_progress_report', 'ask_user_question', 'plan', 'todo'],
+  debug: ['read_source', 'search_sources', 'read_file', 'search_files', 'get_course_state', 'get_task_pool', 'generate_dynamic_card', 'run_quiz', 'evaluate_answer', 'write_file', 'run_command', 'fetch_url', 'search_web', 'spawn_agent', 'read_notes', 'read_material', 'get_study_plan', 'get_mistakes', 'get_progress_report', 'ask_user_question', 'plan', 'todo'],
   // The general Agent preset is intentionally independent from learning
   // modes. It exposes the DSH-style workspace/runtime tools while keeping
   // approval-gated mutations and deployment providers fail-closed.
