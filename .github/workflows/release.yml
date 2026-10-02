@@ -141,6 +141,7 @@ jobs:
         working-directory: apps/desktop
       - name: Verify packaged Web and Host match the shared builds
         working-directory: apps/desktop
+        shell: bash
         env:
           PACKAGE_TARGET: ${{ matrix.target }}
           PACKAGE_ARCH: ${{ matrix.arch }}
@@ -156,10 +157,10 @@ jobs:
           function files(root, prefix = '') {
             return readdirSync(root, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(root, entry.name), prefix + entry.name + '/') : [prefix + entry.name]).sort()
           }
-          const source = '../../web/out', names = files(source)
+          const source = '../web/out', names = files(source)
           if (JSON.stringify(names) !== JSON.stringify(files(join(resources, 'web')))) throw new Error('Packaged Web file list differs')
           for (const name of names) if (hash(join(source, name)) !== hash(join(resources, 'web', name))) throw new Error(`Packaged Web differs: ${name}`)
-          const host = '../../cli/lib'
+          const host = '../cli/lib'
           for (const name of readdirSync(host).filter(name => name.endsWith('.js'))) if (hash(join(host, name)) !== hash(join(resources, 'host', name))) throw new Error(`Packaged Host differs: ${name}`)
           const fingerprint = createHash('sha256').update(names.map(name => name + '\0' + hash(join(source, name)) + '\n').join('')).digest('hex')
           console.log(`Shared Web verified: ${names.length} files, SHA256 ${fingerprint}`)
