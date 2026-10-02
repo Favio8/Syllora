@@ -10,10 +10,10 @@
 .integrated-shell .sy-top>div>span{font-size:10px;color:var(--muted)}
 .integrated-shell .sy-actions{align-items:center;gap:5px}
 .integrated-shell .sy-actions>button{border:0;background:transparent;color:var(--muted);padding:8px}
-.learning-mode-switch{display:flex;gap:4px;padding:4px;background:var(--sidebar);border-radius:8px;margin-right:10px}
-.learning-mode-switch button{display:flex;align-items:center;border:0!important;border-radius:6px!important;font-size:12px!important;padding:7px 10px!important;color:var(--muted);background:transparent}
-/* 三个按钮等宽居中：文本长短不一（对话学习/辅助阅读/笔记），靠 min-width 对齐 */
-.integrated-shell .learning-mode-switch button{justify-content:center;min-width:84px;gap:0}
+/* 学习模式开关：工作台顶栏与笔记页头部共用同一份固定几何，两个页面逐像素一致。
+   文本长短不一（对话学习/辅助阅读/笔记），所以三个按钮固定 84×32、居中；不随断点缩小。 */
+.learning-mode-switch{display:inline-flex;align-items:center;gap:4px;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--sidebar);margin:0;flex-shrink:0;font-family:var(--body-font)}
+.learning-mode-switch button{display:flex;align-items:center;justify-content:center;gap:0;width:84px!important;min-width:84px!important;height:32px!important;padding:0!important;border:0!important;border-radius:6px!important;font-size:12px!important;line-height:1;white-space:nowrap;color:var(--muted);background:transparent}
 .learning-mode-switch button[aria-pressed=true]{color:var(--blue);background:var(--white)}
 .integrated-shell .sy-content{padding:28px 34px;overflow:auto;flex:1;min-height:0;background:var(--white)}
 .integrated-shell .sy-next{border:1px solid var(--line);background:var(--blue-light);border-radius:12px;padding:22px;gap:18px;margin-top:10px}
@@ -70,11 +70,10 @@
 .integrated-shell label{color:var(--muted)}
 .integrated-project-error,.integrated-migration{position:fixed;bottom:24px;left:100px;max-width:650px;z-index:20;background:var(--white);padding:12px;border:1px solid var(--line)}
 .integrated-shell .sy-lecture-reader pre,.integrated-shell .sy-source-text{color:var(--ink);background:var(--sidebar)}
-.integrated-shell .sy-course-path{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
 .integrated-shell .sy-error{flex-shrink:0}
 .integrated-shell .home-scroll,.integrated-shell .catalog-scroll{min-height:0;flex:1}
-@media(max-width:1100px){.integrated-shell.sy-app{grid-template-columns:64px minmax(0,1fr) 310px}.integrated-shell.sy-no-right{grid-template-columns:64px minmax(0,1fr)}.integrated-shell .sy-content{padding:22px}.learning-mode-switch button{font-size:10px!important;padding:6px!important;min-width:72px!important}.integrated-shell .sy-top{padding:12px 18px}}
-@media(max-width:760px){.integrated-shell.sy-app,.integrated-shell.sy-no-right{grid-template-columns:minmax(0,1fr)}.integrated-shell .sidebar.icon-rail{position:fixed;z-index:100;transform:translateX(-100%);width:76px;height:100dvh;left:0;top:0}.integrated-shell .sidebar.mobile-open{transform:translateX(0)}.integrated-shell .sy-right{position:fixed;right:0;top:76px;bottom:0;width:min(360px,88vw);z-index:35;box-shadow:-12px 0 40px #0002}.integrated-shell .sy-top{height:76px;gap:8px;padding:10px 12px}.integrated-shell .sy-top h1{max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.integrated-shell .sy-actions>button{padding:5px}.learning-mode-switch{margin:0}.learning-mode-switch button{font-size:9px!important;min-width:58px!important;gap:0}.integrated-shell .sy-content{padding:16px}.integrated-shell .sy-next{padding:16px;flex-wrap:wrap}.integrated-shell .sy-next h2{font-size:18px}.integrated-shell .sy-settings-cols{grid-template-columns:105px minmax(0,1fr)}.integrated-shell .sy-settings-body{padding:15px}.integrated-shell .sy-composer{padding:12px}.appearance-preview{width:95px;height:72px}.integrated-shell .sy-main .mobile-only{display:flex}}
+@media(max-width:1100px){.integrated-shell.sy-app{grid-template-columns:64px minmax(0,1fr) 332px}.integrated-shell.sy-no-right{grid-template-columns:64px minmax(0,1fr)}.integrated-shell .sy-content{padding:22px}.integrated-shell .sy-top{padding:12px 18px}}
+@media(max-width:760px){.integrated-shell.sy-app,.integrated-shell.sy-no-right{grid-template-columns:minmax(0,1fr)}.integrated-shell .sidebar.icon-rail{position:fixed;z-index:100;transform:translateX(-100%);width:76px;height:100dvh;left:0;top:0}.integrated-shell .sidebar.mobile-open{transform:translateX(0)}.integrated-shell .sy-right{position:fixed;right:0;top:76px;bottom:0;width:min(360px,88vw);z-index:35;box-shadow:-12px 0 40px #0002}.integrated-shell .sy-top{height:76px;gap:8px;padding:10px 12px}.integrated-shell .sy-top h1{max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.integrated-shell .sy-actions>button{padding:5px}.integrated-shell .sy-content{padding:16px}.integrated-shell .sy-next{padding:16px;flex-wrap:wrap}.integrated-shell .sy-next h2{font-size:18px}.integrated-shell .sy-settings-cols{grid-template-columns:105px minmax(0,1fr)}.integrated-shell .sy-settings-body{padding:15px}.integrated-shell .sy-composer{padding:12px}.appearance-preview{width:95px;height:72px}.integrated-shell .sy-main .mobile-only{display:flex}}
 @media(prefers-reduced-motion:reduce){.integrated-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 @media(max-width:760px){.integrated-shell>.sy-main{grid-column:1}.integrated-shell>.sy-right{position:fixed}}
 
@@ -90,7 +89,6 @@
 .integrated-shell .breadcrumbs{display:flex;align-items:center;gap:12px;min-width:0;color:var(--muted);font-size:11px}
 .integrated-shell .breadcrumbs>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px}
 .integrated-shell .breadcrumb-link{border:0;background:none;padding:0;color:var(--muted);font-size:11px;white-space:nowrap}
-.integrated-shell .learning-mode-switch{margin:0;border:1px solid var(--line);padding:3px;border-radius:8px;flex-shrink:0}
 .integrated-shell .sy-actions{margin-left:auto;flex-shrink:0}
 .integrated-shell .sy-top .icon-button{padding:0;width:28px;height:28px}
 .integrated-shell .sy-right-title{height:68px;min-height:68px;font-size:12px;padding:18px 24px;border-bottom:1px solid var(--line)}
@@ -125,9 +123,6 @@
 .integrated-shell .sy-next h2{font-size:19px;line-height:1.65}
 .integrated-shell .sy-content{overflow:visible;flex:none;padding:26px 38px 0;background:transparent}
 .workbench-legacy-content{overflow:auto;flex:1;min-height:0}
-.workbench-details{font-size:10px;color:var(--muted);margin:0 0 10px}
-.workbench-details summary{cursor:pointer;width:fit-content}
-.workbench-details[open]{padding-bottom:12px}
 .workbench-chat{display:flex;flex-direction:column;min-height:0;flex:1}
 .workbench-chat-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
 .agent-message-list{padding:20px 38px 30px;display:flex;flex-direction:column;gap:24px;min-width:0}
@@ -295,7 +290,6 @@
    NotesWorkspace 是整页替换渲染，外壳会给它套上 desktop-shell 类（见 Syllora.tsx）。 */
 .desktop-shell .sy-nw-top{padding-right:154px;app-region:drag;-webkit-app-region:drag}
 .desktop-shell .sy-nw-top :is(button,input,select,a){app-region:no-drag;-webkit-app-region:no-drag}
-.desktop-shell .sy-nw-top .learning-mode-switch{margin-right:10px}
 @media(max-width:1100px){.desktop-shell .sy-nw-top{padding-right:146px}}
 @media(max-width:900px){.desktop-shell .sy-nw-top{padding-right:138px;gap:8px}}
 
@@ -311,6 +305,9 @@
 /* 计划管理页与计划标签入口 */
 .sy-panel-empty-button{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;margin:6px 0;padding:14px 16px;border:1px solid var(--line);border-radius:9px;background:var(--white);color:var(--ink);font-size:13px;font-weight:500;text-align:left}
 .sy-panel-empty-button:hover{border-color:var(--blue);color:var(--blue)}
+/* 大纲标签的三个选项：单列铺满，不再并排换行 */
+.sy-outline-actions{display:grid;gap:9px;margin:12px 0}
+.sy-outline-actions>button{display:flex;width:100%;justify-content:flex-start;margin:0;font-size:12px;text-align:left}
 .primary-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:#fff;font-size:13px;font-weight:500}
 .primary-btn:hover{background:var(--blue-deep)}
 .primary-btn:disabled{opacity:.45;cursor:not-allowed}

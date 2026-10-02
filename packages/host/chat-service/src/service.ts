@@ -618,7 +618,7 @@ export class LearningAgentService {
         )
         if (!needsRecovery || this.registry.get(`study-${sessionId}`) !== undefined) continue
         const meta = await new SessionStore(historyDir).readMeta(sessionId).catch(() => null)
-        const mode = meta?.mode ?? rows.find(row => ['quick', 'quick', 'feynman', 'debug'].includes(String(row.payload['mode'] ?? '')))?.payload['mode'] as LearningMode | undefined ?? 'quick'
+        const mode = meta?.mode ?? rows.find(row => ['quick', 'feynman', 'debug'].includes(String(row.payload['mode'] ?? '')))?.payload['mode'] as LearningMode | undefined ?? 'quick'
         try {
           recovered.push(await this.register(workspaceRoot, projectId, sessionId, mode))
         } catch {

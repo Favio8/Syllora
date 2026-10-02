@@ -5,6 +5,7 @@
  */
 
 export { loadChatConfig, providerFacts } from './config.ts'
+export { setSharedConfigRoot } from './shared-root.ts'
 export { SylloraService, SylloraError } from './syllora.ts'
 export { SylloraProjects, migrateSharedSettings } from './syllora-projects.ts'
 export type { ResolvedChatConfig } from './config.ts'

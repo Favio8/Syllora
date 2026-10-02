@@ -9,12 +9,13 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { atomicText } from './syllora-files.ts'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
 import { ANTHROPIC_VERSION, anthropicEndpoint } from '@syllora/llm-anthropic'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
 import { MAX_AGENT_PROMPT_CHARS } from './config.ts'
+import { sharedConfigRootOf } from './shared-root.ts'
 
 export interface ProviderModelPayload {
   readonly id: string
@@ -152,6 +153,21 @@ async function readConfig(workspaceRoot: string): Promise<ConfigYaml> {
   return typeof parsed === 'object' && parsed !== null ? parsed as ConfigYaml : {}
 }
 
+/**
+ * 与 config.ts 的共享根回落同源：工作区根一个供应商都没有时改读共享设置
+ * 目录，并连同"配置实际来自哪个根"一起返回——凭据也在那个根里，否则
+ * 座位上的 API Key 状态会误报未配置。
+ */
+async function readConfigWithSharedFallback(workspaceRoot: string): Promise<{ config: ConfigYaml; root: string }> {
+  const config = await readConfig(workspaceRoot)
+  if (Object.keys(config.providers ?? {}).length > 0) return { config, root: workspaceRoot }
+  const sharedRoot = sharedConfigRootOf()
+  if (sharedRoot === null || sharedRoot === resolve(workspaceRoot)) return { config, root: workspaceRoot }
+  const shared = await readConfig(sharedRoot).catch(() => null)
+  if (shared === null || Object.keys(shared.providers ?? {}).length === 0) return { config, root: workspaceRoot }
+  return { config: shared, root: sharedRoot }
+}
+
 async function writeConfig(workspaceRoot: string, config: ConfigYaml): Promise<void> {
   const path = configPath(workspaceRoot)
   const text = yaml.dump(config, { sortKeys: false, noRefs: true })
@@ -277,13 +293,13 @@ async function providerPayload(workspaceRoot: string, id: string, provider: Prov
 
 /** Full settings projection (Python `_settings_payload` parity). */
 export async function settingsPayload(workspaceRoot: string): Promise<SettingsPayload> {
-  const config = await readConfig(workspaceRoot)
+  const { config, root } = await readConfigWithSharedFallback(workspaceRoot)
   const active = activeProviderId(config)
   const activeProvider = active !== '' ? config.providers?.[active] : undefined
   const llmRef = activeProvider?.api_key_env ?? config.llm?.api_key_env ?? null
   const providers: ProviderPayload[] = []
   for (const [id, provider] of Object.entries(config.providers ?? {})) {
-    providers.push(await providerPayload(workspaceRoot, id, provider))
+    providers.push(await providerPayload(root, id, provider))
   }
   return {
     version: config.version ?? 1,
@@ -295,7 +311,7 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
       apiBase: activeProvider?.base_url ?? config.llm?.api_base ?? null,
       temperature: activeProvider?.temperature ?? config.llm?.temperature ?? 0.3,
       maxConcurrency: activeProvider?.max_concurrency ?? config.llm?.max_concurrency ?? 8,
-      apiKeyConfigured: await credentialConfigured(workspaceRoot, llmRef),
+      apiKeyConfigured: await credentialConfigured(root, llmRef),
     },
     providers,
     ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'quick' },

@@ -233,13 +233,13 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
         <button className="sy-nw-back" onClick={closeWithGuard}><ArrowLeft size={16} />返回工作台</button>
         <div className="sy-nw-title"><span>笔记</span><small>{courseName}</small></div>
         <div className="sy-nw-actions">
-          {/* 与工作台顶栏同构：开关放在 margin-left:auto 容器内，保存按钮出现时也不会把它挤到左边。 */}
-          <LearningModeSwitch disabled={false} current="notes" onSelect={switchMode} />
+          {/* 开关放在最后一个：与工作台顶栏同规格，且保存按钮出现/消失时它的绝对位置不变。 */}
           {editingId !== null && (
             <button className="sy-primary" disabled={busy || title.trim() === ""} onClick={() => void save()}>
               {busy ? "保存中…" : dirty ? "保存" : "已保存"}
             </button>
           )}
+          <LearningModeSwitch disabled={false} current="notes" onSelect={switchMode} />
         </div>
       </header>
 

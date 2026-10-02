@@ -47,6 +47,7 @@ import {
   searchSessions,
   saveProvider,
   setCredential,
+  setSharedConfigRoot,
   settingsPayload,
   updateSettings,
   agentEventToFrame,
@@ -238,11 +239,6 @@ function frameToSseData(frame: NonNullable<ReturnType<typeof agentEventToFrame>>
   if (frame.kind === 'ask') return { event: 'ask', data: { question: frame.question } }
   if (frame.kind === 'error') return { event: 'error', data: { code: frame.code, message: frame.message } }
   return { event: frame.kind, data: frame.payload }
-}
-
-/** 配置是否足以发起一次模型调用（判定口径与 chat-service 的 configProblem 一致）。 */
-function usableConfig(config: import('@syllora/chat-service').ResolvedChatConfig | null): config is import('@syllora/chat-service').ResolvedChatConfig {
-  return config !== null && config.providerId !== '' && config.baseUrl !== '' && config.model !== ''
 }
 
 interface StartupRegistry {
@@ -579,6 +575,10 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
   await mkdir(settingsRoot, { recursive: true })
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
+  // 设置页把供应商写在共享设置目录，对话/构课解析的是课程目录：登记共享根，
+  // 让 chat-service 的所有配置解析路径都能回落（只补 chat/stream 一条会漏掉
+  // 恢复重放、队列回合与会话内选过模型的分支）。
+  setSharedConfigRoot(settingsRoot)
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
   const syllora = new SylloraProjects(settingsRoot, { managedCoursesRoot: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot,'.syllora'), pdf: extractPdfPages, registerProject: async path => {
@@ -1437,13 +1437,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))
       return
     }
-    // 课程文件夹可能没有自己的 .syllora/config.yaml（工作台的模型配置写在共享
-    // 设置目录）：回落到共享配置，避免「设置里已配好、对话却报未配置」。
-    let config = await loadChatConfig(workspaceRoot).catch(() => null)
-    if (!usableConfig(config)) {
-      const shared = await configFacts().catch(() => null)
-      if (usableConfig(shared)) config = shared
-    }
+    // 课程文件夹通常没有自己的 .syllora/config.yaml（模型配置写在共享设置
+    // 目录）：loadChatConfig 内部按登记的共享根回落，这里不再重复兜底。
+    const config = await loadChatConfig(workspaceRoot).catch(() => null)
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -1453,7 +1449,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (response.writableEnded || response.destroyed) return
       response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     }
-    const mode = typeof input.mode === 'string' && ['quick', 'quick', 'feynman', 'debug'].includes(input.mode)
+    const mode = typeof input.mode === 'string' && ['quick', 'feynman', 'debug'].includes(input.mode)
       ? input.mode as LearningMode
       : 'quick'
     const sessionId = typeof input.sessionId === 'string' ? input.sessionId : null

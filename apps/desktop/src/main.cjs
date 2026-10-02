@@ -229,7 +229,7 @@ async function createMainWindow() {
     backgroundColor: '#F4F3EE',
     title: 'Syllora',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#ffffff', symbolColor: '#617796', height: 70 },
+    titleBarOverlay: { color: '#ffffff', symbolColor: '#617796', height: 46 },
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -395,7 +395,7 @@ ipcMain.handle('syllora:window-theme', (event, input) => {
   win.setTitleBarOverlay({
     color: spec.color ?? (theme === 'dark' ? '#171f2e' : '#ffffff'),
     symbolColor: spec.symbolColor ?? (theme === 'dark' ? '#b9cbe4' : '#617796'),
-    height: spec.height ?? 70,
+    height: spec.height ?? 46,
   })
   return { ok: true }
 })

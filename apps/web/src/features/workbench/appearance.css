@@ -33,7 +33,9 @@
 :root[data-theme=dark] .rail-create{background:var(--dark-surface);border-color:#334763}
 :root[data-theme=dark] .rail-divider{background:var(--line)}
 :root[data-theme=dark] .modal::backdrop{background:#030914aa}
-:root[data-theme=dark] :is(.study-panel,.reader-assistant,.reader-toolbar,.reader-bottom-hint,.settings-navigation,.panel-footer,.stats-summary,.home-today,.settings-data-card,.library-add,.add-course-card,.home-add-course){background:#141e2d;border-color:var(--line)}
+:root[data-theme=dark] :is(.study-panel,.reader-toolbar,.reader-bottom-hint,.settings-navigation,.panel-footer,.stats-summary,.home-today,.settings-data-card,.library-add,.add-course-card,.home-add-course){background:#141e2d;border-color:var(--line)}
+/* 辅助阅读的右侧看板与工作台 .sy-right 同底色（暗色下同样是 var(--white)）。 */
+:root[data-theme=dark] .reader-assistant{background:var(--white);border-color:var(--line)}
 :root[data-theme=dark] :is(.home-continue,.next-step){background:#1a2a47;border-color:#2e4267}
 :root[data-theme=dark] :is(.home-mode-card,.settings-info,.concept-note,.session-tip,.settings-preview-note,.course-identity-preview){background:#19273d;border-color:#2b3d5a}
 :root[data-theme=dark] .home-mode-card.reading{background:#192b2b;border-color:#2d4340}

@@ -38,17 +38,22 @@ export function ProjectDialog({onClose,onOpen,migrationName}:{onClose:()=>void;o
     <div className="sy-row"><button disabled={busy} onClick={onClose}>取消</button><button className="sy-primary" disabled={busy||!name.trim()||(!migrationName&&!icon)} onClick={async()=>{setBusy(true);setError('');try{await onOpen(name.trim(),icon||undefined)}catch(e){setError(e instanceof Error?e.message:'创建失败')}finally{setBusy(false)}}}>{busy?<LoaderCircle size={15} className="sy-spin"/>:null}{migrationName?'迁移课程':'创建课程'}</button></div>
   </section></div>;
 }
-export function MaterialInitialization({course,epoch,busy,running,onRun}:{course:CourseView;epoch:number;busy:boolean;running:boolean;onRun:(action:string,payload:Record<string,unknown>)=>Promise<unknown>}) {
-  const [files,setFiles]=useState<FileCandidate[]>([]),[selected,setSelected]=useState<string[]>([]),[missing,setMissing]=useState<string[]>([]),[loading,setLoading]=useState(false),[failure,setFailure]=useState<{title:string;message:string}|null>(null);
-  const scan=async()=>{setLoading(true);setFailure(null);try{const result=await projectRpc<{files:FileCandidate[];missing:string[]}>('scan',{courseId:course.id});setFiles(result.files);setMissing(result.missing);setSelected(result.files.filter(f=>f.status==='ready'&&course.materials.find(m=>m.path===f.path)?.active!==false).map(f=>f.path))}catch(e){setFailure({title:'资料扫描失败',message:e instanceof Error?e.message:'扫描失败'})}finally{setLoading(false)}};
+/**
+ * 资料页的三个按钮：上传资料 / 重新扫描资料 / 更新课程讲义。
+ * 勾选清单已移除——扫描后自动纳入所有可用文件（缓存按内容命中，重复整理不重算）。
+ */
+export function MaterialInitialization({course,epoch,busy,running,onRun,onUpload}:{course:CourseView;epoch:number;busy:boolean;running:boolean;onRun:(action:string,payload:Record<string,unknown>)=>Promise<unknown>;onUpload:()=>void}) {
+  const [files,setFiles]=useState<FileCandidate[]>([]),[loading,setLoading]=useState(false),[failure,setFailure]=useState<{title:string;message:string}|null>(null);
+  const scan=async()=>{setLoading(true);setFailure(null);try{const result=await projectRpc<{files:FileCandidate[];missing:string[]}>('scan',{courseId:course.id});setFiles(result.files)}catch(e){setFailure({title:'资料扫描失败',message:e instanceof Error?e.message:'扫描失败'})}finally{setLoading(false)}};
   useEffect(()=>{void scan()},[course.id,epoch,course.revision]); // component is keyed by course; scans never cross project selection
   // 失败一律走居中弹窗：旧实现只有行内一行提示，初始化失败后没有可关闭的出口。
   const initialize=async(payload:Record<string,unknown>)=>{try{await onRun('initialize',payload)}catch(e){setFailure({title:'初始化失败',message:e instanceof Error?e.message:'初始化未完成。已归档的资料与学习记录不受影响，可检查资料后重试。'})}};
-  return <><section className="sy-initialization"><h2>检查课程资料</h2><p className="sy-muted">先选择本轮资料，再初始化为可阅读的章节讲义。原文件保持原样。</p><button disabled={loading||running} onClick={()=>void scan()}>{loading?'正在扫描…':'重新扫描资料'}</button>
-    {files.map(f=><label className="sy-file-candidate" key={f.path}><input type="checkbox" disabled={f.status!=='ready'||running||course.archived} checked={selected.includes(f.path)} onChange={e=>setSelected(e.target.checked?[...selected,f.path]:selected.filter(p=>p!==f.path))}/><span><strong>{f.path}</strong><small>{(f.size/1024).toFixed(1)} KiB · {f.status==='ready'?({added:'新增',changed:'内容已变化',unchanged:'未变化'}[f.change]):f.reason}</small></span></label>)}
-    {missing.length>0&&<p className="sy-muted">原文件已缺失：{missing.join('、')}。已有学习记录仍保留。</p>}
-    <button className="sy-primary" disabled={!selected.length||busy||running||course.archived} onClick={()=>void initialize({paths:selected,fingerprints:Object.fromEntries(files.filter(f=>selected.includes(f.path)).map(f=>[f.path,f.fingerprint])),acceptPartial:true})}>{course.revision?'更新课程讲义':'初始化课程'} · {selected.length} 份资料</button>
-  </section>
+  const ready=files.filter(f=>f.status==='ready'&&course.materials.find(m=>m.path===f.path)?.active!==false);
+  return <><section className="sy-initialization"><div className="sy-row">
+    <button disabled={busy||running||course.archived} onClick={onUpload}>上传资料</button>
+    <button disabled={loading||running} onClick={()=>void scan()}>{loading?'正在扫描…':'重新扫描资料'}</button>
+    <button className="sy-primary" disabled={!ready.length||busy||running||course.archived} onClick={()=>void initialize({paths:ready.map(f=>f.path),fingerprints:Object.fromEntries(ready.map(f=>[f.path,f.fingerprint])),acceptPartial:true})}>更新课程讲义</button>
+  </div></section>
   {failure&&<CenteredErrorDialog title={failure.title} message={failure.message} onClose={()=>setFailure(null)}/>}
   </>;
 }

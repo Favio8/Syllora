@@ -7,10 +7,11 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
 import { normalizeProtocol, type ProviderProtocol } from './settings.ts'
+import { sharedConfigRootOf } from './shared-root.ts'
 
 export interface ResolvedChatConfig {
   readonly providerId: string
@@ -30,7 +31,7 @@ export interface ResolvedChatConfig {
   readonly maxConcurrency: number
   /** Per-request output cap（config.yaml `max_tokens`）；null=适配器默认。 */
   readonly maxTokens?: number | null
-  readonly defaultMode: 'quick' | 'quick' | 'feynman' | 'debug'
+  readonly defaultMode: 'quick' | 'feynman' | 'debug'
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
@@ -102,12 +103,51 @@ function normalizeBaseUrl(value: string): string {
 }
 
 /**
- * Load and resolve the active chat config for one workspace.
+ * 共享设置目录：Host 启动时登记（见 shared-root.ts）。工作台的模型配置写在
+ * 共享目录，课程目录通常没有自己的 `.syllora/config.yaml`，不回落就会出现
+ * 「设置里已配好、对话却报未配置」。
+ */
+
+/** 「能发出一次请求」才算可用：缺供应商、缺 Base URL、缺模型都算未配置。 */
+function configUsable(config: ResolvedChatConfig): boolean {
+  return config.providerId !== '' && config.baseUrl !== '' && config.model !== ''
+}
+
+/**
+ * 工作区根与共享根之间取值，不做静默换供应商：
+ * 1. 工作区根读不出可用供应商 → 用共享根（课程目录从没配过就是这一种）；
+ * 2. 工作区根有供应商但缺 API Key，共享根对同一供应商/同一 baseUrl/同一模型有 Key → 只借 Key；
+ * 3. 其余一律保持工作区根。
+ */
+function pickChatConfig(primary: ResolvedChatConfig, fallback: ResolvedChatConfig | null): ResolvedChatConfig {
+  if (fallback === null) return primary
+  if (!configUsable(primary)) return configUsable(fallback) ? fallback : primary
+  if (primary.apiKey === null && fallback.apiKey !== null
+    && fallback.providerId === primary.providerId
+    && fallback.baseUrl === primary.baseUrl
+    && fallback.model === primary.model) {
+    return { ...primary, apiKey: fallback.apiKey }
+  }
+  return primary
+}
+
+/**
+ * Load and resolve the active chat config for one workspace, falling back to
+ * the registered shared settings root when the workspace itself is unconfigured.
  * @param workspaceRoot - The workspace root holding `.syllora/config.yaml`.
  * @returns resolved connection facts; `baseUrl`/`apiKey` may be null when
  * unconfigured (the host reports a clear error at chat time).
  */
 export async function loadChatConfig(workspaceRoot: string, selection?: { providerId?: string; model?: string }): Promise<ResolvedChatConfig> {
+  const primary = await readChatConfig(workspaceRoot, selection)
+  const sharedRoot = sharedConfigRootOf()
+  if (sharedRoot === null || sharedRoot === resolve(workspaceRoot)) return primary
+  const shared = await readChatConfig(sharedRoot, selection).catch(() => null)
+  return pickChatConfig(primary, shared)
+}
+
+/** 只读给定根自己的 config.yaml：loadChatConfig 的回落由上层包装负责。 */
+async function readChatConfig(workspaceRoot: string, selection?: { providerId?: string; model?: string }): Promise<ResolvedChatConfig> {
   const configPath = join(workspaceStateDirOf(workspaceRoot), 'config.yaml')
   const raw = await readFile(configPath, 'utf8').catch(() => null)
   if (raw === null) {
