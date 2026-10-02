@@ -85,7 +85,7 @@ export default function AgentChat({ folder, courseName, onOpenSettings, children
 
   return (
     <div className="sy-agent-chat">
-      <WorkbenchChat courseName={courseName} onUpload={onUpload} onPractice={onPractice} {...(onAgentManage ? { onAgentManage } : {})} disabled={disabled}>{children}</WorkbenchChat>
+      <WorkbenchChat courseName={courseName} onUpload={onUpload} onPractice={onPractice} onOpenSettings={onOpenSettings} {...(onAgentManage ? { onAgentManage } : {})} disabled={disabled}>{children}</WorkbenchChat>
       {paletteOpen ? <CommandPalette /> : null}
     </div>
   );

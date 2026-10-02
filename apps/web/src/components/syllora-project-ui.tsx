@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, LoaderCircle, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from '../lib/markdownPlugins';
 import IconPicker from '../features/workbench/components/IconPicker';
 import Dropdown from '../features/workbench/components/Dropdown';
 import { api } from '../lib/api';
@@ -68,7 +68,7 @@ export function CenteredErrorDialog({title,message,onClose}:{title:string;messag
     <div className="sy-row"><button className="sy-primary" ref={closeRef} onClick={onClose}>关闭</button></div>
   </section></div>;
 }
-const Markdown=({text}:{text:string})=><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{img:({alt})=><span>{alt?`[图片：${alt}]`:'[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{text}</ReactMarkdown>;
+const Markdown=({text}:{text:string})=><ReactMarkdown skipHtml remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:({alt})=><span>{alt?`[图片：${alt}]`:'[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{normalizeMathDelimiters(text)}</ReactMarkdown>;
 export function LectureReader({course,onSource}:{course:CourseView;onSource:(id:string)=>void}) {
   const [lectures,setLectures]=useState<Lecture[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState('');
   useEffect(()=>{let disposed=false;setLectures([]);setError('');void projectRpc<{lectures:Lecture[]}>('lectures',{courseId:course.id}).then(result=>{if(!disposed){setLectures(result.lectures);setSelected(result.lectures[0]?.id??'')}}).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:'讲义读取失败')});return()=>{disposed=true}},[course.id,course.revision]);

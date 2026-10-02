@@ -22,6 +22,7 @@ import type {
   SessionSearchResponse,
   SyncResponse,
   SettingsPayload,
+  ToolInventoryEntry,
   ProviderModelPayload,
   ProviderCatalogEntry,
   ProviderProtocol,
@@ -396,6 +397,9 @@ export const api = {
 
   /** 设置（M2 起经 RPC settings.get；默认模式来自 config.yaml）。 */
   settings: () => rpc<SettingsPayload>("settings.get"),
+
+  /** 工具（技能）清单：Agent 管理弹窗的「技能」面板，只读展示当前可调用的工具。 */
+  tools: () => rpc<{ tools: ToolInventoryEntry[] }>("tools.list"),
 
   /** 部分更新语义（api_spec §2.6 v2.6）：只发送出现的字段。 */
   updateSettings: (payload: {

@@ -8,8 +8,9 @@ import NotesGraph from './NotesGraph';
 import { api } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import type { SylloraState, Task, CourseView } from '../types/syllora';
-import type { SettingsPayload } from '../types/api';
+import type { SettingsPayload, ToolInventoryEntry } from '../types/api';
 import { editDraft, hydrateCourse, markSaved, rememberServer, type DraftCache } from './syllora-drafts';
+import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from '../lib/markdownPlugins';
 import { CenteredErrorDialog, LectureReader, MaterialInitialization, ProjectDialog } from './syllora-project-ui';
 import LearningModeSwitch from '../features/workbench/components/LearningModeSwitch';
 import { LearningJobDiagnostics, LearningMetrics, useLearningExposures } from './syllora-metrics';
@@ -303,56 +304,23 @@ export default function Syllora() {
   const exposureError=useLearningExposures(course,rpc,tab);
   const uiData=data?projectWorkspace(data):null;
   const displayCourse=uiData?.courses.find(item=>item.id===selected);
-  // 原生窗口按钮区（Electron titleBarOverlay）必须匹配"按钮下方真实可见的颜色"：
-  //  - 顶栏容器常常是透明背景（.sy-nw-top 就没有背景声明），所以要从元素向上找第一个
-  //    真正不透明的背景色；直接读元素自己的 backgroundColor 会拿到 rgba(0,0,0,0)，
-  //    换算出来是纯黑，反而在浅色页面上糊出一块黑条。
-  //  - 弹窗打开时，按钮下方是"底色 + .sy-overlay 半透明遮罩"的合成色；只推底色会出现
-  //    一块不透明白框。这里按 alpha 合成，按钮看起来才是透明的。
-  // 高度不再取实测值：实测顶栏高度会直接决定原生按钮的大小，70px 的按钮过大，
-  // 固定成 WINDOW_CONTROL_HEIGHT；顶栏本身的高度由 CSS 决定，与这里无关。
+  // 原生窗口按钮区（Electron titleBarOverlay）：底色不再"实测合成"。
+  //  - 旧实现沿祖先找背景色、再把 .sy-overlay 遮罩按 alpha 合成，而观察器只监听
+  //    body 的直接子节点（无 subtree），弹窗在应用树内开合时永不重算——一次灰色
+  //    值就粘住，表现为顶栏明明是白的、三个按钮底下却是灰的。
+  //  - 顶栏在两个外壳、两种主题下恒为 var(--white)（浅色 #fff / 深色 #171f2e），
+  //    所以直接按主题推固定色 + 固定高度，不需要测量，也就不需要任何监听。
+  // 高度固定成 WINDOW_CONTROL_HEIGHT：它决定原生按钮的大小，不跟顶栏高度走。
   useEffect(()=>{
     const theme=data?.uiPreferences?.theme??'light';
     document.documentElement.dataset.theme=theme;
-    const bridge=desktopBridge();
-    if(!bridge?.setWindowTheme)return;
-    const parse=(value:string)=>{
-      const match=/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(value);
-      if(!match)return null;
-      return { r:Number(match[1]), g:Number(match[2]), b:Number(match[3]), a:match[4]===undefined?1:Number(match[4]) };
-    };
-    const push=()=>{
-      const header=document.querySelector<HTMLElement>('.sy-top')??document.querySelector<HTMLElement>('.sy-nw-top');
-      if(!header)return;
-      const height=WINDOW_CONTROL_HEIGHT;
-      let surface=null as { r:number; g:number; b:number; a:number }|null;
-      for(let node:HTMLElement|null=header;node;node=node.parentElement){
-        const color=parse(getComputedStyle(node).backgroundColor);
-        if(color&&color.a>0){surface=color;break}
-      }
-      if(!surface)surface={ r:255, g:255, b:255, a:1 };
-      const veil=document.querySelector<HTMLElement>('.sy-overlay');
-      if(veil){
-        const layer=parse(getComputedStyle(veil).backgroundColor);
-        if(layer&&layer.a>0) surface={ r:Math.round(surface.r*(1-layer.a)+layer.r*layer.a), g:Math.round(surface.g*(1-layer.a)+layer.g*layer.a), b:Math.round(surface.b*(1-layer.a)+layer.b*layer.a), a:1 };
-      }
-      const hex=(value:number)=>value.toString(16).padStart(2,'0');
-      void bridge.setWindowTheme?.({
-        theme,
-        color:`#${hex(surface.r)}${hex(surface.g)}${hex(surface.b)}`,
-        symbolColor:theme==='dark'?'#b9cbe4':'#617796',
-        height,
-      });
-    };
-    // 等一帧再量：view/断点切换后的样式尚未生效时量到的是旧值。
-    let frame=requestAnimationFrame(push);
-    const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(push)};
-    window.addEventListener('resize',schedule);
-    // 弹窗开合会改变按钮下方的合成色（遮罩出现/消失），因此要跟着 DOM 变化重推。
-    const observer=new MutationObserver(schedule);
-    observer.observe(document.body,{ childList:true });
-    return ()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);observer.disconnect()};
-  },[data?.uiPreferences?.theme,view,learningMode,showRight,notesMode]);
+    void desktopBridge()?.setWindowTheme?.({
+      theme,
+      color:theme==='dark'?'#171f2e':'#ffffff',
+      symbolColor:theme==='dark'?'#b9cbe4':'#617796',
+      height:WINDOW_CONTROL_HEIGHT,
+    });
+  },[data?.uiPreferences?.theme]);
   const openUiCourse=async(id:string,mode:LearningMode='chat')=>{setRenaming(false);if(!(await selectCourse(id)))return false;setViewStack([]);setView('workspace');setLearningMode(mode);setMobileNav(false);return true;};
   const manageUiCourse=async(item:DisplayCourse,action:CourseAction)=>{
     if(!(await selectCourse(item.id)))return;
@@ -396,7 +364,7 @@ export default function Syllora() {
         {course.next.kind==='blocked'&&<section className="sy-notice"><h2>恢复「{pointName(course.next.pointId!)}」的资料来源</h2><p>先补充并整理资料，再选择支持同一知识点的整理结果。关联只恢复新学习入口，不恢复已失效题目的评估证据。</p><div className="form-field"><span>补充资料中的知识点</span><Dropdown label="补充资料中的知识点" value={recoveryPoint} onChange={setRecoveryPoint} placeholder="请选择已整理知识点" options={course.points.filter(point=>!(course.blockedPointIds??[]).includes(point.id)).map(point=>({value:point.id,label:`${point.chapter} · ${point.name}`}))}/></div><button disabled={!recoveryPoint||busy||course.archived} onClick={()=>void run('restorePointSources',{pointId:course.next.pointId,replacementPointId:recoveryPoint})}>确认关联并恢复学习</button></section>}
         {(!course.folder||course.messages.length>0)&&<DiscussionShell className={archiveDiscussion?'sy-discussion-archive':undefined}>
         {archiveDiscussion&&<summary>历史资料问答 · {course.messages.length} 条（对话学习已切换为学习助手，历史只读保留）</summary>}
-        <section className="sy-discussion"><div className="sy-section-title">资料问答</div>{!course.messages.length&&<div className="sy-chat-empty"><FileText size={23}/><p>围绕你的课程资料提问。<br/><span>回答会附上可查看的来源；资料不足时会明确说明。</span></p></div>}{course.messages.map(m=><article className={`sy-message ${m.role}`} key={m.id} data-learning-kind={m.role==='assistant'&&m.sourceIds.length?'answer':undefined} data-learning-id={m.role==='assistant'&&m.sourceIds.length?m.id:undefined}><div className="sy-message-name">{m.role==='user'?'你':'Syllora'}<small>{formatTime(m.at,course.timezone)}</small></div><ReactMarkdown skipHtml components={{img:({alt})=><span>{alt ? `[图片：${alt}]` : '[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{m.text}</ReactMarkdown>{m.sourceIds.length>0&&<div className="sy-citations">{m.sourceIds.map((s,i)=><button key={s} onClick={()=>setSourceId(s)}><FileText size={13}/>来源 {i+1}</button>)}{m.role==='assistant'&&<button disabled={course.archived||busy} onClick={()=>{setAnswerReport(m.id);setAnswerReason(m.report?.reason??'')}}>{m.report?'已报错，依据待核验':'报告回答来源问题'}</button>}</div>}</article>)}<div ref={bottom}/></section>
+        <section className="sy-discussion"><div className="sy-section-title">资料问答</div>{!course.messages.length&&<div className="sy-chat-empty"><FileText size={23}/><p>围绕你的课程资料提问。<br/><span>回答会附上可查看的来源；资料不足时会明确说明。</span></p></div>}{course.messages.map(m=><article className={`sy-message ${m.role}`} key={m.id} data-learning-kind={m.role==='assistant'&&m.sourceIds.length?'answer':undefined} data-learning-id={m.role==='assistant'&&m.sourceIds.length?m.id:undefined}><div className="sy-message-name">{m.role==='user'?'你':'Syllora'}<small>{formatTime(m.at,course.timezone)}</small></div><ReactMarkdown skipHtml remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:({alt})=><span>{alt ? `[图片：${alt}]` : '[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{normalizeMathDelimiters(m.text)}</ReactMarkdown>{m.sourceIds.length>0&&<div className="sy-citations">{m.sourceIds.map((s,i)=><button key={s} onClick={()=>setSourceId(s)}><FileText size={13}/>来源 {i+1}</button>)}{m.role==='assistant'&&<button disabled={course.archived||busy} onClick={()=>{setAnswerReport(m.id);setAnswerReason(m.report?.reason??'')}}>{m.report?'已报错，依据待核验':'报告回答来源问题'}</button>}</div>}</article>)}<div ref={bottom}/></section>
         </DiscussionShell>}
       </div>
       </ChatWorkspace>
@@ -549,24 +517,40 @@ function OutlineManagePage({course,scope,setScope,estimates,setEstimates,busy,on
 function AgentManageDialog({onClose}:{onClose:()=>void}) {
   const [payload,setPayload]=useState<SettingsPayload|null>(null);
   const [preset,setPreset]=useState('syllora-learning');
-  const [permission,setPermission]=useState('workspace-write');
   const [plugins,setPlugins]=useState<Record<string,boolean>>({});
-  const [systemPrompt,setSystemPrompt]=useState('');
+  // 三项各占一行，细节进二级面板：预设用下拉框就地选，插件/技能点进去看
+  // （不再把全部设置内容平铺在一个弹窗里）。
+  const [pane,setPane]=useState<'root'|'plugins'|'skills'>('root');
+  const [skills,setSkills]=useState<ToolInventoryEntry[]|null>(null);
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState('');
-  useEffect(()=>{let disposed=false;void api.settings().then(data=>{if(disposed)return;setPayload(data);setPreset(data.agent.preset);setPermission(data.permissions.preset);setPlugins(Object.fromEntries(data.plugins.inventory.map(item=>[item.id,item.enabled])));setSystemPrompt(data.agent.systemPrompt)}).catch(reason=>{if(!disposed)setError(reason instanceof Error?reason.message:'无法读取 Agent 配置')});return()=>{disposed=true}},[]);
-  const current=payload?.agent.presets.find(item=>item.id===preset);
-  const save=async()=>{setBusy(true);setError('');setNotice('');try{const next=await api.updateSettings({agentPreset:preset,permissionPreset:permission,plugins,agentSystemPrompt:systemPrompt});setPayload(next);setNotice('已保存。新的对话回合生效；进行中的回合不变。')}catch(reason){setError(reason instanceof Error?reason.message:'保存失败')}finally{setBusy(false)}};
+  useEffect(()=>{let disposed=false;void api.settings().then(data=>{if(disposed)return;setPayload(data);setPreset(data.agent.preset);setPlugins(Object.fromEntries(data.plugins.inventory.map(item=>[item.id,item.enabled])))}).catch(reason=>{if(!disposed)setError(reason instanceof Error?reason.message:'无法读取 Agent 配置')});return()=>{disposed=true}},[]);
+  // 技能清单只读：宿主按插件与运行能力给出当前可调用的工具，进面板时才拉取。
+  useEffect(()=>{if(pane!=='skills'||skills!==null)return;let disposed=false;void api.tools().then(result=>{if(!disposed)setSkills(result.tools)}).catch(reason=>{if(!disposed){setSkills([]);setError(reason instanceof Error?reason.message:'无法读取技能清单')}});return()=>{disposed=true}},[pane,skills]);
+  const enabledPlugins=payload?payload.plugins.inventory.filter(item=>plugins[item.id]??item.enabled).length:0;
+  const save=async()=>{setBusy(true);setError('');setNotice('');try{const next=await api.updateSettings({agentPreset:preset,plugins});setPayload(next);setNotice('已保存。新的对话回合生效；进行中的回合不变。')}catch(reason){setError(reason instanceof Error?reason.message:'保存失败')}finally{setBusy(false)}};
+  const policyGroups:[string,string][]=[['read','读取'],['action','操作'],['write','写入'],['interactive','交互']];
   return <div className="sy-overlay" onClick={onClose}><section className="sy-modal sy-agent-manage" role="dialog" aria-modal="true" aria-label="Agent 管理" onClick={event=>event.stopPropagation()}>
     <header><h2>Agent 管理</h2><button aria-label="关闭 Agent 管理" onClick={onClose}><X size={19}/></button></header>
-    {!payload?<p className="sy-muted">{error||'正在读取配置…'}</p>:<>
-      <p className="sy-muted">配置对话所用的 Agent 预设、权限、插件与提示词。保存后对新的回合生效。</p>
+    {!payload?<p className="sy-muted">{error||'正在读取配置…'}</p>:pane==='plugins'?<>
+      <button className="sy-agent-back" onClick={()=>setPane('root')}><ArrowLeft size={15}/>插件</button>
+      <p className="sy-muted">内置插件决定 Agent 能拿到哪一组能力；未配置运行能力的插件不可用。</p>
+      <div className="sy-agent-plugins">{payload.plugins.inventory.map(item=><label key={item.id} className="sy-agent-plugin"><input type="checkbox" checked={plugins[item.id]??item.enabled} onChange={event=>setPlugins({...plugins,[item.id]:event.target.checked})}/><span><strong>{item.name}</strong><small>{item.source==='builtin'?'内置':item.reason||'工作区'}</small></span></label>)}</div>
+      {error&&<p role="alert" className="sy-agent-error">{error}</p>}
+      <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save().then(()=>setPane('root'))}>{busy?'保存中…':'保存并返回'}</button><button disabled={busy} onClick={()=>setPane('root')}>返回</button></div>
+    </>:pane==='skills'?<>
+      <button className="sy-agent-back" onClick={()=>setPane('root')}><ArrowLeft size={15}/>技能</button>
+      <p className="sy-muted">技能是 Agent 当前可调用的工具，由插件与运行能力提供；这里是只读清单。</p>
+      {skills===null?<p className="sy-muted">正在读取技能清单…</p>:skills.length===0?<p className="sy-muted">当前没有可用技能。</p>:<div className="sy-agent-skills">{policyGroups.map(([policy,label])=>{const items=skills.filter(item=>item.policy===policy);if(!items.length)return null;return <section key={policy}><h3>{label}<small>{items.length}</small></h3>{items.map(item=><div className="sy-agent-skill" key={item.name}><strong>{item.description}</strong><small>{item.name}{item.requiresApproval?' · 需要审批':''}{item.providerStatus&&!item.providerStatus.available?` · ${item.providerStatus.reason??'运行能力未启用'}`:''}</small></div>)}</section>})}</div>}
+      {error&&<p role="alert" className="sy-agent-error">{error}</p>}
+      <div className="sy-row"><button onClick={()=>setPane('root')}>返回</button></div>
+    </>:<>
+      <p className="sy-muted">配置对话所用的 Agent 预设、插件与技能。保存后对新的回合生效；权限在输入框下方的「权限」里即时切换。</p>
       <label className="sy-agent-field"><span>Agent 预设</span><Dropdown label="Agent 预设" value={preset} onChange={setPreset} options={payload.agent.presets.map(item=>({value:item.id,label:`${item.name} · ${item.description}`}))}/></label>
-      <div className="sy-agent-field"><span>权限</span><div className="sy-agent-radios">{payload.permissions.presets.map(item=><label key={item.id} className={"sy-agent-radio"+(permission===item.id?" is-selected":"")}><input type="radio" name="agent-permission" checked={permission===item.id} onChange={()=>setPermission(item.id)}/><span><strong>{item.name}</strong><small>{item.description}</small></span></label>)}</div></div>
-      <div className="sy-agent-field"><span>插件</span><div className="sy-agent-plugins">{payload.plugins.inventory.map(item=><label key={item.id} className="sy-agent-plugin"><input type="checkbox" checked={plugins[item.id]??item.enabled} onChange={event=>setPlugins({...plugins,[item.id]:event.target.checked})}/><span><strong>{item.name}</strong><small>{item.source==='builtin'?'内置':item.reason||'工作区'}</small></span></label>)}</div></div>
-      <label className="sy-agent-field"><span>预设提示词 <small>留空则使用所选预设自带的默认提示词</small></span><textarea rows={7} maxLength={payload.agent.maxPromptChars} value={systemPrompt} placeholder={current?.defaultPrompt??''} onChange={event=>setSystemPrompt(event.target.value)}/><small className="sy-muted">已用 {systemPrompt.length} / {payload.agent.maxPromptChars} 字符</small></label>
+      <div className="sy-agent-field"><span>插件</span><button className="sy-agent-entry" onClick={()=>setPane('plugins')}><span><strong>插件</strong><small>已启用 {enabledPlugins} / {payload.plugins.inventory.length}</small></span><ChevronRight size={16}/></button></div>
+      <div className="sy-agent-field"><span>技能</span><button className="sy-agent-entry" onClick={()=>setPane('skills')}><span><strong>技能</strong><small>查看 Agent 当前可调用的工具</small></span><ChevronRight size={16}/></button></div>
       {notice&&<p role="status" className="sy-muted">{notice}</p>}
       {error&&<p role="alert" className="sy-agent-error">{error}</p>}
-      <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save()}>{busy?'保存中…':'保存'}</button><button disabled={busy} onClick={()=>{setSystemPrompt('');}}>清空提示词</button><button disabled={busy} onClick={onClose}>取消</button></div>
+      <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save()}>{busy?'保存中…':'保存'}</button><button disabled={busy} onClick={onClose}>取消</button></div>
     </>}
   </section></div>;
 }

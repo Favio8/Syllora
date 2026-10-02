@@ -276,8 +276,8 @@ button:active:not(:disabled){transform:scale(.975)}
 .panel-header{padding-right:9px;height:68px;gap:7px}
 .panel-header>.panel-close{width:32px;height:32px;margin-left:auto}
 .error-banner{position:fixed;z-index:70;top:78px;left:50%;transform:translateX(-50%);width:min(660px,calc(100vw - 100px));box-shadow:0 8px 24px #132e5712}
-/* Use the system arrow tip as the visible click point for editable fields. */
-input:not([type]),input:is([type=text],[type=password],[type=url],[type=number]),textarea{cursor:default}
+/* 可编辑字段用文本光标（含工作区外的笔记页）：悬停就能看出这里是输入框。 */
+input:not([type]),input:is([type=text],[type=password],[type=url],[type=number],[type=search],[type=email],[type=tel]),textarea{cursor:text}
 .input-unit{position:relative;padding:0}
 .input-unit>input{min-width:0;flex:1;padding:10px 54px 10px 12px}
 .input-unit>span{position:absolute;right:12px;top:50%;transform:translateY(-50%);white-space:nowrap;pointer-events:none}

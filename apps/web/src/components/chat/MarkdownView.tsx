@@ -15,9 +15,9 @@
 
 import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import InteractiveViz from "./InteractiveViz";
 import { splitVizSegments } from "@/src/lib/vizSegments";
+import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from "@/src/lib/markdownPlugins";
 
 function codeLanguage(children: React.ReactNode): string {
   const first = Array.isArray(children) ? children[0] : children;
@@ -27,8 +27,6 @@ function codeLanguage(children: React.ReactNode): string {
       : "";
   return cls.replace("language-", "");
 }
-
-const REMARK_PLUGINS = [remarkGfm];
 
 /** 模块级常量：避免流式每帧重建 components 对象。 */
 const MARKDOWN_COMPONENTS = {
@@ -145,7 +143,8 @@ const MARKDOWN_COMPONENTS = {
 const MemoMarkdown = memo(function MdSegment({ code }: { code: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={REMARK_PLUGINS}
+      remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+      rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
       components={MARKDOWN_COMPONENTS}
     >
       {code}
@@ -169,7 +168,7 @@ export default function MarkdownView({
       </p>
     );
   }
-  const segments = useMemo(() => splitVizSegments(content), [content]);
+  const segments = useMemo(() => splitVizSegments(normalizeMathDelimiters(content)), [content]);
   return (
     <div
       data-markdown-view=""

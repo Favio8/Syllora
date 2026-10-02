@@ -71,7 +71,7 @@ export interface SettingsPayload {
     apiKeyConfigured: boolean;
   };
   providers: ProviderPayload[];
-  ui: { defaultMode: "quick" | "quick" | "feynman" | "debug" };
+  ui: { defaultMode: "quick" | "feynman" | "debug" };
   agent: {
     preset: string;
     /** 自定义预设提示词；空串＝使用所选预设自带的默认提示词。 */
@@ -81,6 +81,17 @@ export interface SettingsPayload {
   };
   permissions: { preset: string; presets: Array<{ id: string; name: string; sandboxMode: "read-only" | "workspace-write" | "danger-full-access"; approvalPolicy: "deny" | "ask" | "never"; description: string }> };
   plugins: { inventory: Array<{ id: string; name: string; enabled: boolean; source: "builtin" | "workspace"; reason?: string }> };
+}
+
+/** `tools.list`：Agent 当前可调用的工具（技能）清单；宿主按插件与运行能力决定可用性。 */
+export interface ToolInventoryEntry {
+  name: string;
+  description: string;
+  policy: "read" | "action" | "write" | "interactive";
+  requiresApproval: boolean;
+  renderIntent?: string;
+  provider?: string;
+  providerStatus?: { available: boolean; reason: string | null; installAction: string | null };
 }
 
 /** 项目注册表条目（dsh 语义：uuid 键 + canonical 路径，持久化于宿主）。 */

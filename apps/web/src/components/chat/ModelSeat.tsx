@@ -26,7 +26,7 @@ function modelFor(directory: SessionModelDirectory, provider: string, model: str
   return directory.groups.find((group) => group.id === provider)?.models.find((item) => item.id === model) ?? null;
 }
 
-export default function ModelSeat() {
+export default function ModelSeat({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const activeModel = useAppStore((s) => s.activeModel);
   const setActiveModel = useAppStore((s) => s.setActiveModel);
   const activeCourseId = useAppStore((s) => s.activeCourseId);
@@ -56,6 +56,8 @@ export default function ModelSeat() {
   }, [activeCourseId, activeSessionId, setActiveModel]);
 
   useEffect(() => { if (open) void loadDirectory(); }, [open, loadDirectory]);
+  // 座位在打开前就要显示当前模型：进课程/换会话时先读一次目录（打开菜单时再刷一次）。
+  useEffect(() => { void loadDirectory(); }, [loadDirectory]);
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false); };
@@ -143,7 +145,7 @@ export default function ModelSeat() {
           {directory.failures.map((failure) => <div key={failure.id} className="px-2 py-1.5 text-[11px] text-accent-warn">{failure.name}：{failure.message}</div>)}
           {directory.groups.map((group) => <section key={group.id} role="group" aria-label={group.name} className="border-t border-border-faint py-1 first:border-t-0"><div className="px-2 py-1 text-[11px] font-medium text-text-faint">{group.name}</div>{group.models.map((model) => { const key = `${group.id}/${model.id}`; const selected = currentKey === key; return <button key={model.id} type="button" role="menuitemradio" aria-checked={selected} disabled={selecting !== null} onClick={() => void choose(group.id, model.id)} className={`flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] disabled:opacity-50 ${selected ? "bg-bg-card text-text-primary" : "text-text-muted hover:bg-bg-card hover:text-text-primary"}`}><span className="min-w-0 flex-1 truncate">{model.name || model.id}</span>{selected ? <Check size={14} className="text-accent-focus" aria-hidden /> : null}</button>; })}</section>)}
           {!loading && directory.groups.length === 0 ? <div className="px-2 py-2 text-xs text-text-faint">还没有可用模型。</div> : null}
-          {!directory.routable ? <button type="button" className="mt-1 flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left text-xs text-accent-focus hover:bg-bg-card" onClick={() => { setOpen(false); setSettingsOpen(true); }}><Settings2 size={13} aria-hidden />打开模型配置</button> : null}
+          {!directory.routable ? <button type="button" className="mt-1 flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left text-xs text-accent-focus hover:bg-bg-card" onClick={() => { setOpen(false); if (onOpenSettings) onOpenSettings(); else setSettingsOpen(true); }}><Settings2 size={13} aria-hidden />打开模型配置</button> : null}
         </> : <>
           {!current ? <div className="px-2 py-2 text-xs text-text-faint">请先选择一个模型。</div> : null}
           {current && (currentModel?.efforts?.length ?? 0) === 0 ? <div className="px-2 py-2 text-xs text-text-faint">当前模型不提供思考强度选项。</div> : null}
