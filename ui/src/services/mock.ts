@@ -3,34 +3,45 @@ import type { Course, WorkspaceData, WorkspaceService } from '@/types';
 import { courseIcons } from '@/lib/courseIcons';
 import { dayKey } from '@/lib/activity';
 
-const STORAGE_KEY = 'syllora-ui.workspace.v1';
+export const STORAGE_KEY = 'syllora-ui.workspace.v1';
 let memory: WorkspaceData | null = null;
 const copy = <T,>(value: T): T => structuredClone(value);
 const id = () => crypto.randomUUID();
 
 function read(): WorkspaceData {
-  if (memory) return memory;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw) as WorkspaceData;
       if (saved.version === 1 && Array.isArray(saved.courses) && saved.preferences && saved.courses.every(c => Array.isArray(c.tasks) && Array.isArray(c.points) && Array.isArray(c.messages) && Array.isArray(c.materials))) {
-        memory = { ...saved, activity: saved.activity ?? copy(initialWorkspace.activity ?? []) };
+        memory = { ...saved, revision: saved.revision ?? 0, preferencesVersion: saved.preferencesVersion ?? 0, apiConfigVersion: saved.apiConfigVersion ?? 0, activity: saved.activity ?? copy(initialWorkspace.activity ?? []) };
         return memory;
       }
     }
-  } catch { /* 浏览器禁用存储或旧数据不可读时，使用内存演示。 */ }
+  } catch { if (memory) return memory; /* 存储不可读时保留当前页面快照；写入仍会报错。 */ }
   memory = copy(initialWorkspace);
   return memory;
 }
 
-function write(update: (data: WorkspaceData) => void): WorkspaceData {
-  const data = copy(read());
-  update(data);
-  // 存储失败时明确报错，避免把未持久化的操作显示为已保存。
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  memory = data;
-  return copy(data);
+async function write(update: (data: WorkspaceData) => void): Promise<WorkspaceData> {
+  const commit = () => {
+    // 每次操作读取最新快照；Web Locks 将同源标签页的读改写串行化。
+    const data = copy(read());
+    update(data);
+    data.revision = (data.revision ?? 0) + 1;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    memory = data;
+    return copy(data);
+  };
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(STORAGE_KEY, commit);
+  }
+  // 不支持 Web Locks 的浏览器仅保证当前标签页的同步写入。
+  return commit();
+}
+
+function checkVersion(actual: number | undefined, expected: number) {
+  if ((actual ?? 0) !== expected) throw new Error('设置已在其他页面更新。你的输入已保留，请加载最新设置后重新编辑。');
 }
 
 function course(data: WorkspaceData, courseId: string): Course {
@@ -101,13 +112,25 @@ export const mockService: WorkspaceService = {
     await new Promise(resolve => setTimeout(resolve, 700));
     return write(data => { const target = course(data, courseId); target.messages.push({ id: id(), role: 'assistant', content: demoReply(target, content), createdAt: new Date().toISOString() }); });
   },
-  async savePreferences(preferences) { return write(data => { data.preferences = preferences; }); },
-  async saveApiConfig(config) {
+  async savePreferences(preferences, baseVersion) {
+    if (!preferences.name.trim() || preferences.name.trim().length > 16) throw new Error('称呼需要为 1–16 个字符。');
+    if (!Number.isFinite(preferences.dailyMinutes) || preferences.dailyMinutes < 5 || preferences.dailyMinutes > 480) throw new Error('每日学习时间需要为 5–480 分钟。');
+    return write(data => {
+      checkVersion(data.preferencesVersion, baseVersion);
+      data.preferences = { ...preferences, name: preferences.name.trim() };
+      data.preferencesVersion = (data.preferencesVersion ?? 0) + 1;
+    });
+  },
+  async saveApiConfig(config, baseVersion) {
     if (!config.model.trim()) throw new Error('请填写模型名称。');
     const url = new URL(config.baseUrl);
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('接口地址需要以 http:// 或 https:// 开头。');
     if (!Number.isFinite(config.temperature) || config.temperature < 0 || config.temperature > 2) throw new Error('随机度需要在 0–2 之间。');
-    return write(data => { data.apiConfig = { ...config, baseUrl: config.baseUrl.trim(), model: config.model.trim() }; });
+    return write(data => {
+      checkVersion(data.apiConfigVersion, baseVersion);
+      data.apiConfig = { ...config, baseUrl: config.baseUrl.trim(), model: config.model.trim() };
+      data.apiConfigVersion = (data.apiConfigVersion ?? 0) + 1;
+    });
   },
   async recordActivity(courseId, kind, minutes = 0) {
     return write(data => {
@@ -116,9 +139,14 @@ export const mockService: WorkspaceService = {
     });
   },
   async reset() {
-    localStorage.removeItem(STORAGE_KEY);
+    const next = await write(data => {
+      const revision = data.revision ?? 0;
+      const preferencesVersion = (data.preferencesVersion ?? 0) + 1;
+      const apiConfigVersion = (data.apiConfigVersion ?? 0) + 1;
+      Object.assign(data, copy(initialWorkspace), { revision, preferencesVersion, apiConfigVersion });
+      if (!initialWorkspace.apiConfig) delete data.apiConfig;
+    });
     try { sessionStorage.removeItem('syllora-ui.api-key'); } catch {}
-    memory = copy(initialWorkspace);
-    return copy(memory);
+    return next;
   },
 };

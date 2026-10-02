@@ -42,7 +42,7 @@
 - [README](../README.md) 提供独立安装、启动、静态构建和四套浏览器验证命令。
 - Windows [start-ui.cmd](../start-ui.cmd) 以脚本相对路径定位工程，不依赖开发者的桌面或 `D:` 路径；浏览器脚本支持 `UI_URL`/`CHROME_PATH`，无系统 Chrome 时使用 Playwright Chromium。
 
-## 验证记录
+## 原提交作者验证记录（本轮未重跑 Python 套件）
 
 2026-10-02 在 Windows / Node.js 22.23.2 下，对本分支 `ui/` 执行以下检查。浏览器使用隔离上下文和本分支的静态 `out/` 产物（`PORT=3002`、`UI_URL=http://127.0.0.1:3002`），不读取用户实际 localStorage。
 
@@ -58,7 +58,7 @@
 
 浏览器套件均未发现 JavaScript 异常；基础套件同时确认没有业务 API 请求。末次深色消息与复习概览修复另已检查背景、文字/图标对比度以及手机布局和浅色样式。
 
-现有仓库 CI 以 pnpm 工作区为范围，不能将其通过等同于 `ui/` 已通过测试。原后端未修改，本报告只记录实际执行的独立 UI 检查。
+原提交的仓库 CI 以 pnpm 工作区为范围，其通过不代表 `ui/` 已验证。本轮已补充独立 UI CI，见下文审核记录。原后端未修改。
 
 ## 当前边界与后端待办
 
@@ -88,3 +88,23 @@
 ![正文划词工具栏](preview-reading-selection.png)
 ![深浅色外观选择](preview-appearance.png)
 ![深色用户偏好](preview-preferences-dark.png)
+
+## PR #43 审核与修复记录
+
+2026-10-02，在 FavioStation / Windows / Node.js v24.19.0 上审核原头提交 `429c7e8772e663d9e7ea717ad75c67a202634375`。仅使用合成测试数据和隔离浏览器上下文；未读取用户学习数据或凭据，未调用真实模型。
+
+原始产物类型检查和生产构建通过，但新增状态与真实浏览器回归复现了草稿丢失、跨标签页快照覆盖、旧设置覆盖和延迟回复复活已删除课程。修复包括按课程保留标签页草稿、成功持久化后清除对应草稿、最新快照读改写、Web Locks 串行化、storage 事件刷新、独立设置版本及显式重载、恢复演示数据递增版本，以及资料消失时结束阅读加载状态。旧版本一数据默认版本号为 0，无需清空课程。
+
+| 本轮实际检查 | 结果 |
+|---|---|
+| `npm ci --no-audit --no-fund` | 用户明确允许后安装 ui 锁定依赖；未改变任何依赖版本或锁文件 |
+| `npm test` | 9 项真实 mock 服务状态回归通过 |
+| `npm run typecheck` / `npm run build` | 均通过，生成静态产物 |
+| `node scripts/verify-browser.mjs` | 13 组隔离 Edge 浏览器回归通过；无页面 JavaScript 异常或业务 API 请求；外部请求仅为原有 Google Fonts |
+| 原应用 `scripts/syllora-e2e.ts` | 既有学习闭环浏览器验收通过，使用本地合成模型夹具 |
+| 原应用 `scripts/syllora-verify-issue4.ts` | 8 项作用域、恢复、双页面冲突与旧快照检查通过 |
+| 截图检查 | 已查看深色设置和手机设置，产物位于测试临时目录，不覆盖原提交截图 |
+
+上述 Python 四套作者脚本本轮未运行：本机没有 Python Playwright，改用现有 `apps/web` 的 Node Playwright 添加并执行相关浏览器回归。未安装额外浏览器测试依赖。新增 GitHub CI job `Standalone UI (state, types, build)` 独立使用 ui 锁文件安装并验证；远端最终结果以 PR 和 main 对应提交的检查为准。
+
+Web Locks 不可用的环境不保证跨标签页原子更新。草稿仅在当前标签页会话内保存；真实后端事务、认证、模型及 PDF 正文解析仍待未来联调，不属于本次独立预览交付。

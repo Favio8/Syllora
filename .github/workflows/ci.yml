@@ -152,3 +152,22 @@ jobs:
           name: desktop-smoke-macos-diagnostics
           path: ${{ runner.temp }}/syllora-smoke/
           if-no-files-found: warn
+
+  standalone-ui:
+    name: Standalone UI (state, types, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.19.0
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: ui
+      - run: npm test
+        working-directory: ui
+      - run: npm run typecheck
+        working-directory: ui
+      - run: npm run build
+        working-directory: ui

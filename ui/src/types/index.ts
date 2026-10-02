@@ -58,6 +58,9 @@ export interface Preferences {
 
 export interface WorkspaceData {
   version: 1;
+  revision?: number;
+  preferencesVersion?: number;
+  apiConfigVersion?: number;
   courses: Course[];
   preferences: Preferences;
   activity?: LearningRecord[];
@@ -93,8 +96,8 @@ export interface WorkspaceService {
   removeMaterial(courseId: string, materialId: string): Promise<WorkspaceData>;
   appendMessage(courseId: string, content: string): Promise<WorkspaceData>;
   reply(courseId: string, content: string): Promise<WorkspaceData>;
-  savePreferences(preferences: Preferences): Promise<WorkspaceData>;
-  saveApiConfig(config: ApiConfiguration): Promise<WorkspaceData>;
+  savePreferences(preferences: Preferences, baseVersion: number): Promise<WorkspaceData>;
+  saveApiConfig(config: ApiConfiguration, baseVersion: number): Promise<WorkspaceData>;
   recordActivity(courseId: string, kind: 'practice' | 'reading', minutes?: number): Promise<WorkspaceData>;
   reset(): Promise<WorkspaceData>;
 }

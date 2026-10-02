@@ -23,7 +23,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   const loadDocument = useCallback(async () => {
     const version = ++requestVersion.current;
     setToolbar(null); setResult(null); setPending(null); setError(''); setReadingDoc(null);
-    if (!material) return;
+    if (!material) { setLoading(false); return; }
     setLoading(true);
     try {
       const next = await readingService.document(course.id, material.id);

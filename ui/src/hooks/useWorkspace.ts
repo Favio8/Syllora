@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { workspaceService } from '@/services';
+import { STORAGE_KEY } from '@/services/mock';
 import type { WorkspaceData } from '@/types';
 
 export function useWorkspace() {
@@ -16,12 +17,25 @@ export function useWorkspace() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    let active = true;
+    async function refresh() {
+      try {
+        const next = await workspaceService.load();
+        if (active) setData(current => current && (current.revision ?? 0) > (next.revision ?? 0) ? current : next);
+      } catch { /* 不关闭当前编辑界面；写入失败通过 run 提示。 */ }
+    }
+    function changed(event: StorageEvent) { if (event.storageArea === localStorage && (event.key === STORAGE_KEY || event.key === null)) void refresh(); }
+    window.addEventListener('storage', changed);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('storage', changed); window.removeEventListener('focus', refresh); };
+  }, [load]);
 
   const run = useCallback(async (operation: () => Promise<WorkspaceData>) => {
     try {
       const next = await operation();
-      setData(next);
+      setData(current => current && (current.revision ?? 0) > (next.revision ?? 0) ? current : next);
       setError('');
       return next;
     } catch (e) {

@@ -19,6 +19,7 @@ Windows 可双击本目录的 **start-ui.cmd**，或为它创建桌面快捷方�
 本目录独立使用 npm 锁文件，位于现有 pnpm 工作区之外。根目录 `pnpm build:web` 与 `pnpm serve` 继续用于原前端；预览本 UI 请进入本目录执行上述命令。
 
 ```powershell
+npm test
 npm run typecheck
 npm run build
 npm run preview
@@ -100,3 +101,23 @@ python -X utf8 scripts/verify_input_boundaries.py
 外观验证覆盖主题保存与取消、刷新持久化、旧偏好兼容、深色卡片与文字对比度、浮层菜单主题、顶部课程操作、简化收起栏及手机展开入口。
 
 输入验证检查 11 个输入框的四侧框外点击、框内激活、箭头指针、键盘切换，以及深色学习时间底色、保存和手机单位布局。
+
+## 草稿与并发保存（PR #43 审核修复）
+
+聊天草稿按课程保存在当前标签页的 `sessionStorage`（`syllora-ui.chat-draft.v1.<courseId>`），切换课程、页面、学习模式和刷新后保留；关闭标签页后清除。问题持久化成功后才清除对应草稿，存储失败、预设提示以及回复期间新输入的草稿均保留。恢复演示数据会清除当前标签页草稿。存储被禁用时保留页面内存并提示刷新风险。
+
+每次工作空间变更从最新 localStorage 快照读取，支持 Web Locks 的同源页面通过锁串行保存，其他标签页通过 storage 事件刷新。Web Locks 不可用时仅保证当前标签页同步写入，不保证跨标签页并发写入；正式产品需要后端事务。
+
+旧 `version:1` 数据无需清空；新增可选 `revision`、`preferencesVersion`、`apiConfigVersion` 默认 0。偏好与 API 保存必须携带编辑开始时的 `baseVersion`。版本过期会拒绝保存并保留输入，设置窗口可点击“加载最新设置”后重新编辑。恢复演示数据继续递增版本，旧窗口不能覆盖恢复后的状态。
+
+`npm test` 执行实际 TypeScript mock 服务的隔离状态回归，不连接业务后端或真实模型。CI 独立安装本目录锁定依赖并执行状态测试、类型检查与生产构建；Python 浏览器脚本仍需单独执行，CI 不声称覆盖真实浏览器。
+
+### 本轮新增的 Node 浏览器回归
+
+在完整仓库已安装原 `apps/web` 依赖、已执行本目录 `npm run build` 的环境下，可复用原前端的 Playwright，无需安装 Python 包：
+
+```powershell
+node scripts/verify-browser.mjs
+```
+
+默认使用已安装的 Microsoft Edge；也可用 `SYLLORA_BROWSER` 指定浏览器可执行文件。脚本自行启动临时静态服务、创建隔离浏览器上下文，并在结束时关闭。13 组回归检查草稿、存储失败、双页面课程与设置、划词与延迟回复、资料删除和重新添加、键盘操作、主题及小屏。产物默认保存于系统临时目录；`UI_ARTIFACTS` 可指定目录。此脚本只复用已有仓库测试依赖，独立克隆 `ui/` 时使用上面的 Python 验证路径。CI 运行状态测试、类型检查和构建，不运行此浏览器脚本。

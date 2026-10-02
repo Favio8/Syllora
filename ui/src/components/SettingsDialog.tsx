@@ -6,10 +6,18 @@ import Modal from './Modal';
 import Dropdown from './Dropdown';
 import type { ApiConfiguration, Preferences, WorkspaceData } from '@/types';
 
-export default function SettingsDialog({ data, error, onClose, onReset, onPreferences, onApi }: { data: WorkspaceData; error: string; onClose: () => void; onReset: () => void; onPreferences: (preferences: Preferences) => Promise<boolean>; onApi: (config: ApiConfiguration) => Promise<boolean> }) {
+export default function SettingsDialog({ data, error, onClose, onReset, onPreferences, onApi }: { data: WorkspaceData; error: string; onClose: () => void; onReset: () => void; onPreferences: (preferences: Preferences, baseVersion: number) => Promise<boolean>; onApi: (config: ApiConfiguration, baseVersion: number) => Promise<boolean> }) {
   const [page, setPage] = useState('preferences');
   const [preferences, setPreferences] = useState<Preferences>({ ...data.preferences, theme: data.preferences.theme ?? 'light', compact: false });
   const [config, setConfig] = useState<ApiConfiguration>(data.apiConfig ?? { baseUrl: '', model: '', format: 'compatible', temperature: 0.7 });
+  const [preferencesBase, setPreferencesBase] = useState(data.preferencesVersion ?? 0);
+  const [apiBase, setApiBase] = useState(data.apiConfigVersion ?? 0);
+  const conflict = page === 'model' ? apiBase !== (data.apiConfigVersion ?? 0) : preferencesBase !== (data.preferencesVersion ?? 0);
+  function reloadSettings() {
+    if (page === 'model') { setConfig(data.apiConfig ?? { baseUrl: '', model: '', format: 'compatible', temperature: 0.7 }); setApiBase(data.apiConfigVersion ?? 0); }
+    else { setPreferences({ ...data.preferences, theme: data.preferences.theme ?? 'light', compact: false }); setPreferencesBase(data.preferencesVersion ?? 0); }
+    setFeedback('已加载最新设置，请重新编辑。');
+  }
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -24,8 +32,9 @@ export default function SettingsDialog({ data, error, onClose, onReset, onPrefer
     if (page === 'model' && !validate()) return;
     setSaving(true); setFeedback('');
     try {
-      const success = page === 'model' ? await onApi(config) : await onPreferences(preferences);
+      const success = page === 'model' ? await onApi(config, apiBase) : await onPreferences(preferences, preferencesBase);
       if (success) {
+        if (page === 'model') setApiBase(apiBase + 1); else setPreferencesBase(preferencesBase + 1);
         if (page === 'model') {
           try { if (key.trim()) sessionStorage.setItem('syllora-ui.api-key', key.trim()); else sessionStorage.removeItem('syllora-ui.api-key'); }
           catch { setFeedback('接口配置已保存；浏览器未允许保存密钥，密钥仅保留在当前设置中。'); return; }
@@ -39,5 +48,5 @@ export default function SettingsDialog({ data, error, onClose, onReset, onPrefer
       {page === 'model' && <><div className="form-field"><span id="api-address-label">接口地址</span><input aria-labelledby="api-address-label" required type="url" autoComplete="off" placeholder="https://your-api.example/v1" value={config.baseUrl} onChange={e => setConfig({ ...config, baseUrl: e.target.value })} /></div><div className="form-field"><span id="api-secret-label">API 密钥</span><div className="secret-input"><input id="api-secret" aria-labelledby="api-secret-label" type={showKey ? 'text' : 'password'} autoComplete="off" placeholder="输入访问密钥（可选）" value={key} onChange={e => setKey(e.target.value)} /><button type="button" className="icon-button" aria-label={showKey ? '隐藏 API 密钥' : '显示 API 密钥'} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</button></div><small>密钥仅保留在当前标签页会话，关闭标签页后清除。</small></div><div className="settings-field-grid"><div className="form-field"><span id="api-model-label">模型名称</span><input aria-labelledby="api-model-label" required autoComplete="off" maxLength={120} placeholder="填写服务提供的模型 ID" value={config.model} onChange={e => setConfig({ ...config, model: e.target.value })} /></div><div className="form-field"><span id="api-format-label">接口格式</span><Dropdown label="接口格式" value={config.format} onChange={value => setConfig({ ...config, format: value as ApiConfiguration['format'] })} options={[{ value: 'compatible', label: '兼容接口', description: '通用消息格式，后端适配' }, { value: 'native', label: '原生接口', description: '按服务提供方的格式适配' }]} /></div></div><div className="form-field">随机度 <span className="range-value">{config.temperature.toFixed(1)}</span><input aria-label="随机度" type="range" min="0" max="2" step="0.1" value={config.temperature} onChange={e => setConfig({ ...config, temperature: Number(e.target.value) })} /></div><div className="settings-info"><KeyRound size={17} /><p>这是前端配置演示，不发送网络请求。真实调用和密钥管理会在后端接入时完成。</p></div></>}
       {page === 'display' && <><fieldset className="theme-options"><legend>界面外观</legend><div className="theme-option-grid">{([{ id: 'light', name: '浅色', icon: Sun, description: '清爽的白色与克莱因蓝' }, { id: 'dark', name: '深色', icon: Moon, description: '沉静的墨蓝与柔和亮蓝' }] as const).map(({ id, name, icon: Icon, description }) => <label className={`theme-option ${preferences.theme === id ? 'selected' : ''}`} key={id}><input type="radio" name="appearance" aria-label={`${name}外观`} value={id} checked={preferences.theme === id} onChange={() => setPreferences({ ...preferences, theme: id })} /><span className={`theme-preview ${id}`} aria-hidden="true"><span className="preview-rail"><i /><i /><i /></span><span className="preview-main"><span className="preview-top"><i /><i /></span><span className="preview-body"><i /><span><i /><i /></span></span></span></span><span className="theme-option-caption"><Icon size={16} /><strong>{name}</strong>{preferences.theme === id && <Check size={15} />}</span><small>{description}</small></label>)}</div></fieldset><p className="appearance-note">外观应用于主页、学习工作台、资料和菜单。保存后会在当前浏览器中保留。</p></>}
       {page === 'data' && <><div className="settings-data-card"><Database size={22} /><h4>浏览器中的学习空间</h4><p>课程、资料文本、学习记录和偏好保存在当前浏览器，便于之后接入后端。</p><dl><div><dt>课程</dt><dd>{data.courses.length} 门</dd></div><div><dt>学习资料</dt><dd>{data.courses.reduce((count, course) => count + course.materials.length, 0)} 份</dd></div></dl></div><div className="settings-reset"><strong>恢复演示数据</strong><p>清除新增课程和本地记录，恢复初始课程与示例统计。</p><button type="button" className="button" onClick={onReset}>恢复初始演示数据</button></div></>}
-    </div><footer className="settings-page-footer">{feedback && <p role="status">{feedback}</p>}<div>{page === 'model' && <button type="button" className="button" onClick={validate}>检查配置格式</button>}<button type="button" className="button" onClick={onClose}>关闭</button>{page !== 'data' && <button className="button primary" disabled={saving}>{saving ? '正在保存…' : page === 'model' ? '保存配置' : page === 'display' ? '保存外观' : '保存偏好'}</button>}</div></footer></form></div></Modal>;
+    </div><footer className="settings-page-footer">{conflict && page !== "data" && <p role="status">其他页面已更新设置，你的输入已保留。</p>}{conflict && page !== "data" && <button type="button" className="button" disabled={saving} onClick={reloadSettings}>加载最新设置</button>}{feedback && <p role="status">{feedback}</p>}<div>{page === 'model' && <button type="button" className="button" onClick={validate}>检查配置格式</button>}<button type="button" className="button" onClick={onClose}>关闭</button>{page !== 'data' && <button className="button primary" disabled={saving}>{saving ? '正在保存…' : page === 'model' ? '保存配置' : page === 'display' ? '保存外观' : '保存偏好'}</button>}</div></footer></form></div></Modal>;
 }
