@@ -115,25 +115,41 @@ export async function initializeFolder(options: {
   const batches:Source[][]=[]; let batch:Source[]=[], size=0
   for(const source of sources) {
     const length=JSON.stringify(source).length
+    // 超预算时只 flush，不能顺手把当前源塞进新批次：否则下一个章节的首个片段会被粘到上一批，
+    // 造出一个跨章节的伪 section（实测 40 章会被粘成 10 个混合 section）。
     if(batch.length&&(batch[0]!.section!==source.section || batch.length>=20 || size+length>8000)) { batches.push(batch);batch=[];size=0 }
     batch.push(source);size+=length
   }
   if(batch.length)batches.push(batch)
+  /**
+   * 章节边界原本是"每次模型调用"的硬边界，于是调用次数与章节数同阶（58 页论文 91 次）。
+   * 折行公式、被误判的小标题、每页一个 section 都会把文档切得很碎。这里在章节边界之上再按体量
+   * 合并相邻章节。预算取 8000 字符：实测 24 页论文 56→7 次、58 页 91→14 次（约 7–8 倍），
+   * 最大载荷约 12KB，不会把单次响应顶到 12000 输出 token 上限（那会截断并重试，反而更慢）。
+   */
+  const groups:Source[][]=[]
+  let current:Source[]=[], currentSize=0
+  for(const section of batches) {
+    const sectionSize=section.reduce((n,source)=>n+JSON.stringify(source).length,0)
+    if(current.length && currentSize+sectionSize>8000) { groups.push(current); current=[]; currentSize=0 }
+    current.push(...section); currentSize+=sectionSize
+  }
+  if(current.length)groups.push(current)
   const lectures:Lecture[]=[], points:Point[]=[]
-  // 批次之间互不依赖，只把模型调用并发起来；缓存、进度、讲义与知识点仍按批次顺序串行落盘。
-  // 缓存的批次不占并发位，也不产生调用（重跑只补变化章节的语义不变）。
+  // 调用组之间互不依赖，只把模型调用并发起来；缓存、进度、讲义与知识点仍按组顺序串行落盘。
+  // 缓存的组不占并发位，也不产生调用（重跑只补变化内容）。
   const cachedOutputs:Array<z.infer<typeof lectureSchema>|null>=[]
-  const lectureCachePath=(group:Source[]) => join(cacheDir,`${sha('lecture-v1:'+options.modelKey+':'+JSON.stringify(group.map(({version: _version,...source})=>source)))}.json`)
-  for(const group of batches) {
+  const lectureCachePath=(group:Source[]) => join(cacheDir,`${sha('lecture-v2:'+options.modelKey+':'+JSON.stringify(group.map(({version: _version,...source})=>source)))}.json`)
+  for(const group of groups) {
     let output=await jsonFile<z.infer<typeof lectureSchema>>(lectureCachePath(group))
     if(output) { try {output=lectureSchema.parse(output);validateLecture(output,group)} catch {output=null} }
     cachedOutputs.push(output ?? null)
   }
-  const pending=batches.map((group,index)=>({group,index,cachePath:lectureCachePath(group)})).filter(item=>!cachedOutputs[item.index])
+  const pending=groups.map((group,index)=>({group,index,cachePath:lectureCachePath(group)})).filter(item=>!cachedOutputs[item.index])
   // 上限与设置界面一致（ModelsSection 的 max=16）：界面传不出的值不在这里生效。
-  const concurrency=Math.min(Math.max(1,options.concurrency ?? 8),16,batches.length)
-  let organized=batches.length-pending.length
-  if(pending.length>1) await options.progress({stage:'organizing',done:organized,total:batches.length,failures:[...failures],message:`并发整理 ${pending.length} 个章节（并发 ${concurrency}）`})
+  const concurrency=Math.min(Math.max(1,options.concurrency ?? 8),16,groups.length)
+  let organized=groups.length-pending.length
+  if(pending.length>1) await options.progress({stage:'organizing',done:organized,total:groups.length,failures:[...failures],message:`并发整理 ${pending.length} 组章节（并发 ${concurrency}）`})
   const organizedOutputs=await mapWithConcurrency(pending,concurrency,async item=>{
     for(let attempt=0;attempt<2;attempt++) {
       await options.check()
@@ -144,7 +160,7 @@ export async function initializeFolder(options: {
         await atomicJson(item.cachePath,output)
         // 只有进度真的写出去才算这一章完成：先自增再写，会让"自增后被 check 打断"的章节显示为已完成，
         // 而它其实没有任何已落盘的产物。
-        await options.progress({stage:'organizing',done:organized+1,total:batches.length,failures:[...failures],message:`整理章节 ${organized+1}/${batches.length}：${item.group[0]!.section}`})
+        await options.progress({stage:'organizing',done:organized+1,total:groups.length,failures:[...failures],message:`整理章节 ${organized+1}/${groups.length}：${item.group[0]!.section}`})
         organized+=1
         return output
       } catch(error) {
@@ -155,14 +171,14 @@ export async function initializeFolder(options: {
         failures.push(message)
         // 进度里必须落下这次失败的范围，否则并发下先抛出的章节错误会丢失（调用方只看到 job.state=failed）。
         await options.check()
-        await options.progress({stage:'organizing',done:organized,total:batches.length,failures:[...failures],message:'章节整理失败；已完成批次可在重试时复用'})
+        await options.progress({stage:'organizing',done:organized,total:groups.length,failures:[...failures],message:'章节整理失败；已完成批次可在重试时复用'})
         throw new Error(message, {cause:error})
       }
     }
     throw new Error('章节整理失败')
   })
   const pendingOutputs=new Map(pending.map((item,index)=>[item.index,organizedOutputs[index]!]))
-  for(const [index,group] of batches.entries()) {
+  for(const [index,group] of groups.entries()) {
     const output=(cachedOutputs[index] ?? pendingOutputs.get(index))!
     const lecture:Lecture={...output,id:sha(JSON.stringify(group.map(s=>s.id))),materialIds:[...new Set(group.map(s=>s.materialId))],sourceIds:group.map(s=>s.id)}
     lectures.push(lecture)
@@ -175,7 +191,7 @@ export async function initializeFolder(options: {
     }
     await options.check(); await writeFile(join(stage,'lectures',`${lecture.id}.md`),lectureMarkdown(lecture),'utf8')
   }
-  await options.progress({stage:'validating',done:batches.length,total:batches.length,failures,message:'检查全文覆盖、引用及资料版本'})
+  await options.progress({stage:'validating',done:groups.length,total:groups.length,failures,message:'检查全文覆盖、引用及资料版本'})
   await options.check()
   for(const [path,fingerprint] of Object.entries(fingerprints)) if(sha(await readFile(await within(root,path)))!==fingerprint) throw new Error(`${path} 在整理期间发生变化，请重新检查资料`)
   const revision=randomUUID()
