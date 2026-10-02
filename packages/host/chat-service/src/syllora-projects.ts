@@ -111,6 +111,22 @@ export class SylloraProjects {
       }
       return {saved:true}
     }
+    // 需求一：左栏拖拽排序的持久化（参照 reorderPoints 的先例）。入参是全部
+    // 已打开课程的 id 全序；顺序写进 projects.json。新打开课程仍置顶（见
+    // remember()），手动排序只调整既有课程的相对次序。
+    if(action==='reorderCourses') {
+      const p=z.object({courseIds:z.array(z.string().uuid()).min(1)}).parse(payload)
+      if(new Set(p.courseIds).size!==p.courseIds.length)throw new SylloraError('INPUT_INVALID','课程顺序无效，请刷新后重试')
+      return this.serialize(async()=>{
+        await this.load()
+        const existing=this.projects
+        if(p.courseIds.length!==existing.length||!p.courseIds.every(id=>existing.some(project=>project.id===id)))throw new SylloraError('INPUT_INVALID','课程顺序与已打开课程不一致，请刷新后重试')
+        const order=new Map(p.courseIds.map((id,index)=>[id,index]))
+        this.projects=[...existing].sort((a,b)=>order.get(a.id)!-order.get(b.id)!)
+        await atomicJson(join(this.root,'.syllora','projects.json'),this.projects)
+        return {saved:true,order:this.projects.map(project=>project.id)}
+      })
+    }
     if(action==='state') {
       const courses:unknown[]=[], jobs:unknown[]=[], projects:Array<Project&{error:string|null}>=[];let calls=0
       for(const project of this.projects) {

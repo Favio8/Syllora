@@ -24,7 +24,20 @@
 .rail-create{border:1px solid #dce3f1;background:white;color:var(--blue);margin-bottom:24px;height:41px;width:41px}
 .rail-nav{display:flex;flex-direction:column;gap:9px}
 .rail-divider{height:1px;width:28px;background:#dfe5ef;margin:25px 0 19px;flex-shrink:0}
-.rail-courses{display:flex;flex-direction:column;align-items:center;gap:9px;overflow:auto;min-height:0;flex:1;width:100%;padding-bottom:15px;scrollbar-width:thin}
+.rail-courses{display:flex;flex-direction:column;align-items:center;gap:9px;overflow:hidden;min-height:0;flex:1;width:100%;padding-bottom:15px}
+/* 需求一：溢出时列表末尾固定显示「…」，点击弹出课程选择浮层（不再依赖滚动）。 */
+.rail-courses-more{font-size:17px;line-height:1;color:#8d97a8;letter-spacing:.06em;border:1px dashed #d9e0ec}
+.rail-courses-more:hover{border-color:var(--blue);color:var(--blue)}
+/* 需求一：拖拽中的图标半透明并抬起，落位后由 onReorder 持久化。 */
+.rail-course[draggable=true]{cursor:grab}
+.rail-course.is-dragging{opacity:.45;cursor:grabbing;transform:scale(.94)}
+.course-picker-row{display:flex;align-items:center;gap:8px}
+.course-picker-row.selected{background:#f2f6ff;border-radius:9px}
+.course-picker-choose{flex:1;min-width:0}
+.course-picker-move{display:flex;flex-direction:column;gap:2px;padding-right:6px}
+.course-picker-move button{width:26px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;color:var(--muted);background:var(--white)}
+.course-picker-move button:hover:not(:disabled){color:var(--blue);border-color:var(--blue)}
+.course-picker-move button:disabled{opacity:.4}
 .rail-course.blue{color:#8298c7}.rail-course.green{color:#88a897}.rail-course.orange{color:#bb9a7e}
 .rail-course.selected{color:var(--blue)}
 .rail-current-dot{position:absolute;height:4px;width:4px;border-radius:50%;background:var(--blue);right:4px;top:6px}

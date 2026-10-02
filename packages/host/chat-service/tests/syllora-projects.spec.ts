@@ -214,3 +214,48 @@ describe('structured sources and migration',()=>{
     expect((await s.projects.readMaterialFile(legacyId,material.id)).data).toEqual(bytes);expect(await readFile(join(s.app,'files',`${material.id}.pdf`))).toEqual(bytes)
   })
 })
+
+describe('PRD 需求一：课程顺序持久化',()=>{
+  async function twoCourses(){await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'order-'));roots.push(root)
+    const app=join(root,'app'),projects=new SylloraProjects(app,{config:async()=>config})
+    const a=join(root,'甲课'),b=join(root,'乙课'),c=join(root,'丙课');await mkdir(a);await mkdir(b);await mkdir(c)
+    const first=await projects.handle('openCourse',{path:a}) as {id:string}
+    const second=await projects.handle('openCourse',{path:b}) as {id:string}
+    const third=await projects.handle('openCourse',{path:c}) as {id:string}
+    return {root,projects,first:first.id,second:second.id,third:third.id}
+  }
+  const orderOf=async(projects:SylloraProjects)=>((await projects.handle('state',{}) as any).projects as Array<{id:string}>).map(p=>p.id)
+
+  it('persists an explicit course order and survives a restart',async()=>{
+    const s=await twoCourses()
+    // remember() 置顶：最后打开的排最前。
+    expect(await orderOf(s.projects)).toEqual([s.third,s.second,s.first])
+    const saved=await s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,s.third]}) as {saved:boolean;order:string[]}
+    expect(saved.saved).toBe(true)
+    expect(saved.order).toEqual([s.first,s.second,s.third])
+    expect(await orderOf(s.projects)).toEqual([s.first,s.second,s.third])
+    // 重启后顺序保持（写在 projects.json，不是内存态）。
+    const restarted=new SylloraProjects(join(s.root,'app'),{config:async()=>config})
+    expect(await orderOf(restarted)).toEqual([s.first,s.second,s.third])
+  })
+
+  it('rejects an order that is not a permutation of the open courses',async()=>{
+    const s=await twoCourses()
+    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.second]})).rejects.toThrow()
+    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.first,s.third]})).rejects.toThrow()
+    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,randomUUID()]})).rejects.toThrow()
+    // 顺序未被半途改写。
+    expect(await orderOf(s.projects)).toEqual([s.third,s.second,s.first])
+  })
+
+  it('keeps a newly opened course on top regardless of the saved order',async()=>{
+    const s=await twoCourses()
+    await s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,s.third]})
+    const d=join(s.root,'丁课');await mkdir(d)
+    const fourth=await s.projects.handle('openCourse',{path:d}) as {id:string}
+    // 待确认事项 1（建议值）：新打开课程仍置顶，手动排序只调整既有课程相对顺序。
+    expect((await orderOf(s.projects))[0]).toBe(fourth.id)
+    const tail=(await orderOf(s.projects)).slice(1)
+    expect(tail).toEqual([s.first,s.second,s.third])
+  })
+})
