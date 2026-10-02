@@ -176,9 +176,9 @@ export function MaterialsSection({ course, busy, running, epoch, text, setText, 
   return <>
     {course.folder && <PanelCard title="初始化课程"><MaterialInitialization course={course} epoch={epoch} busy={busy} running={running} onRun={onRun} /></PanelCard>}
     <PanelCard title="课程资料">
-      <p className="sy-muted">{course.folder ? '支持 PDF、MD/TXT、DOCX、XLSX、HTML' : '支持文本 PDF、MD、TXT'}。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p>
+      <p className="sy-muted">{course.folder ? '上传支持 PDF、MD/TXT、DOCX、XLSX、HTML（与文件夹扫描一致）；粘贴正文仅支持纯文本。' : '上传支持文本 PDF、MD、TXT；粘贴正文仅支持纯文本'}。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p>
       <button className="upload-zone" disabled={busy || course.archived} onClick={onPickFile}><Upload size={20} /><span>选择资料文件</span></button>
-      <label>或粘贴正文<textarea rows={4} value={text} onChange={e => setText(e.target.value)} placeholder="粘贴有使用权限的学习资料" /></label>
+      <label>或粘贴正文（纯文本，最多 10 万字符）<textarea rows={4} value={text} onChange={e => setText(e.target.value)} placeholder="粘贴有使用权限的学习资料" /></label>
       <button disabled={!text.trim() || busy || course.archived} onClick={async () => { if (await onRun('import', { name: '粘贴资料.txt', text })) setText('') }}>保存正文</button>
       {course.materials.length === 0 && <PanelEmpty icon={<Upload size={22} />} title="还没有学习资料" description="添加一份讲义或笔记，初始化后就能阅读正文与追问。" />}
       {course.materials.map(material => <div className="panel-file sy-material" key={material.id}><FileText size={17} /><div>

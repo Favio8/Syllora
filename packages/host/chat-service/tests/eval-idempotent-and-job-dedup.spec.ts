@@ -89,6 +89,35 @@ async function collect(gen: AsyncGenerator<{ event: string; data: unknown }>): P
 }
 
 describe('UI-7：evalSubmit evalId 幂等', () => {
+  it('CR-05: concurrent retries across service instances settle once and replay complete frames', async () => {
+    const { ws, service, courseId, cleanup } = await setup()
+    try {
+      const otherService = createCourseService(async () => null)
+      const replies = await Promise.all([service, otherService, service].map(instance =>
+        collect(instance.evalSubmit(ws, courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_concurrent'))))
+      for (const reply of replies) {
+        expect(reply.filter(frame => frame.event === 'result')).toHaveLength(1)
+        expect(reply.at(-1)?.event).toBe('done')
+      }
+      expect(replies[1]).toEqual(replies[0])
+      expect(evalsOfCmcq(await readFile(join(ws, '.syllora', 'progress.md'), 'utf8'))).toBe(1)
+      const replay = await collect(otherService.evalSubmit(ws, courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_concurrent'))
+      expect(replay).toEqual(replies[0])
+    } finally { await cleanup() }
+  })
+
+  it('CR-05: the same evalId in two workspaces does not suppress either result', async () => {
+    const first = await setup(), second = await setup()
+    try {
+      const replies = await Promise.all([first, second].map(s =>
+        collect(s.service.evalSubmit(s.ws, s.courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_shared_id'))))
+      for (let index = 0; index < replies.length; index++) {
+        expect(replies[index]!.at(-1)?.event).toBe('done')
+        expect(evalsOfCmcq(await readFile(join([first, second][index]!.ws, '.syllora', 'progress.md'), 'utf8'))).toBe(1)
+      }
+    } finally { await first.cleanup(); await second.cleanup() }
+  })
+
   it('同一 evalId 的重复提交重放已结算帧，progress.evals 不重复累加', async () => {
     const { ws, service, courseId, cleanup } = await setup()
     const evalId = 'ev_test_eval_001'

@@ -173,11 +173,15 @@ export default function ChatArea() {
                 if (hasPersistedChat) persistedChatIndex += 1;
                 const chatIndex = persistedChatIndex;
                 if (msg.role === "user" && msg.persisted !== false) lastUserText = msg.content;
+                // CR-13：`lastUserText` 是 map 共享的 let 绑定，若在点击时读取会拿到
+                // 全表最后一条用户消息（旧失败卡重试会重发错误文本）。渲染时把本卡
+                // 对应的文本固化成常量，闭包只捕获该值。
+                const retryText = lastUserText;
                 return (
                   <MessageCard
                     key={msg.id}
                     message={msg}
-                    onRetry={msg.error ? () => retryLast(lastUserText) : undefined}
+                    onRetry={msg.error ? () => retryLast(retryText) : undefined}
                     onBranch={hasPersistedChat && activeSessionId ? () => branchFromMessage(chatIndex) : undefined}
                     branchUnavailable={streaming}
                   />

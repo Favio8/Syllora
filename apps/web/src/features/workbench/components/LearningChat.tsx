@@ -15,11 +15,15 @@ export function VectorDrawing() {
 }
 
 
-export default function LearningChat({courseName,name,folder,disabled,children,draft,onDraft,onUpload,onPractice,onOpenSettings}:{courseName:string;name:string;folder:string;disabled?:boolean;children?:ReactNode;draft?:string;onDraft?:(value:string)=>void;onUpload?:()=>void;onPractice?:()=>void;onOpenSettings?:()=>void}) {
+export default function LearningChat({courseName,name,folder,disabled:disabledProp,syncId,children,draft,onDraft,onUpload,onPractice,onOpenSettings}:{courseName:string;name:string;folder:string;disabled?:boolean;syncId?:string;children?:ReactNode;draft?:string;onDraft?:(value:string)=>void;onUpload?:()=>void;onPractice?:()=>void;onOpenSettings?:()=>void}) {
   const messages=useAppStore(s=>s.messages);
   const streaming=useAppStore(s=>s.streaming);
   const sessionId=useAppStore(s=>s.activeSessionId);
   const courseId=useAppStore(s=>s.activeCourseId);
+  // B4：store 里的 activeCourseId 由 AgentChat 的 effect 切换，窗口期内输入框已显示新课程，
+  // 但发送读的是旧 activeCourseId，消息会进入旧课程。二者不一致时禁用输入并显示加载态。
+  const switching=!!syncId&&courseId!==syncId;
+  const disabled=!!disabledProp||switching;
   const pendingAsk=useAppStore(s=>s.pendingAsk);
   const key=`syllora:chat-draft:${folder}`;
   const storedDraft=useAppStore(s=>s.composerDrafts[key]??'');
@@ -38,6 +42,8 @@ export default function LearningChat({courseName,name,folder,disabled,children,d
   function change(value:string,owner=key){setDraft(owner,value);if(onDraft){onDraft(value);return;}try{if(value)localStorage.setItem(owner,value);else localStorage.removeItem(owner);setStorageError('');}catch{setStorageError('草稿暂时无法在本机保存，请保留此页面。');}}
   async function submit(content=input){
     if(disabled||streaming||submittingRef.current||!content.trim()||!folder)return;
+    // 提交瞬间再核对一次 store（渲染到点击之间课程也可能刚切走）。
+    if(syncId&&useAppStore.getState().activeCourseId!==syncId)return;
     const owner=key,ownerCourse=courseId,fromInput=content===input,before=useAppStore.getState().messages.length;
     submittingRef.current=true;setSubmitting(true);
     // Clear immediately: send() resolves only after the whole streamed turn.
@@ -74,7 +80,7 @@ export default function LearningChat({courseName,name,folder,disabled,children,d
     {folder&&<div className="composer-wrap"><ApprovalPanel agentId={sessionId?`study-${sessionId}`:null}/><QueueDock/>
       <div className="suggestions">{['用直观例子解释','帮我安排今天'].map(text=><button disabled={disabled||streaming||submitting} key={text} onClick={()=>void submit(text)}>{text}<ArrowUp size={12}/></button>)}</div>
       {pendingAsk&&<p className="composer-note">请回答学习助手的问题：{pendingAsk.question}</p>}
-      <form className="composer" onSubmit={event=>{event.preventDefault();void submit();}}><label className="sr-only" htmlFor="chat-input">向 Syllora 提问</label><textarea id="chat-input" rows={2} maxLength={4000} value={input} disabled={disabled} onChange={event=>change(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.repeat&&!event.nativeEvent.isComposing){event.preventDefault();void submit();}}} placeholder={`关于${courseName}，有什么想一起弄明白的？`}/><div className="composer-controls"><span className="composer-hint">Enter 发送 · Shift + Enter 换行</span>{streaming?<button className="send-button" type="button" onClick={stop} aria-label="停止生成"><Square size={16}/></button>:<button className="send-button" type="submit" disabled={disabled||!input.trim()||submitting} aria-label="发送消息"><ArrowUp size={18}/></button>}</div></form>
+      <form className="composer" onSubmit={event=>{event.preventDefault();void submit();}}><label className="sr-only" htmlFor="chat-input">向 Syllora 提问</label><textarea id="chat-input" rows={2} maxLength={4000} value={input} disabled={disabled} onChange={event=>change(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.repeat&&!event.nativeEvent.isComposing){event.preventDefault();void submit();}}} placeholder={switching?'正在切换课程…':`关于${courseName}，有什么想一起弄明白的？`}/><div className="composer-controls"><span className="composer-hint">Enter 发送 · Shift + Enter 换行</span>{streaming?<button className="send-button" type="button" onClick={stop} aria-label="停止生成"><Square size={16}/></button>:<button className="send-button" type="submit" disabled={disabled||!input.trim()||submitting} aria-label="发送消息"><ArrowUp size={18}/></button>}</div></form>
       <div className="composer-actions"><button onClick={onPractice}><PencilLine size={16}/>练习</button><button onClick={onUpload}><Paperclip size={16}/>添加资料</button><button onClick={onOpenSettings}><Settings2 size={15}/>模型设置</button><span>回答与引用请结合资料核验</span></div>{storageError&&<p role="alert" className="composer-note">{storageError}</p>}
     </div>}
   </div>;

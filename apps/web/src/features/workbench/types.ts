@@ -104,5 +104,5 @@ export interface ReadingAssistance {
 
 export interface ReadingService {
   document(courseId: string, materialId: string): Promise<ReadingDocument>;
-  assist(document: ReadingDocument, selection: string, mode: 'explain' | 'search', signal?:AbortSignal): Promise<ReadingAssistance>;
+  assist(document: ReadingDocument, selection: string, mode: 'explain' | 'search', signal?:AbortSignal, options?: { onWaiting?: (message: string) => void }): Promise<ReadingAssistance>;
 }

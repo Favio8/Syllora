@@ -47,6 +47,15 @@
 .integrated-shell .reading-source{padding:8px 0;line-height:2.15;overflow-wrap:anywhere}
 .integrated-shell .reading-source.highlighted{background:var(--blue-light);outline:2px solid var(--blue);outline-offset:4px;border-radius:4px}
 .integrated-shell .reading-source p{margin:8px 0}
+/* B11：正文按 kind 分支渲染后的排版——代码保换行缩进、表格可横向滚动、
+   列表缩进不被软换行折叠影响。 */
+.integrated-shell .reading-source .reading-code{margin:12px 0;padding:12px 14px;background:var(--sidebar);border:1px solid var(--line);border-radius:8px;overflow-x:auto;font-family:var(--data-font);font-size:12.5px;line-height:1.75;white-space:pre;tab-size:2}
+.integrated-shell .reading-source .reading-code code{background:none;border:0;padding:0;font:inherit;color:var(--ink)}
+.integrated-shell .reading-source :is(ul,ol){margin:8px 0;padding-left:22px}
+.integrated-shell .reading-source li{margin:4px 0;line-height:2}
+.integrated-shell .reading-source table{margin:12px 0;border-collapse:collapse;width:100%;display:block;overflow-x:auto;font-size:13px}
+.integrated-shell .reading-source :is(th,td){border:1px solid var(--line);padding:7px 10px;text-align:left;line-height:1.7}
+.integrated-shell .reading-source th{background:var(--sidebar);font-weight:600;color:var(--ink)}
 .integrated-shell .reading-search-results>p,.integrated-shell .reading-explanation p{margin:12px 0;line-height:1.9}
 .integrated-shell .sy-panel{flex:1;min-height:0;overflow:auto}
 .integrated-shell .integrated-project-error,.integrated-shell .integrated-migration{position:static;margin:10px 24px;max-width:none}

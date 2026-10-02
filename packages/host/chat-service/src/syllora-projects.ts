@@ -28,11 +28,20 @@ export class SylloraProjects {
     return (await this.service(courseId)).readMaterialFile(courseId,materialId)
   }
   private async load() {
+    // CR-14：`ready` 一旦失败就会把整个进程钉死——projects.json 读一次失败
+    // （文件被外部占用、半写入、权限瞬时变化）之后，所有操作都复用同一个已
+    // rejected 的 promise，修好文件也要重启。这里在失败时清掉缓存，
+    // 让下一次调用重新尝试（成功的路径仍只读一次）。
     this.ready??=(async()=>{
       await mkdir(this.root,{recursive:true});await stateDirectory(this.root)
       this.projects=await jsonFile<Project[]>(join(this.root,'.syllora','projects.json'))??[]
     })()
-    await this.ready
+    try {
+      await this.ready
+    } catch (error) {
+      this.ready=null
+      throw error
+    }
   }
   private async serialize<T>(fn:()=>Promise<T>) {
     const next=this.tail.then(async()=>{await this.load();return fn()});this.tail=next.catch(()=>undefined);return next

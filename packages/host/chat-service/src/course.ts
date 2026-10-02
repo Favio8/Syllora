@@ -342,6 +342,23 @@ export class JobManager {
  * 去重对全部入口生效。 */
 const jobs = new JobManager()
 
+// 同一工作区、同一 evalId 的在途请求串行结算；等待者在前一个请求
+// 写完完整账本后重放，避免全局 evalId 集合串课程或把未完成账本覆盖掉。
+const evalSubmissions = new Map<string, Promise<void>>()
+async function acquireEvalSubmission(workspaceRoot: string, evalId: string): Promise<() => void> {
+  const key = evalLedgerFile(workspaceRoot, evalId)
+  const previous = evalSubmissions.get(key) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>(done => { release = done })
+  const tail = previous.then(() => current)
+  evalSubmissions.set(key, tail)
+  await previous
+  return () => {
+    release()
+    if (evalSubmissions.get(key) === tail) evalSubmissions.delete(key)
+  }
+}
+
 /**
  * UI-7：evalSubmit 的实际执行体。`record` 由幂等包装器注入——每一帧在
  * 下发前登记进账本，命中重试时整体重放，SM-2/progress 不会二次 settle。
@@ -769,37 +786,40 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       return { courseId, tasks: cards }
     },
     async *evalSubmit(workspaceRoot, courseId, taskId, answer, sessionId = null, evalId: string | null = null) {
-      // UI-7 + M4：评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
-      // 若第一次的 settle（SM-2/progress）已落盘，重试就是重复计分。同一
-      // evalId（taskId+会话+作答的稳定指纹）在 TTL 窗口内直接重放已结算帧；
-      // 真实 evalId 走磁盘（宿主重启后仍可重放），匿名键留内存。
-      if (evalId !== null && evalId !== '') {
-        const prior = await loadLedgerFrames(workspaceRoot, evalId)
-        if (prior !== null) {
-          for (const frame of prior) yield frame
+      const release = evalId ? await acquireEvalSubmission(workspaceRoot, evalId) : () => {}
+      try {
+        // UI-7 + M4：评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
+        // 若第一次的 settle（SM-2/progress）已落盘，重试就是重复计分。同一
+        // evalId（taskId+会话+作答的稳定指纹）在 TTL 窗口内直接重放已结算帧；
+        // 真实 evalId 走磁盘（宿主重启后仍可重放），匿名键留内存。
+        if (evalId !== null && evalId !== '') {
+          const prior = await loadLedgerFrames(workspaceRoot, evalId)
+          if (prior !== null) {
+            for (const frame of prior) yield frame
+            return
+          }
+        }
+        const frames: Array<Record<string, unknown>> = []
+        yield* runEvalSubmit(workspaceRoot, courseId, taskId, answer, sessionId, getConfig, (frame) => {
+          frames.push(frame)
+          return frame
+        }, evalId !== null && evalId !== ''
+          ? tail => saveLedgerFrames(workspaceRoot, evalId, [...frames, ...tail]).catch(error => {
+            // RV-18：尾帧账本落盘失败同样留告警（静默吞掉会让重试二次计分且无迹可查）。
+            console.warn(`[syllora] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
+          })
+          : undefined)
+        if (evalId !== null && evalId !== '') {
+          // RV-18：账本落盘失败不能静默——settle（SM-2/progress）已写盘而账本
+          // 缺失时，同 evalId 重试会二次计分。留告警让运维可见（客户端无从感知）。
+          await saveLedgerFrames(workspaceRoot, evalId, frames).catch(error => {
+            console.warn(`[syllora] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
+          })
           return
         }
-      }
-      const frames: Array<Record<string, unknown>> = []
-      yield* runEvalSubmit(workspaceRoot, courseId, taskId, answer, sessionId, getConfig, (frame) => {
-        frames.push(frame)
-        return frame
-      }, evalId !== null && evalId !== ''
-        ? tail => saveLedgerFrames(workspaceRoot, evalId, [...frames, ...tail]).catch(error => {
-          // RV-18：尾帧账本落盘失败同样留告警（静默吞掉会让重试二次计分且无迹可查）。
-          console.warn(`[syllora] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
-        })
-        : undefined)
-      if (evalId !== null && evalId !== '') {
-        // RV-18：账本落盘失败不能静默——settle（SM-2/progress）已写盘而账本
-        // 缺失时，同 evalId 重试会二次计分。留告警让运维可见（客户端无从感知）。
-        await saveLedgerFrames(workspaceRoot, evalId, frames).catch(error => {
-          console.warn(`[syllora] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
-        })
-        return
-      }
-      // RV-14：匿名提交的进程内账本已删除——键为自增 anon_N，无任何读取路径
-      // （重放只走磁盘 loadLedgerFrames），纯 write-only 死状态。
+        // RV-14：匿名提交的进程内账本已删除——键为自增 anon_N，无任何读取路径
+        // （重放只走磁盘 loadLedgerFrames），纯 write-only 死状态。
+      } finally { release() }
     },
 
     job(jobId) {

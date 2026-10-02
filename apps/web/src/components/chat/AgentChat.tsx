@@ -4,9 +4,8 @@
  * 工作台「对话学习」的 agent 聊天宿主。
  *
  * 自包含：不依赖独立的 Console 外壳，使用 PR #43 的 LearningChat，保留工具调用行、
- * ask 折叠和审批面板，并补齐两套 id 空间之间的桥接——
- * chat/agent 端点的 courseId 必须是「课程文件夹名」（courseDirOf 的等值
- * 校验），而工作台的课程 id 是 UUID，二者的换算只在这里发生。
+ * ask 折叠和审批面板。工作台与 chat/agent 端点使用同一课程 UUID，
+ * 宿主校验 UUID 与目标课程目录的归属，兼容旧调用方的文件夹名身份。
  */
 
 import { useEffect, useMemo, type ReactNode } from "react";
@@ -86,7 +85,7 @@ export default function AgentChat({ folder, courseName, courseId, onOpenSettings
 
   return (
     <div className="workbench-agent">
-      <LearningChat folder={folder} courseName={courseName} name={props.name??'学习者'} onOpenSettings={onOpenSettings} {...props}/>
+      <LearningChat folder={folder} courseName={courseName} syncId={chatCourseId} name={props.name??'学习者'} onOpenSettings={onOpenSettings} {...props}/>
       {paletteOpen ? <CommandPalette /> : null}
     </div>
   );

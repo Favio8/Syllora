@@ -30,6 +30,15 @@ async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<400;i
 async function initialize(s:Awaited<ReturnType<typeof setup>>,acceptPartial=false){const scan=await s.projects.handle('scan',{courseId:s.id}) as any;const files=scan.files.filter((f:any)=>f.status==='ready');const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint])),acceptPartial}) as any;return settle(s.projects,job.jobId)}
 const DOC='# 第一章\n\n单位矩阵的主对角线元素为一，其余元素为零。\n\n# 第二章\n\n矩阵乘法需要检查左矩阵列数与右矩阵行数是否相等。\n'
 describe('course folder initialization',()=>{
+  it('CR-14: retries loading projects after a damaged index is repaired without restarting',async()=>{
+    const s=await setup(),filename=join(s.app,'.syllora','projects.json')
+    const original=await readFile(filename,'utf8')
+    await writeFile(filename,'{broken')
+    const restarted=new SylloraProjects(s.app)
+    await expect(restarted.handle('state',{})).rejects.toThrow()
+    await writeFile(filename,original)
+    expect((await restarted.handle('state',{}) as any).courses[0].id).toBe(s.id)
+  })
   it('persists one stable identity and restores records after reopening and moving folders',async()=>{
     const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
     const first=await initialize(s);expect(first.job.state).toBe('succeeded');expect(first.state.courses[0].points).toHaveLength(2);expect(first.state.courses[0].scope).toEqual([])
