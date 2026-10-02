@@ -1000,6 +1000,21 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         })()
         return
       }
+      if(url.pathname==='/api/syllora/notes/asset') {
+        void (async()=>{
+          try {
+            const {contentType,data}=await syllora.readNoteAsset(url.searchParams.get('courseId')??'',url.searchParams.get('name')??'')
+            response.writeHead(200,{'Content-Type':contentType,'Content-Length':String(data.length),'Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            response.end(request.method==='HEAD'?undefined:data)
+          } catch(error) {
+            if(response.headersSent||response.writableEnded||response.destroyed)return
+            const code=error instanceof SylloraError?error.code:'INTERNAL_ERROR'
+            const status=code==='INVALID_REQUEST'?400:code==='NOT_FOUND'?404:code==='LIMIT_EXCEEDED'?413:500
+            response.writeHead(status);response.end(JSON.stringify({error:{code,message:error instanceof SylloraError?error.message:'图片读取失败',details:null}}))
+          }
+        })()
+        return
+      }
       response.writeHead(405)
       response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: `method ${request.method ?? ''} is not supported`, details: null } }))
       return

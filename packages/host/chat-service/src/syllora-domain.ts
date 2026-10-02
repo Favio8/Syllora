@@ -51,6 +51,41 @@ export interface NextAction {
 export interface Course { icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
+/** 笔记（课程附属，md 内容存 notes/{id}.md，元数据存 notes/index.json）。 */
+export interface NoteMeta {
+  id: string;
+  title: string;
+  wikilinks: string[]; // [[笔记名]] 解析结果
+  images: string[]; // 正文里的图片文件名（assets/xxx.png），供左栏图片树
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 从 Markdown 正文中提取图片引用 `![](assets/xxx.png)` 的文件名。 */
+export function parseNoteImages(content: string): string[] {
+  const images: string[] = [];
+  const re = /!\[[^\]]*\]\(assets\/([A-Za-z0-9._-]+)\)/g;
+  let match;
+  while ((match = re.exec(content)) !== null) {
+    const name = match[1]!;
+    if (!images.includes(name)) images.push(name);
+  }
+  return images;
+}
+
+/** 从 Markdown 正文中提取 [[双链]] 引用的笔记标题。
+ *  支持 `[[标题]]` 与 `[[标题|显示文字]]` 两种写法，后者只取 `|` 前的目标标题。 */
+export function parseWikilinks(content: string): string[] {
+  const links: string[] = [];
+  const re = /\[\[([^[\]]+?)\]\]/g;
+  let match;
+  while ((match = re.exec(content)) !== null) {
+    const target = match[1]!.split('|')[0]!.trim();
+    if (target && !links.includes(target)) links.push(target);
+  }
+  return links;
+}
+
 export function normalizeCourse(course: Course) {
   if (!Array.isArray(course.activity)) course.activity = []
   if (!Array.isArray(course.actions)) course.actions = []

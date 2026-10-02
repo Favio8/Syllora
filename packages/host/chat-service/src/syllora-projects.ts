@@ -28,6 +28,11 @@ export class SylloraProjects {
     if(!z.string().uuid().safeParse(courseId).success||!z.string().uuid().safeParse(materialId).success)throw new SylloraError('INVALID_REQUEST','课程或资料 ID 不正确')
     return (await this.service(courseId)).readMaterialFile(courseId,materialId)
   }
+  /** 笔记图片读取（GET /api/syllora/notes/asset 用）；文件名白名单在 service 内校验。 */
+  async readNoteAsset(courseId:string,name:string) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).readNoteAsset(courseId,name)
+  }
   private async load() {
     this.ready??=(async()=>{
       await mkdir(this.root,{recursive:true});await stateDirectory(this.root)

@@ -5,6 +5,17 @@
  * 响应负载形态（服务层组装的 camelCase 视图模型），不参与 parity 对拍。
  */
 
+/** 笔记元数据（后端 NoteMeta 对齐）。 */
+export interface NoteMeta {
+  id: string;
+  title: string;
+  wikilinks: string[];
+  /** 正文里的图片文件名（assets/xxx.png），左栏图片树用。 */
+  images: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CourseSummary {
   id: string;
   title: string;

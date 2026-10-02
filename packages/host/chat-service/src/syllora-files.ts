@@ -14,7 +14,9 @@ export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:
   const seen=new Map(result.pages.map(p=>[p.num,p.text]))
   return Array.from({length:result.total},(_,i)=>i+1).flatMap<PageIssue>(num=>!seen.has(num)?[{num,reason:'unextracted-text'}]:!seen.get(num)!.trim()?[{num,reason:'blank-page'}]:[])
 }
-const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__'])
+// `notes` 是本应用管理的笔记目录（{课程根}/notes/）：用户自己的笔记不作为课程资料候选，
+// 否则每写一篇笔记都会出现在资料清单里，并可能被当作生成依据发送给模型。
+const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__', 'notes'])
 
 export async function atomicJson(path: string, value: unknown) {
   return atomicText(path, JSON.stringify(value, null, 2))
