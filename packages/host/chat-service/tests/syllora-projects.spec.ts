@@ -17,12 +17,12 @@ const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'h
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
 }
-async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf']) {
+async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1) {
   await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder)
   let calls=0
   const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
-  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>config,client:()=>client,...(pdf?{pdf}:{})})
+  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency}),client:()=>client,...(pdf?{pdf}:{})})
   await projects.handle('preferences',{consent:true})
   const course=await projects.handle('openCourse',{path:folder}) as {id:string}
   return {root,folder,app,projects,id:course.id,calls:()=>calls,client}
@@ -215,6 +215,36 @@ describe('structured sources and migration',()=>{
     // 缺文件属性的老课程记录不得被当成"未变化"而跳过：必须重算并按真实内容判定。
     const legacy=await files.scanFiles(s.folder,[{...material,fingerprint:'stale-legacy-hash',size:undefined,mtimeMs:undefined}])
     expect(legacy[0]!.fingerprint).toBe(modified[0]!.fingerprint);expect(legacy[0]!.change).toBe('changed')
+  })
+  it('organizes chapters concurrently up to the configured limit and still publishes every chapter',async()=>{
+    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const s=await setup(undefined,undefined,3)
+    await writeFile(join(s.folder,'lecture.md'),FOUR)
+    let inFlight=0,peak=0,calls=0
+    // 每个调用都停住 60ms 再返回：串行时 peak 恒为 1，并发时才会大于 1。
+    const client:StructuredCallClient={async *stream(options){
+      const message=(options.messages.at(-1) as any).content[0].text
+      const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length))
+      calls++;inFlight++;peak=Math.max(peak,inFlight)
+      await new Promise(r=>setTimeout(r,60))
+      inFlight--
+      yield {type:'text-delta',text:JSON.stringify(lecture(sources))}
+    }}
+    const app=join(s.root,'concurrent-app')
+    const projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency:3}),client:()=>client})
+    await projects.handle('preferences',{consent:true})
+    const id=(await projects.handle('openCourse',{path:s.folder}) as any).id
+    const scan=await projects.handle('scan',{courseId:id}) as any
+    const files=scan.files.filter((f:any)=>f.status==='ready')
+    const job=await projects.handle('initialize',{courseId:id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint]))}) as any
+    const settled=await settle(projects,job.jobId)
+    expect(settled.job.state).toBe('succeeded')
+    const state=await projects.handle('state',{}) as any
+    const chapters=state.courses[0].points.map((p:any)=>p.chapter)
+    expect(new Set(chapters)).toEqual(new Set(['第一章','第二章','第三章','第四章']))
+    expect(calls).toBe(4)
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(3)
   })
   it('migrates old courses with their identifiers and evidence, refuses existing destinations and keeps the original snapshot',async()=>{
     const s=await setup(),id=randomUUID(),pointId=randomUUID(),materialId=randomUUID(),sourceId=randomUUID(),questionId=randomUUID()
