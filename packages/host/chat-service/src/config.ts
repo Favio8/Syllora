@@ -32,6 +32,11 @@ export interface ResolvedChatConfig {
   /** Per-request output cap（config.yaml `max_tokens`）；null=适配器默认。 */
   readonly maxTokens?: number | null
   readonly defaultMode: 'quick' | 'feynman' | 'debug'
+  /**
+   * 是否在初始化时额外生成"幻灯片讲义"（`ui.slides`）。默认**关**：开启后每批会在讲义之外
+   * 多一次模型调用，属于用户应显式选择的成本，不应该是升级后静默多出来的开销。
+   */
+  readonly slides: boolean
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
@@ -57,7 +62,7 @@ interface ConfigYaml {
     readonly max_concurrency?: number
     readonly max_tokens?: number | null
   }>
-  readonly ui?: { default_mode?: string }
+  readonly ui?: { default_mode?: string; slides?: boolean }
   readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
@@ -167,6 +172,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
       maxConcurrency: 8,
       maxTokens: null,
       defaultMode: 'quick',
+      slides: false,
       agentPreset: 'syllora-learning',
       agentSystemPrompt: '',
       agentSkill: '',
@@ -210,6 +216,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     maxConcurrency,
     maxTokens,
     defaultMode,
+    slides: config.ui?.slides === true,
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
     agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',
