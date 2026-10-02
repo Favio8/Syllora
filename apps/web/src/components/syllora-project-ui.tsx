@@ -22,7 +22,7 @@ export function MaterialPreview({url,name,version}:{url:string;name:string;versi
     const current=new AbortController();controller.current=current;setBusy(true);setError('');
     try {
       const token=(window as unknown as {__SYLLORA__?:{token?:string}}).__SYLLORA__?.token;
-      const response=await fetch(url,{headers:token?{Authorization:`Bearer ${token}`}:{},signal:current.signal});
+      const response=await fetch(url,{credentials:'same-origin',headers:token?{Authorization:`Bearer ${token}`}:{},signal:current.signal});
       if(!response.ok){const body=await response.json();throw new Error(body.error?.message??'原文件读取失败')}
       const data=await response.blob();if(current.signal.aborted)return;
       if(held.current)URL.revokeObjectURL(held.current);held.current=URL.createObjectURL(data);setBlob(held.current);

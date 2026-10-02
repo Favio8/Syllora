@@ -142,8 +142,11 @@ interface AppState {
   sessionBanner: string | null; // 对话横幅（常驻，切换时闪现）
   suggestedEntry: string | null; // 恢复对话的建议入口（可点击发送）
   /** FE-2：全局排队消息（streaming 时发送）。此前是 useChatStream 实例私有
-   * ref——ChatArea 与 CommandPalette 两个实例各自排队，Palette 关闭即蒸发。 */
-  queuedMessages: Array<{ text: string; turnId?: string }>;
+   * ref——ChatArea 与 CommandPalette 两个实例各自排队，Palette 关闭即蒸发。
+   * CR-04：每条排队消息携带入队时的课程+会话归属。旧实现只在模块级 queueOwner
+   * 里记"最近一次 send 的会话"，切会话/新建会话既不清队列也不强校验条目归属，
+   * 旧会话文本与旧 turnId 会被发进新会话（串课/串会话）。 */
+  queuedMessages: Array<{ text: string; turnId?: string; owner?: { courseId: string | null; sessionId: string | null } }>;
   /** 学习中断唤醒（F6）：恢复/新建对话时的 1 道快问快答，可跳过。 */
   wakeupCard: WakeupCard | null;
   /** M-C (Sprint 8): pending ask question for composer answer state. */
@@ -220,9 +223,9 @@ interface AppState {
   flashStatusBanner: (text: string) => void;
   setSessionBanner: (text: string | null) => void;
   setSuggestedEntry: (text: string | null) => void;
-  enqueueQueuedMessage: (entry: { text: string; turnId?: string }) => void;
+  enqueueQueuedMessage: (entry: { text: string; turnId?: string; owner?: { courseId: string | null; sessionId: string | null } }) => void;
   /** 取出队首消息；无可取时返回 undefined。 */
-  shiftQueuedMessage: () => { text: string; turnId?: string } | undefined;
+  shiftQueuedMessage: () => { text: string; turnId?: string; owner?: { courseId: string | null; sessionId: string | null } } | undefined;
   queuedCount: () => number;
   setWakeupCard: (card: WakeupCard | null) => void;
   setPendingAsk: (ask: AskView | null) => void;
@@ -334,8 +337,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
   setSessions: (sessions) => set({ sessions }),
   setActiveSession: (sessionId, title = "") =>
-    // 仅更新 id/标题；消息列表由调用方显式控制（恢复渲染/清空/流式 meta 均需区分）
-    set({ activeSessionId: sessionId, activeSessionTitle: title, activeModel: null }),
+    // 仅更新 id/标题；消息列表由调用方显式控制（恢复渲染/清空/流式 meta 均需区分）。
+    // CR-04：切会话（含新建会话置 null）必须同步丢弃旧队列——旧实现只在切项目
+    // 时清队列，同项目内切会话时排队文本与旧 turnId 会漏进新会话。
+    set((state) => ({
+      activeSessionId: sessionId,
+      activeSessionTitle: title,
+      activeModel: null,
+      queuedMessages: state.queuedMessages.filter((entry) => {
+        if (entry.owner === undefined) return false; // 无归属条目不跨会话保留
+        return (entry.owner.courseId ?? null) === (state.activeCourseId ?? null)
+          && (entry.owner.sessionId ?? null) === (sessionId ?? null);
+      }),
+    })),
   setActiveSessionTitle: (title) => set({ activeSessionTitle: title }),
   setMessages: (messages) => set({ messages }),
   appendMessage: (message) =>

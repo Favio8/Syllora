@@ -34,6 +34,16 @@ beforeEach(() => {
 });
 
 describe("chatCourseIdOf", () => {
+  it("prefers the course UUID so two same-named folders cannot share one chat course", () => {
+    const uuid = "8f14e45f-ceea-467a-9a1e-3ed7e1f6d7c5";
+    expect(chatCourseIdOf("D:\\courses\\高数", uuid)).toBe(uuid);
+    expect(chatCourseIdOf("/home/learner/algebra/", uuid)).toBe(uuid);
+    // 空值仍回落到文件夹名，兼容旧调用方与旧历史。
+    expect(chatCourseIdOf("D:\\courses\\高数", "")).toBe("高数");
+    expect(chatCourseIdOf("D:\\courses\\高数", null)).toBe("高数");
+    expect(chatCourseIdOf("D:\\courses\\高数", "   ")).toBe("高数");
+  });
+
   it("takes the folder basename for both separators and drops trailing ones", () => {
     expect(chatCourseIdOf("D:\\courses\\高数")).toBe("高数");
     expect(chatCourseIdOf("/home/learner/algebra/")).toBe("algebra");
@@ -42,7 +52,18 @@ describe("chatCourseIdOf", () => {
 });
 
 describe("AgentChat", () => {
-  it("bridges the course folder, course list and active course into the store", async () => {
+  it("bridges the course UUID (not the folder name) into the store", async () => {
+    const uuid = "8f14e45f-ceea-467a-9a1e-3ed7e1f6d7c5";
+    render(<AgentChat folder={"D:\\courses\\高数"} courseId={uuid} courseName="高等数学" />);
+
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe(uuid));
+    expect(useAppStore.getState().courses).toEqual([
+      { id: uuid, title: "高等数学", overallMastery: 0, dueToday: 0, lastActiveAt: null },
+    ]);
+    await waitFor(() => expect(ensureCourseMock).toHaveBeenCalledWith(uuid));
+  });
+
+  it("falls back to the folder name for callers without a course identity", async () => {
     render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
 
     expect(screen.getByTestId("chat-area")).toBeInTheDocument();

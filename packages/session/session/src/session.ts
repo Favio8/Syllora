@@ -492,6 +492,8 @@ export class TutorSession {
         courseDir: this.courseDir,
         workspaceRoot: this.workspaceRoot,
         sessionId: this.sessionId,
+        // CR-02：派发口必须能复核模式白名单，不能只靠投影给模型的 schema。
+        mode: this.toolMode ?? this.mode,
         ...(signal === undefined ? {} : { signal }),
         ...(this.providers === undefined ? {} : { providers: this.providers }),
         ...(this.toolActions === undefined ? {} : { actions: this.toolActions }),

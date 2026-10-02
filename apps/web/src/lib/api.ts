@@ -59,6 +59,7 @@ function bootstrapToken(): string | null {
   return typeof boot?.token === "string" && boot.token !== "" ? boot.token : null;
 }
 
+
 function authHeaders(): Record<string, string> {
   const token = bootstrapToken();
   return token === null ? {} : { Authorization: `Bearer ${token}` };
@@ -72,6 +73,7 @@ function authHeaders(): Record<string, string> {
 async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/${method}`, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload === undefined ? {} : { payload }),
     signal,
@@ -94,6 +96,8 @@ async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    // CR-16：/api/session 下发的 HttpOnly 会话 Cookie 必须让浏览器带上。
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
   });
   const text = await response.text();
@@ -127,7 +131,7 @@ async function uploadFiles<T>(path: string, files: File[], signal?: AbortSignal)
     // 目录选择器会提供相对路径；它能让同名资料在归档后仍可辨识来源。
     form.append("files", file, file.webkitRelativePath || file.name);
   }
-  const response = await fetch(path, { method: "POST", headers: { ...authHeaders() }, body: form, signal });
+  const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: { ...authHeaders() }, body: form, signal });
   const text = await response.text();
   // UI-25：同 request——非 JSON 响应转可读的 ApiError。
   let body: unknown = {};
@@ -158,6 +162,7 @@ export async function* streamSse<T extends { event: string }>(
 ): AsyncGenerator<T> {
   const response = await fetch(path, {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",

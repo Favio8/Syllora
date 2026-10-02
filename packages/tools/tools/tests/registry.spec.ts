@@ -139,7 +139,9 @@ describe('ToolRegistry', () => {
     const ctx = { courseDir, workspaceRoot: wsRoot, approval: async () => 'allow' as const }
     const result = await registry.execute('write_note', { content: '我的理解：封装是隐藏实现。', conceptId: 'c_1' }, ctx)
     expect(result.status).toBe('success')
-    const notes = await (await import('node:fs/promises')).readFile(join(courseDir, 'notes.md'), 'utf8')
+    // CR-20：笔记统一落在 v2 布局，与 builder 的 migrateLegacyLayout 和 read_notes 一致。
+    expect(result.data['file']).toBe('.syllora/notes.md')
+    const notes = await (await import('node:fs/promises')).readFile(join(wsRoot, '.syllora', 'notes.md'), 'utf8')
     expect(notes).toContain('[c_1] 我的理解：封装是隐藏实现。')
     expect(registry.actionAudit).toHaveLength(1)
     expect(registry.actionAudit[0]!.name).toBe('write_note')
@@ -152,7 +154,7 @@ describe('ToolRegistry', () => {
     const content = '长笔记'.repeat(100)
     const result = await registry.execute('write_note', { content }, { courseDir, workspaceRoot: wsRoot, approval: async () => 'allow' as const })
     expect(result.status).toBe('success')
-    const notes = await (await import('node:fs/promises')).readFile(join(courseDir, 'notes.md'), 'utf8')
+    const notes = await (await import('node:fs/promises')).readFile(join(wsRoot, '.syllora', 'notes.md'), 'utf8')
     expect(notes).toContain(content)
     expect(registry.actionAudit[0]?.summary).toBeTruthy()
     await rm(root, { recursive: true, force: true })

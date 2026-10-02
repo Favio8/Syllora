@@ -28,23 +28,38 @@ export interface AgentChatProps {
   onPractice?: () => void;
   /** 课程显示名（会话面板标题）。 */
   courseName: string;
+  /** 工作台课程 UUID（B1：chat 端点的课程身份，缺省回落到文件夹名兼容旧调用方）。 */
+  courseId?: string;
   /** 打开工作台自己的模型设置弹窗。 */
   onOpenSettings?: () => void;
 }
 
-/** 课程文件夹名 = chat/agent 端点的 courseId；Windows 分隔符也要切。 */
-export function chatCourseIdOf(folder: string): string {
+/**
+ * B1：chat/agent 端点的课程身份。历史契约是「课程文件夹名」，两门不同路径、
+ * 同名文件夹的课程会共用同一个 chat 课程，会话与消息互相串入。现在以课程
+ * UUID（工作台 project.id）作为 chat 课程 id；宿主侧按课程状态文件里的课程
+ * id 解析目录，并向 basename 形式兼容（升级前的历史会话仍可读取——会话日志
+ * 按课程目录分片存储，不随 id 变化）。
+ */
+export function chatCourseIdOf(folder: string, courseId?: string | null): string {
+  const id = (courseId ?? "").trim();
+  if (id !== "") return id;
   return folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
-export default function AgentChat({ folder, courseName, onOpenSettings, ...props }: AgentChatProps) {
+export default function AgentChat({ folder, courseName, courseId, onOpenSettings, ...props }: AgentChatProps) {
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath);
   const setCourses = useAppStore((s) => s.setCourses);
   const setActiveCourse = useAppStore((s) => s.setActiveCourse);
   const paletteOpen = useAppStore((s) => s.paletteOpen);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
-  const chatCourseId = useMemo(() => chatCourseIdOf(folder), [folder]);
+  // 桥接以「已打开课程文件夹」为前提：没有 folder 就没有可桥接的工作区
+  // （此前的守卫语义不变），有 folder 时优先用课程 UUID 作为 chat 课程身份。
+  const chatCourseId = useMemo(
+    () => (folder === "" ? "" : chatCourseIdOf(folder, courseId)),
+    [folder, courseId],
+  );
 
   // 桥接 store：项目路径、课程列表、激活课程。setActiveCourse 会清空消息与
   // 会话，所以只在课程真正变化时调用（工作台每 1.5s 轮询 state 会反复渲染）。

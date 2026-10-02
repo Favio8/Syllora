@@ -141,9 +141,12 @@ export function useChatStream() {
     const state = useAppStore.getState();
     const next = state.shiftQueuedMessage();
     if (next === undefined) return;
-    const owner = queueOwner;
-    const sameOwner = (state.activeCourseId ?? null) === owner.courseId
-      && (state.activeSessionId ?? null) === owner.sessionId;
+    // CR-04：以「条目自带的归属」为准（而非模块级 queueOwner——它记的是最近
+    // 一次 send 的会话，会被新 send 刷新，导致陈旧条目通过守卫）。条目缺失
+    // 归属时回落到 queueOwner，兼容旧行为。
+    const owner = next.owner ?? queueOwner;
+    const sameOwner = (state.activeCourseId ?? null) === (owner.courseId ?? null)
+      && (state.activeSessionId ?? null) === (owner.sessionId ?? null);
     if (!sameOwner) {
       flashStatusBanner("已切换会话，丢弃旧队列消息");
       return;
@@ -378,14 +381,16 @@ export function useChatStream() {
         // 作为普通 LLM 回合跑一遍。命令只进本地队列（无 turnId，刷新丢失可接受），
         // 普通消息才建 durable 回合保刷新不丢。
         const commandOnly = parseCommand(trimmed) !== null;
+        // CR-04：入队即固化归属，drain 时按条目自身归属强校验。
+        const entryOwner = { courseId: state.activeCourseId ?? null, sessionId: state.activeSessionId ?? null };
         if (!commandOnly && state.activeSessionId) {
           try {
             const queued = await api.enqueueAgent(state.activeCourseId ?? "", state.activeSessionId, state.mode, trimmed);
-            state.enqueueQueuedMessage({ text: trimmed, turnId: queued.turnId });
+            state.enqueueQueuedMessage({ text: trimmed, turnId: queued.turnId, owner: entryOwner });
           } catch {
-            state.enqueueQueuedMessage({ text: trimmed });
+            state.enqueueQueuedMessage({ text: trimmed, owner: entryOwner });
           }
-        } else state.enqueueQueuedMessage({ text: trimmed });
+        } else state.enqueueQueuedMessage({ text: trimmed, owner: entryOwner });
         flashStatusBanner(`已加入队列 · ${useAppStore.getState().queuedMessages.length}`);
         return;
       }

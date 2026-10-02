@@ -62,18 +62,53 @@ export class CourseNotFoundError extends Error {
  */
 const MASTERY_ALPHA = 0.3
 
-function courseDirOf(workspaceRoot: string, courseId: string): string {
-  if (courseId === '' || /[\/]/.test(courseId) || courseId.includes('..') || courseId.startsWith('.')) {
-    throw new CourseNotFoundError(courseId)
+const COURSE_ID_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+interface CourseIdentity { readonly id?: unknown; readonly courseId?: unknown; readonly course_id?: unknown }
+
+function uuidOf(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as CourseIdentity
+  for (const candidate of [record.id, record.courseId, record.course_id]) {
+    if (typeof candidate === 'string' && COURSE_ID_UUID_RE.test(candidate)) return candidate.toLowerCase()
   }
-  // 项目即课程：courseId = 项目根 basename；不匹配视为课程不存在（避免跨项目串数据）。
-  const expected = basename(workspaceRoot)
-  if (courseId !== expected) throw new CourseNotFoundError(courseId)
-  return workspaceRoot
+  return null
+}
+
+/**
+ * B1：课程身份解析。历史契约 courseId = 项目根 basename（同名文件夹的两门课
+ * 会共用同一个 chat 课程，会话与消息互相串入）。现在优先按课程 UUID 解析：
+ * 读课程状态文件里的课程 id，与请求的 courseId 相等即认定本目录；仍兼容
+ * basename 形式的旧客户端（升级前的会话历史按目录分片，不随 id 变化）。
+ * 返回真实目录（平台大小写差异在此归一），无法解析返回 null。
+ */
+export async function resolveCourseDir(workspaceRoot: string, courseId: string): Promise<string | null> {
+  const raw = courseId.trim()
+  if (raw === '' || /[\\/]/.test(raw) || raw.includes('..') || raw.startsWith('.')) return null
+  const direct = await stat(workspaceRoot).catch(() => null)
+  if (direct?.isDirectory() !== true) return null
+  const wanted = raw.toLowerCase()
+  const files = [join(stateDirOf(workspaceRoot), 'course.json'), join(workspaceRoot, 'syllora.json')]
+  for (const file of files) {
+    const text = await readFile(file, 'utf8').catch(() => null)
+    if (text === null) continue
+    let stored: { courses?: unknown[] } | null = null
+    try { stored = JSON.parse(text) as { courses?: unknown[] } } catch { continue }
+    for (const course of stored?.courses ?? []) {
+      if (uuidOf(course) === wanted) return workspaceRoot
+    }
+  }
+  return raw === basename(workspaceRoot) ? workspaceRoot : null
+}
+
+async function courseDirOf(workspaceRoot: string, courseId: string): Promise<string> {
+  const dir = await resolveCourseDir(workspaceRoot, courseId)
+  if (dir === null) throw new CourseNotFoundError(courseId)
+  return dir
 }
 
 async function requireCourse(workspaceRoot: string, courseId: string): Promise<string> {
-  const dir = courseDirOf(workspaceRoot, courseId)
+  const dir = await courseDirOf(workspaceRoot, courseId)
   if (!(await stat(dir).catch(() => null))?.isDirectory()) throw new CourseNotFoundError(courseId)
   return dir
 }
@@ -91,7 +126,7 @@ interface BuildContext {
 
 export async function configForSession(workspaceRoot: string, courseId: string, sessionId: string | null | undefined, fallback: ResolvedChatConfig | null): Promise<ResolvedChatConfig | null> {
   if (sessionId === null || sessionId === undefined || sessionId === '') return fallback
-  const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
+  const historyDir = join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')
   // Event logs are authoritative for migrated/live Agent sessions. The
   // legacy SessionStore remains the fallback for sessions not yet migrated.
   const events = new SessionEventStore(historyDir)
@@ -843,7 +878,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       if ((await stat(syllabusPath).catch(() => null)) !== null) return { ensured: false }
       await mkdir(stateDirOf(dir), { recursive: true })
       await writeFile(syllabusPath, JSON.stringify({
-        course_id: courseId, title: courseId, version: '1.0.0',
+        course_id: basename(dir), title: basename(dir), version: '1.0.0',
         granularity: 'fine', chapters: [], adjacency: {},
       }, null, 2) + '\n', 'utf8')
       return { ensured: true }

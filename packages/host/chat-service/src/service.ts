@@ -5,11 +5,12 @@
  * @module @syllora/chat-service/src/service
  */
 
-import { readFile, readdir } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { readFile, readdir, realpath } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { AgentLoop, ApprovalQueue, type Agent, type AgentCapability, type AgentEvent, type AgentModelSelection, type AgentPreset, type AgentRegistry, type ApprovalDecision, type ApprovalRequest, type AgentTurnHandle } from '@syllora/agent'
 import {
   agentToolRegistry,
+  courseSourceRoot,
   resolveSourceRef,
   withCourseLock,
   type ToolActionContext,
@@ -20,8 +21,9 @@ import {
 import { SessionEventStore, SessionStore, SessionError, TutorSession, utcTs, sessionModelLine, publicToolArgs, sylloraFallbackTitle, normalizeSessionTitle, type ChatEvent, type LearningMode, type SessionProjection } from '@syllora/session'
 import type { ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient, reasoningEffortsForConfig } from './adapter.ts'
-import { configProblem, createCourseService, type CourseService } from './course.ts'
+import { configProblem, createCourseService, resolveCourseDir, type CourseService } from './course.ts'
 import { loadChatConfig } from './config.ts'
+import { fetchUrlSafe } from './fetch-url-safe.ts'
 import { discoverModels, settingsPayload, saveProvider } from './settings.ts'
 import { stateDirOf } from '@syllora/course-builder'
 import { createSylloraStudyActions } from './syllora-study-actions.ts'
@@ -114,12 +116,14 @@ async function readBodyCapped(response: Response, maxBytes: number): Promise<str
   return text.slice(0, maxBytes)
 }
 
-/** Credential-free URL provider. Redirects are rejected to avoid leaking keys. */
+/** Credential-free URL provider. CR-06：此前裸 fetch，无任何 SSRF/IP 校验——
+ *  LLM 可控 URL 可直达内网与云元数据地址（ingestUrl 通道早有 fetch-url-safe
+ *  加固，两处不一致）。统一复用 fetch-url-safe：协议/凭据/每一跳的公共 IP
+ *  校验 + 响应体上限。 */
 async function localFetch(input: { url: string; signal?: AbortSignal }): Promise<{ status: number; contentType: string; body: string }> {
-  const response = await fetch(input.url, { redirect: 'manual', ...(input.signal === undefined ? {} : { signal: input.signal }) })
-  if (response.status >= 300 && response.status < 400) throw new Error('网络重定向已拒绝')
-  const body = await readBodyCapped(response, PROVIDER_OUTPUT_LIMIT)
-  return { status: response.status, contentType: response.headers.get('content-type') ?? '', body }
+  const response = await fetchUrlSafe(input.url)
+  const text = await response.text()
+  return { status: response.status, contentType: response.headers.get('content-type') ?? '', body: text.slice(0, PROVIDER_OUTPUT_LIMIT) }
 }
 
 /** Credential-free web search provider. It is deliberately small and
@@ -150,7 +154,7 @@ function deprecatedModel(model: string): boolean {
 }
 
 async function ensureSessionModel(workspaceRoot: string, courseId: string, sessionId: string, configRoot = workspaceRoot): Promise<SessionModelSelection | null> {
-  const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
+  const historyDir = join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')
   const eventStore = new SessionEventStore(historyDir)
   const eventModel = (await eventStore.load(sessionId).catch(() => []))
     .reverse()
@@ -239,8 +243,8 @@ export async function selectSessionModel(workspaceRoot: string, courseId: string
       overwrite: true,
     }).catch(() => undefined)
   }
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
-  const events = new SessionEventStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
+  const events = new SessionEventStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   if (await events.exists(sessionId)) {
     await events.append(sessionId, { ts: utcTs(), type: 'session/model', payload: { provider: selection.provider, model: selection.model, ...(selection.effort === undefined || selection.effort === null ? {} : { effort: selection.effort }) } })
   } else {
@@ -250,13 +254,13 @@ export async function selectSessionModel(workspaceRoot: string, courseId: string
 }
 
 export async function sessionEvents(workspaceRoot: string, courseId: string, sessionId: string, afterSeq = 0): Promise<{ events: SessionEventView[]; lastSeq: number }> {
-  const events = new SessionEventStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const events = new SessionEventStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   const rows = await events.loadAfter(sessionId, afterSeq)
   return { events: rows, lastSeq: rows.at(-1)?.seq ?? afterSeq }
 }
 
 export async function sessionProjection(workspaceRoot: string, courseId: string, sessionId: string): Promise<SessionProjection> {
-  return new SessionEventStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')).project(sessionId)
+  return new SessionEventStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')).project(sessionId)
 }
 
 export interface LearningAgentOptions {
@@ -331,8 +335,8 @@ async function ensureAgentRuntimeConfig(events: SessionEventStore, sessionId: st
 }
 
 /** Build one live learning Agent. All callers (Host, Web, CLI and ACP) use this adapter. */
-export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
-  const courseDir = courseDirOf(options.workspaceRoot, options.courseId)
+export async function createLearningAgent(options: LearningAgentOptions): Promise<AgentLoop> {
+  const courseDir = await courseDirOf(options.workspaceRoot, options.courseId)
   const events = new SessionEventStore(join(stateDirOf(courseDir), 'history'))
   const providers: ToolProviders = {
     ...localToolProviders,
@@ -342,7 +346,7 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
         // 随机后缀：同毫秒内两次 spawn 会生成相同 childSessionId，registry.register
         // 以「Agent 已存在」拒绝第二个；事件 id 校验（SEC-6）允许字母数字与连字符。
         const childSessionId = `${options.sessionId}-child-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-        const child = createLearningAgent({
+        const child = await createLearningAgent({
           ...options,
           sessionId: childSessionId,
           agentId: `study-${childSessionId}`,
@@ -636,7 +640,7 @@ export class LearningAgentService {
     const inputConfig = await loadChatConfig(this.configRoot ?? workspaceRoot)
     let runtimeConfig: AgentRuntimeConfig | undefined
     if (existing === undefined) {
-      const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
+      const historyDir = join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')
       const events = new SessionEventStore(historyDir)
       if (!(await events.exists(sessionId))) {
         const meta = await new SessionStore(historyDir).readMeta(sessionId)
@@ -645,7 +649,7 @@ export class LearningAgentService {
       runtimeConfig = await ensureAgentRuntimeConfig(events, sessionId, inputConfig)
     }
     const modelSelection = await ensureSessionModel(workspaceRoot, courseId, sessionId, this.configRoot)
-    const agent = existing ?? createLearningAgent({ workspaceRoot, courseId, sessionId, mode, inputConfig, approvals: this.approvals, agentRegistry: this.registry, modelSelection, ...(runtimeConfig === undefined ? {} : { runtimeConfig }) })
+    const agent = existing ?? await createLearningAgent({ workspaceRoot, courseId, sessionId, mode, inputConfig, approvals: this.approvals, agentRegistry: this.registry, modelSelection, ...(runtimeConfig === undefined ? {} : { runtimeConfig }) })
     if (existing === undefined) {
       this.registry.register(agent)
     }
@@ -890,13 +894,12 @@ export class LearningAgentService {
 
 }
 
-function courseDirOf(workspaceRoot: string, courseId: string): string {
-  if (courseId === '' || /[\/]/.test(courseId) || courseId.includes('..') || courseId.startsWith('.')) {
-    throw new SessionError(`课程不存在: ${courseId}`)
-  }
-  // 项目即课程：courseId = 项目根 basename；不匹配视为课程不存在（避免跨项目串数据）。
-  if (courseId !== basename(workspaceRoot)) throw new SessionError(`课程不存在: ${courseId}`)
-  return workspaceRoot
+/** B1：chat/agent 端点的课程解析——优先按课程 UUID（状态文件里的课程 id），
+ *  兼容 basename 形式的旧客户端。解析在 course.ts 与 course 服务共用一处。 */
+async function courseDirOf(workspaceRoot: string, courseId: string): Promise<string> {
+  const dir = await resolveCourseDir(workspaceRoot, courseId)
+  if (dir === null) throw new SessionError(`课程不存在: ${courseId}`)
+  return dir
 }
 
 function toView(summary: Awaited<ReturnType<SessionStore['listSessions']>>[number], turns: number): SessionSummaryView {
@@ -912,8 +915,8 @@ function toView(summary: Awaited<ReturnType<SessionStore['listSessions']>>[numbe
 
 /** List a course's sessions (mtime desc), with chat-line turn counts. */
 export async function listSessions(workspaceRoot: string, courseId: string): Promise<SessionSummaryView[]> {
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
-  const eventStore = new SessionEventStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
+  const eventStore = new SessionEventStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   const summaries = await store.listSessions()
   const views: SessionSummaryView[] = []
   for (const summary of summaries) {
@@ -944,8 +947,8 @@ export async function searchSessions(
 ): Promise<SessionSearchView[]> {
   const normalized = query.trim().toLowerCase()
   if (normalized === '') return []
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
-  const eventStore = new SessionEventStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
+  const eventStore = new SessionEventStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   const matches: SessionSearchView[] = []
   for (const summary of await store.listSessions()) {
     const chats = await store.loadChat(summary.id).catch(() => [])
@@ -999,7 +1002,7 @@ export async function createSession(
   title: string | null,
   configRoot = workspaceRoot,
 ): Promise<{ sessionId: string; file: string }> {
-  const courseDir = courseDirOf(workspaceRoot, courseId)
+  const courseDir = await courseDirOf(workspaceRoot, courseId)
   const store = new SessionStore(join(stateDirOf(courseDir), 'history'))
   const { sessionId, path } = await store.newSession(mode, title)
   // chatStream 的 TutorSession.init 只认「遗留 jsonl 或事件日志」二者之一，而遗留
@@ -1021,7 +1024,7 @@ export async function renameSession(
   sessionId: string,
   title: string,
 ): Promise<{ sessionId: string; title: string }> {
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   const normalized = title.trim()
   if (normalized === '') throw new SessionError('会话标题不能为空')
   await store.renameSession(sessionId, normalized)
@@ -1035,8 +1038,8 @@ export async function forkSession(
   sessionId: string,
   chatIndex?: number,
 ): Promise<{ sessionId: string; file: string }> {
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
-  const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
+  const historyDir = join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')
   const events = new SessionEventStore(historyDir)
   if (await events.exists(sessionId)) {
     const { stat } = await import('node:fs/promises')
@@ -1065,7 +1068,7 @@ export async function archiveSession(
   courseId: string,
   sessionId: string,
 ): Promise<{ sessionId: string; archived: true }> {
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   await store.archiveSession(sessionId)
   return { sessionId, archived: true }
 }
@@ -1077,7 +1080,7 @@ export async function reorderSession(
   sessionId: string,
   beforeId?: string,
 ): Promise<{ sessions: SessionSummaryView[] }> {
-  const store = new SessionStore(join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history'))
+  const store = new SessionStore(join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history'))
   await store.insertSessionBefore(sessionId, beforeId)
   return { sessions: await listSessions(workspaceRoot, courseId) }
 }
@@ -1088,7 +1091,7 @@ export async function restoreSession(
   courseId: string,
   sessionId: string,
 ): Promise<RestoredSessionView> {
-  const courseDir = courseDirOf(workspaceRoot, courseId)
+  const courseDir = await courseDirOf(workspaceRoot, courseId)
   const store = new SessionStore(join(stateDirOf(courseDir), 'history'))
   const eventStore = new SessionEventStore(join(stateDirOf(courseDir), 'history'))
   const legacyChats = await store.loadChat(sessionId).catch(() => [])
@@ -1138,20 +1141,33 @@ export async function restoreSession(
   }
 }
 
-/** Load the referenced files into a file-context block (best-effort, capped). */
+/** Load the referenced files into a file-context block (best-effort, capped).
+ *  CR-21：词法 containment 不解析符号链接——资料根里植入指向外部的链接 +
+ *  客户端携带该 fileRef，即可把外部文件读进 LLM 上下文。出口统一 realpath
+ *  包含校验（与 read_source 同口径）。 */
 export async function fileContextOf(courseDir: string, fileRefs: string[]): Promise<string | null> {
   if (fileRefs.length === 0) return null
+  const sourceRoot = await courseSourceRoot(courseDir)
+  const realRoot = await realpath(sourceRoot).catch(() => sourceRoot)
   const parts: string[] = []
   for (const ref of fileRefs.slice(0, 8)) {
     try {
       const path = await resolveSourceRef(courseDir, ref)
-      const text = await readFile(path, 'utf8')
+      const resolved = await realpath(path).catch(() => null)
+      if (resolved === null || !isWithinReal(realRoot, resolved)) continue
+      const text = await readFile(resolved, 'utf8')
       parts.push(`### ${ref}\n${text.slice(0, 4000)}`)
     } catch {
       // Unreadable refs are skipped; the conversation continues.
     }
   }
   return parts.length === 0 ? null : parts.join('\n\n')
+}
+
+/** realpath 后的包含判定（异盘相对路径会被路过的 isAbsolute 挡下）。 */
+function isWithinReal(root: string, target: string): boolean {
+  const relPath = relative(root, target)
+  return relPath !== '' && !isAbsolute(relPath) && relPath !== '..' && !relPath.startsWith(`..${sep}`)
 }
 
 function courseIdOfAction(ctx: ToolActionContext): string {
@@ -1348,13 +1364,20 @@ export async function* chatStream(
   inputConfig: ResolvedChatConfig | null,
   agentRegistry?: AgentRegistry,
   approvals?: ApprovalQueue,
+  /**
+   * CR-09：共享设置根（settingsRoot）。此前无此入参，inputConfig 为 null
+   * （ACP 路径）时 runtime 快照/session model 回退读 workspaceRoot 而非
+   * settingsRoot，读到的是课程目录里的旧配置。缺省仍回落 workspaceRoot，
+   * 兼容既有调用方。
+   */
+  configRoot: string = workspaceRoot,
 ): AsyncGenerator<ChatEvent | { kind: 'error'; code: string; message: string } | { kind: 'meta'; payload: Record<string, unknown> }> {
   // 课程校验失败（id 非法/与当前工作区不匹配）是业务错误而非异常：SSE 场景下
   // 生成器一旦 throw，会穿透到宿主 HTTP 层（SSE 头已发时 writeHead 兜底会
   // 以 ERR_HTTP_HEADERS_SENT 打崩进程）。这里转 error 帧由调用方收尾。
   let courseDir: string
   try {
-    courseDir = courseDirOf(workspaceRoot, courseId)
+    courseDir = await courseDirOf(workspaceRoot, courseId)
   } catch (error) {
     yield {
       kind: 'error',
@@ -1386,8 +1409,8 @@ export async function* chatStream(
     if (!(await store.exists(session.sessionId))) {
       await store.append(session.sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: input.mode ?? 'socratic', agentId: `study-${session.sessionId}` } })
     }
-    const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, inputConfig ?? await loadChatConfig(workspaceRoot))
-    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId, inputConfig?.configRoot)
+    const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, inputConfig ?? await loadChatConfig(configRoot))
+    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId, inputConfig?.configRoot ?? configRoot)
     // DSH ensureFallback: the deterministic first-prompt title lands at send
     // time (independent of turn outcome) so the sidebar drops the blank
     // "新对话" placeholder as soon as the first message exists.
@@ -1397,7 +1420,7 @@ export async function* chatStream(
     if (fallbackTitle !== '') {
       firstPrompt = await history.applyAutoTitle(session.sessionId, fallbackTitle, 'fallback').catch(() => false)
     }
-    const agent = agentRegistry?.get(`study-${session.sessionId}`) ?? createLearningAgent({
+    const agent = agentRegistry?.get(`study-${session.sessionId}`) ?? await createLearningAgent({
       workspaceRoot,
       courseId,
       sessionId: session.sessionId,
@@ -1525,7 +1548,7 @@ export async function* chatStream(
       // send time and never overrides a user rename (pin check in store).
       void (async () => {
         const config = modelSelection !== null
-          ? await loadChatConfig(inputConfig?.configRoot ?? workspaceRoot, { providerId: modelSelection.provider, model: modelSelection.model })
+          ? await loadChatConfig(inputConfig?.configRoot ?? configRoot, { providerId: modelSelection.provider, model: modelSelection.model })
           : inputConfig ?? await loadChatConfig(workspaceRoot)
         const title = await generateLlmSessionTitle(config, input.message)
         if (title !== '') {

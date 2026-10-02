@@ -26,6 +26,8 @@ pnpm serve --port 8081
 
 服务默认只监听本机地址，沿用原项目的访问 token 与 Origin 校验。不要将此 MVP 直接暴露到公网。
 
+访问 token 不再注入页面：浏览器打开 Web UI 时先由宿主交付一个不含凭据的票据页，页面用 `<hostHome>/host.json` 里的 token 调 `POST /api/session` 换取 HttpOnly 会话 Cookie，之后的 `/api/*` 由 Cookie 授权（同机进程 `curl /` 拿不到可用 token）。CLI/桌面端沿用 `Authorization: Bearer <token>`。`--insecure-no-token` 仍是显式逃生口。
+
 ## 第一次使用
 
 1. 打开左下角「用户 → 设置」，添加供应商，填写模型服务地址、model_id 和 API Key。支持 OpenAI 兼容与 Anthropic Messages 两种协议；已有供应商在「供应商管理」中编辑、激活或删除。

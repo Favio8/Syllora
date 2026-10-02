@@ -6,9 +6,9 @@ import { workspaceStateDirOf } from './runtime-paths.ts'
  */
 
 import { randomBytes } from 'node:crypto'
-import { mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { courseSourceRoot, isEightDotThreeSegment, isInplaceCourse, INPLACE_SOURCE_EXCLUDED_DIRS, resolveSourceRef, resolveStateFile } from './paths.ts'
+import { courseSourceRoot, isEightDotThreeSegment, resolveSourceRef, resolveStateFile, sourceExcludedDirs } from './paths.ts'
 import { ToolRejected } from './result.ts'
 import { MAX_FILE_BYTES, MAX_NOTE_CHARS, MAX_READ_LINES, MAX_TOOL_MESSAGE_CHARS } from './specs.ts'
 
@@ -181,6 +181,13 @@ export interface ToolContext extends ToolActionContext {
   readonly approval?: (request: { name: string; policy: string; args: Record<string, unknown> }) => Promise<'allow' | 'deny'>
   /** Optional deployment providers. Missing providers deliberately degrade. */
   readonly providers?: ToolProviders
+  /**
+   * CR-02：本次派发所属的工具模式（socratic/quick/feynman/debug/general）。
+   * 声明后，registry 会按 `MODE_TOOL_SETS` 白名单拒绝越模式的工具调用——
+   * 模式隔离不再只依赖「投影给模型的 schema」这一层自觉。缺省不校验，
+   * 兼容仅按注册表直接调用的宿主。
+   */
+  readonly mode?: string
 }
 
 function workspacePath(ctx: ToolContext, value: string): string {
@@ -296,16 +303,13 @@ export async function handlerWriteFile(ctx: ToolContext, args: Record<string, un
   // 的真实路径，压缩符号链接替换的竞态窗口。
   await safeWriteParent(ctx, path)
   await mkdir(dirname(path), { recursive: true })
-  const safeParent = await safeWriteParent(ctx, path)
-  const safePath = join(safeParent, basename(path))
+  // CR-17：悬空符号链接会让 stat 返回 null 而落入「新建」分支，writeFile 沿
+  // 链接在工作区外创建文件，审批面板展示的却是工作区内相对路径。写前统一
+  // lstat 拒链 + realpath 复核（与 write_note 同源修法）。
+  const safePath = await assertSafeWriteTarget(ctx.workspaceRoot, path, '目标路径')
   const existing = await stat(safePath).catch(() => null)
-  if (existing !== null) {
-    // 既有文件可能是符号链接：解析并复核真实路径后再写。
-    const resolved = await safeExistingPath(ctx, safePath)
-    await writeFile(resolved, String(args['content']), 'utf8')
-  } else {
-    await writeFile(safePath, String(args['content']), 'utf8')
-  }
+  if (existing !== null && !existing.isFile()) throw new ToolRejected('目标路径被占用（非普通文件）')
+  await writeFile(safePath, String(args['content']), 'utf8')
   return [`已写入 ${relative(ctx.workspaceRoot, path).replaceAll('\\', '/')}`, { path: relative(ctx.workspaceRoot, path).replaceAll('\\', '/'), bytes: Buffer.byteLength(String(args['content']), 'utf8') }]
 }
 
@@ -513,7 +517,7 @@ export async function handlerSearchSources(ctx: ToolContext, args: Record<string
   if (!(await stat(root).catch(() => null))?.isDirectory()) {
     return ['0 处匹配', { matches: [], filesScanned: 0, totalMatches: 0 }]
   }
-  const inplace = await isInplaceCourse(ctx.courseDir)
+  const excludedDirs = sourceExcludedDirs()
   const matches: Array<{ file: string; line: number; text: string }> = []
   let filesScanned = 0
   let skippedOversize = 0
@@ -523,7 +527,7 @@ export async function handlerSearchSources(ctx: ToolContext, args: Record<string
     // 达到上限后必须整树退出：break 只能跳出当前文件的行循环。
     if (ctx.signal?.aborted || matches.length >= maxResults) break
     const parts = relative(root, path).split(/[\\/]/)
-    if (inplace && parts.some(part => INPLACE_SOURCE_EXCLUDED_DIRS.has(part))) continue
+    if (parts.some(part => excludedDirs.has(part))) continue
     if ((await stat(path)).size > MAX_FILE_BYTES) { skippedOversize += 1; continue }
     if (BINARY_SOURCE_RE.test(path)) { skippedOversize += 1; continue }
     let text: string
@@ -751,7 +755,30 @@ export function handlerGetProgressReport(ctx: ToolContext, args: Record<string, 
   return runInjectedAction(ctx, 'getProgressReport', args)
 }
 
-/** `write_note`: append one line to notes.md (append-only, per-course lock). */
+/**
+ * CR-03/CR-17 同源修法：写入前对目标做 lstat + realpath 复核。
+ * - `stat` 跟随链接，`isSymbolicLink()` 对存在的链接恒 false（防护是死代码）；
+ *   悬空链接 stat 返回 null，会落入「新建」分支沿链接在边界外创建文件。
+ * - 因此必须 `lstat`：目标本身是链接（含悬空）一律拒绝。
+ * - 目标不是链接时，再对其父目录 realpath 复核包含关系，堵住中间目录 junction。
+ * 返回可用于写入的真实路径（调用方必须用它完成后续 IO，避免 TOCTOU）。
+ */
+async function assertSafeWriteTarget(boundary: string, target: string, label: string): Promise<string> {
+  const realBoundary = await realpath(boundary).catch(() => boundary)
+  const info = await lstat(target).catch(() => null)
+  if (info?.isSymbolicLink()) throw new ToolRejected(`${label}不允许是符号链接（防越界写入）`)
+  if (info !== null && !info.isFile()) throw new ToolRejected(`${label}被占用（非文件）`)
+  const parent = await realpath(dirname(target)).catch(() => null)
+  if (parent === null) throw new ToolRejected(`${label}的父目录不存在`)
+  if (parent !== realBoundary && !isWithin(realBoundary, parent)) throw new ToolRejected(`${label}不能通过符号链接越界`)
+  return join(parent, basename(target))
+}
+
+/** `write_note`: append one line to notes.md (append-only, per-course lock).
+ *  CR-20：笔记落在 v2 布局的 `.syllora/notes.md`（与 builder 的 migrateLegacyLayout
+ *  和 read_notes 一致）。旧版在课程根写 notes.md，迁移后首次写笔记会在根重建
+ *  文件并永久遮蔽 `.syllora` 里的历史笔记。仅当根里已有遗留 notes.md 且 v2
+ *  文件不存在时才继续追加到遗留文件，保证未迁移的旧工作区不丢笔记。 */
 export async function handlerWriteNote(ctx: ToolContext, args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
   const content = String(args['content'] ?? '').trim()
   if (content === '') throw new ToolRejected('content 不能为空')
@@ -763,28 +790,40 @@ export async function handlerWriteNote(ctx: ToolContext, args: Record<string, un
   if (chapterId !== undefined && !validRefId(chapterId)) throw new ToolRejected('chapterId 只能包含字母/数字/下划线/连字符（禁止换行注入）')
   const prefix = conceptId === undefined ? '' : `[${conceptId}] `
   const line = `- ${noteLineTs()} ${prefix}${normalized}\n`
-  const path = join(ctx.courseDir, 'notes.md')
-  await withCourseLock(ctx.courseDir, async () => {
+  const stateDir = workspaceStateDirOf(ctx.courseDir)
+  const v2Path = join(stateDir, 'notes.md')
+  const legacyPath = join(ctx.courseDir, 'notes.md')
+  const file = await withCourseLock(ctx.courseDir, async () => {
+    const hasV2 = (await lstat(v2Path).catch(() => null)) !== null
+    const hasLegacy = !hasV2 && (await lstat(legacyPath).catch(() => null)) !== null
+    const shown = hasLegacy ? 'notes.md' : '.syllora/notes.md'
+    const path = hasLegacy ? legacyPath : v2Path
+    if (!hasLegacy) await mkdir(stateDir, { recursive: true })
+    const safePath = await assertSafeWriteTarget(ctx.courseDir, path, '学生笔记路径')
     let old = ''
-    const existing = await stat(path).catch(() => null)
+    const existing = await stat(safePath).catch(() => null)
     if (existing !== null) {
-      if (existing.isSymbolicLink()) throw new Error('学生笔记路径不允许是符号链接（防越界读取/污染）')
-      if (!existing.isFile()) throw new Error(`学生笔记路径被占用（非文件）: notes.md`)
-      old = await readFile(path, 'utf8')
+      old = await readFile(safePath, 'utf8')
       if (old !== '' && !old.endsWith('\n')) old += '\n'
     }
-    await writeFile(path, old + line, 'utf8')
+    await writeFile(safePath, old + line, 'utf8')
+    return shown
   })
-  return ['已记录', { file: 'notes.md', appended: normalized.length, lines: 1 }]
+  return ['已记录', { file, appended: normalized.length, lines: 1 }]
 }
 
-/** `read_notes`: read back the append-only student notes file. The legacy
- *  layout migration (`migrateLegacyLayout`) moves a root `notes.md` into
- *  `.syllora/`, so both locations are read newest-first. */
+/**
+ * `read_notes`: read back the append-only student notes file. The v2 layout
+ * (`.syllora/notes.md`) is authoritative because `write_note` and the builder's
+ * `migrateLegacyLayout` both write there; a root `notes.md` is only read when the
+ * v2 file is absent, so a leftover root file cannot shadow the live notes.
+ * CR-10 of the layout migration: 旧实现根优先，迁移后一个空的根 notes.md 会
+ * 永久遮蔽 `.syllora/notes.md` 里的历史笔记（写侧在 v2、读侧读根 = 看不到）。
+ */
 export async function handlerReadNotes(ctx: ToolContext, args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
   const candidates = [
-    { file: 'notes.md', path: join(ctx.courseDir, 'notes.md') },
     { file: '.syllora/notes.md', path: join(workspaceStateDirOf(ctx.courseDir), 'notes.md') },
+    { file: 'notes.md', path: join(ctx.courseDir, 'notes.md') },
   ]
   const realCourse = await realpath(ctx.courseDir).catch(() => ctx.courseDir)
   let text: string | null = null
@@ -800,6 +839,8 @@ export async function handlerReadNotes(ctx: ToolContext, args: Record<string, un
     }
     const body = await readFile(resolved, 'utf8').catch(() => null)
     if (body === null) continue
+    // 空文件不遮蔽后续候选：根里遗留的空 notes.md 不应让 v2 的历史笔记消失。
+    if (body.trim() === '') continue
     text = body
     shownPath = candidate.file
     break
