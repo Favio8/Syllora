@@ -48,7 +48,7 @@ export interface NextAction {
   trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
   practice: { pointId: string; text: string } | null
 }
-export interface Course { icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
+export interface Course { color?:'blue'|'green'|'orange'|'purple'|'rose'|'slate'; icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
 export function normalizeCourse(course: Course) {

@@ -23,7 +23,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import WorkspaceRegistry from '@syllora/workspace'
 import { AcpProtocolError, AcpRouter, parseAcpRequest, type AcpHost, type AcpNotification, type AcpRequest, type AcpUpdate } from '@syllora/acp'
 import { listCourseSummaries } from '@syllora/course-summary'
-import { migrateLegacyLayout, stateDirOf, extractPdfPages } from '@syllora/course-builder'
+import { migrateLegacyLayout, stateDirOf, extractPdfPages, extractTextToMarkdown } from '@syllora/course-builder'
 import { SylloraProjects, SylloraError, migrateSharedSettings } from '@syllora/chat-service'
 import { dispatch, type HostServices, type SessionSearchResultView } from '@syllora/apiproxy'
 import { pickNativeDirectory } from '@syllora/directory-picker-native'
@@ -570,10 +570,6 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   await healStartupRegistry(registry)
   if (registry.lastOpenedPath !== '') await migrateLegacyLayout(registry.lastOpenedPath).catch(() => undefined)
   const agentRegistry = new AgentRegistry()
-  const agentService = new LearningAgentService(agentRegistry)
-  // Rehydrate only durable inbox/interaction work. Idle sessions stay cold
-  // until the client explicitly resumes them, matching DSH host startup.
-  if (registry.lastOpenedPath !== '') await agentService.recover(registry.lastOpenedPath)
   const acpRequests = new Map<string, AbortController>()
 
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
@@ -581,7 +577,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
-  const syllora = new SylloraProjects(settingsRoot, { pdf: extractPdfPages, registerProject: async path => {
+  const agentService = new LearningAgentService(agentRegistry, undefined, settingsRoot)
+  if (registry.lastOpenedPath !== '') await agentService.recover(registry.lastOpenedPath)
+  const syllora = new SylloraProjects(settingsRoot, { pdf: extractPdfPages, document: extractTextToMarkdown, registerProject: async path => {
     const workspace = await registry.create(path)
     await registry.setLastOpenedPath(workspace.workspace.path)
   } })
@@ -604,21 +602,21 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const activeRoot = (): string => registry.lastOpenedPath
     const courseService = createCourseService(configFacts)
     return {
-      syllabus: async courseId => courseService.syllabus(activeRoot(), courseId),
-      setGranularity: async (courseId, granularity) => courseService.setGranularity(activeRoot(), courseId, granularity),
-      progress: async courseId => courseService.progress(activeRoot(), courseId),
-      mastery: async courseId => courseService.mastery(activeRoot(), courseId),
-      quiz: async (courseId, mode, count, conceptId, dueOnly) => courseService.quiz(activeRoot(), courseId, mode, count, conceptId, dueOnly),
-      files: async courseId => courseService.files(activeRoot(), courseId),
+      syllabus: async courseId => courseService.syllabus(await workspaceForCourse(courseId), courseId),
+      setGranularity: async (courseId, granularity) => courseService.setGranularity(await workspaceForCourse(courseId), courseId, granularity),
+      progress: async courseId => courseService.progress(await workspaceForCourse(courseId), courseId),
+      mastery: async courseId => courseService.mastery(await workspaceForCourse(courseId), courseId),
+      quiz: async (courseId, mode, count, conceptId, dueOnly) => courseService.quiz(await workspaceForCourse(courseId), courseId, mode, count, conceptId, dueOnly),
+      files: async courseId => courseService.files(await workspaceForCourse(courseId), courseId),
       workspaceFiles: async () => courseService.workspaceFiles(activeRoot()),
-      sync: async (courseId, sessionId) => courseService.sync(activeRoot(), courseId, sessionId),
-      ensureCourse: courseId => courseService.ensureCourse(activeRoot(), courseId),
-      ingestUrl: async (courseId, url, title) => courseService.ingestUrl(activeRoot(), courseId, url, title),
-      createCards: async (courseId, payload) => courseService.createCards(activeRoot(), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
-      dynamicCards: async (courseId, payload) => courseService.dynamicCards(activeRoot(), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
+      sync: async (courseId, sessionId) => courseService.sync(await workspaceForCourse(courseId), courseId, sessionId),
+      ensureCourse: async courseId => courseService.ensureCourse(await workspaceForCourse(courseId), courseId),
+      ingestUrl: async (courseId, url, title) => courseService.ingestUrl(await workspaceForCourse(courseId), courseId, url, title),
+      createCards: async (courseId, payload) => courseService.createCards(await workspaceForCourse(courseId), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
+      dynamicCards: async (courseId, payload) => courseService.dynamicCards(await workspaceForCourse(courseId), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
       // M4：evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
       // 在这里静默丢参导致磁盘幂等账本（.syllora/eval-ledger/）永不写入。
-      evalSubmit: (courseId, taskId, answer, sessionId, evalId) => courseService.evalSubmit(activeRoot(), courseId, taskId, answer, sessionId, evalId),
+      evalSubmit: async function* (courseId, taskId, answer, sessionId, evalId) { yield* courseService.evalSubmit(await workspaceForCourse(courseId), courseId, taskId, answer, sessionId, evalId) },
       job: jobId => courseService.job(jobId) as Record<string, unknown> | undefined,
       tools: providerStatus => courseService.tools(providerStatus),
       heatmap: async weeks => courseService.heatmap(activeRoot(), weeks),
@@ -707,14 +705,14 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           hasMore: matches.length > limit,
         }
       },
-      create: async (courseId, mode, title) => createSession(await workspaceForCourse(courseId), courseId, mode as LearningMode, title),
+      create: async (courseId, mode, title) => createSession(await workspaceForCourse(courseId), courseId, mode as LearningMode, title, settingsRoot),
       rename: async (courseId, sessionId, title) => renameSession(await workspaceForCourse(courseId), courseId, sessionId, title),
       fork: async (courseId, sessionId, chatIndex) => forkSession(await workspaceForCourse(courseId), courseId, sessionId, chatIndex),
       archive: async (courseId, sessionId) => archiveSession(await workspaceForCourse(courseId), courseId, sessionId),
       reorder: async (courseId, sessionId, beforeId) => reorderSession(await workspaceForCourse(courseId), courseId, sessionId, beforeId),
       restore: async (courseId, sessionId) => restoreSession(await workspaceForCourse(courseId), courseId, sessionId),
-      models: async (courseId, sessionId) => sessionModels(await workspaceForCourse(courseId), courseId, sessionId),
-      selectModel: async (courseId, sessionId, selection) => selectSessionModel(await workspaceForCourse(courseId), courseId, sessionId, selection),
+      models: async (courseId, sessionId) => sessionModels(await workspaceForCourse(courseId), courseId, sessionId, settingsRoot),
+      selectModel: async (courseId, sessionId, selection) => selectSessionModel(await workspaceForCourse(courseId), courseId, sessionId, selection, settingsRoot),
       events: async (courseId, sessionId, afterSeq) => sessionEvents(await workspaceForCourse(courseId), courseId, sessionId, afterSeq),
     },
     agentService: {
@@ -1415,11 +1413,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     // 课程文件夹可能没有自己的 .syllora/config.yaml（工作台的模型配置写在共享
     // 设置目录）：回落到共享配置，避免「设置里已配好、对话却报未配置」。
-    let config = await loadChatConfig(workspaceRoot).catch(() => null)
-    if (!usableConfig(config)) {
-      const shared = await configFacts().catch(() => null)
-      if (usableConfig(shared)) config = shared
-    }
+    let config = await configFacts()
+    if (!usableConfig(config)) config = await loadChatConfig(workspaceRoot).catch(() => null)
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',

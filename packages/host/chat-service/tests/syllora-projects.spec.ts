@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects, migrateSharedSettings } from '../src/syllora-projects.ts'
 import { SylloraService } from '../src/syllora.ts'
-import { selectContext, structuredSources, within } from '../src/syllora-files.ts'
+import { normalizeExtractedText, selectContext, structuredSources, within } from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
 import { validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
@@ -16,12 +16,12 @@ const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'h
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
 }
-async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf']) {
+async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],document?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['document']) {
   await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder)
   let calls=0
   const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
-  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>config,client:()=>client,...(pdf?{pdf}:{})})
+  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>config,client:()=>client,...(pdf?{pdf}:{}),...(document?{document}:{})})
   await projects.handle('preferences',{consent:true})
   const course=await projects.handle('openCourse',{path:folder}) as {id:string}
   return {root,folder,app,projects,id:course.id,calls:()=>calls,client}
@@ -164,6 +164,29 @@ describe('structured sources and migration',()=>{
     const sources=structuredSources('m','v',[{text:'资料提供准确的概念定义。',anchor:'a'},{text:'另一片段说明适用条件。',anchor:'b'}]),value=lecture(sources)
     value.concepts[0]!.quote='编造的依据';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
     const incomplete=lecture([sources[0]]);expect(()=>validateLecture(incomplete,sources)).toThrow('没有完整关联')
+  })
+  it('accepts verbatim quotes despite PDF radicals, line breaks and fragment boundaries',()=>{
+    const sources=structuredSources('m','v',[{text:'Harness ⽤于管理⼯具调⽤，\n并实施权限检查。',anchor:'第 1 页'},{text:'⼦ Agent 拥有独⽴的消息历史。',anchor:'第 2 页'}]),value=lecture(sources)
+    value.concepts[0]!.quote='Harness 用于管理工具调用，并实施权限检查。';expect(()=>validateLecture(value,sources)).not.toThrow()
+    value.concepts[0]!.quote='并实施权限检查。子 Agent 拥有';value.concepts[0]!.sourceIds=sources.map(s=>s.id);expect(()=>validateLecture(value,sources)).not.toThrow()
+    value.concepts[0]!.quote='Harness 用于编排部署流水线';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
+    value.concepts[0]!.quote='，。';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
+  })
+  it('normalizes radical code points without touching Chinese punctuation',()=>{
+    expect(normalizeExtractedText('⽤⼾常⻅⼀，⻓度：（⽆）')).toBe('用户常见一，长度：（无）')
+  })
+  it('initializes PDF text with radicals and office documents through the injected extractors',async()=>{
+    const pdf=async()=>({total:1,pages:[{num:1,text:'# Harness\n\nHarness 是连接模型与真实环境的控制系统，负责⼯具调⽤与⽤⼾确认。'}]})
+    const document=async(path:string)=>path.endsWith('.docx')?'# 补充\n\n文档中的单位矩阵定义。':(()=>{throw new Error('corrupt workbook')})()
+    const s=await setup(undefined,pdf,document)
+    await writeFile(join(s.folder,'讲义.pdf'),'%PDF-1.4 fixture');await writeFile(join(s.folder,'补充.docx'),'docx-bytes');await writeFile(join(s.folder,'~$补充.docx'),'lock')
+    const scan=await s.projects.handle('scan',{courseId:s.id}) as any
+    expect(scan.files.map((f:any)=>f.path).sort()).toEqual(['补充.docx','讲义.pdf'])
+    const done=await initialize(s);expect(done.job.state).toBe('succeeded')
+    const texts=done.state.courses[0].materials.flatMap((m:any)=>m.sources.map((x:any)=>x.text)).join('\n')
+    expect(texts).toContain('负责工具调用与用户确认');expect(texts).not.toMatch(/[⺀-⿟]/);expect(texts).toContain('单位矩阵定义')
+    await writeFile(join(s.folder,'坏表.xlsx'),'xlsx-bytes')
+    const broken=await initialize(s);expect(broken.job.state).toBe('failed');expect(JSON.stringify(broken.job)).toContain('文档解析失败：corrupt workbook')
   })
   it('migrates old courses with their identifiers and evidence, refuses existing destinations and keeps the original snapshot',async()=>{
     const s=await setup(),id=randomUUID(),pointId=randomUUID(),materialId=randomUUID(),sourceId=randomUUID(),questionId=randomUUID()

@@ -274,14 +274,14 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
   const llmRef = activeProvider?.api_key_env ?? config.llm?.api_key_env ?? null
   const providers: ProviderPayload[] = []
   for (const [id, provider] of Object.entries(config.providers ?? {})) {
-    providers.push(await providerPayload(workspaceRoot, id, provider))
+    providers.push(await providerPayload(workspaceRoot, id, {...provider, model:provider.model?.trim() || (config.llm?.provider===id?config.llm.model:'') || ''}))
   }
   return {
     version: config.version ?? 1,
     activeProviderId: active,
     llm: {
       provider: active,
-      model: activeProvider?.model ?? config.llm?.model ?? '',
+      model: activeProvider?.model?.trim() || (config.llm?.provider===active?config.llm.model:'') || '',
       apiKeyEnv: llmRef,
       apiBase: activeProvider?.base_url ?? config.llm?.api_base ?? null,
       temperature: activeProvider?.temperature ?? config.llm?.temperature ?? 0.3,
@@ -676,6 +676,11 @@ export async function updateSettings(workspaceRoot: string, partial: {
     const nextLlm: NonNullable<ConfigYaml['llm']> = { ...llm }
     if (partial.provider !== undefined) nextLlm.provider = partial.provider.trim()
     if (partial.model !== undefined) nextLlm.model = partial.model.trim()
+    const providers = { ...(config.providers ?? {}) }
+    const selectedProvider = partial.provider?.trim() || config.active_provider || nextLlm.provider
+    if (selectedProvider && providers[selectedProvider] && partial.model !== undefined) {
+      providers[selectedProvider] = { ...providers[selectedProvider], model: partial.model.trim() }
+    }
     if (partial.apiKeyEnv !== undefined) {
       const value = partial.apiKeyEnv.trim()
       // 加固4：与 discoverModels 的 API_KEY_ENV_RE 对齐——旧判定接受任意标识符
@@ -714,7 +719,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
         nextPlugins[id] = enabled
       }
     }
-    const changed = JSON.stringify(nextLlm) !== JSON.stringify(llm) || JSON.stringify(nextUi) !== JSON.stringify(config.ui ?? {})
+    const changed = JSON.stringify(providers) !== JSON.stringify(config.providers ?? {}) || JSON.stringify(nextLlm) !== JSON.stringify(llm) || JSON.stringify(nextUi) !== JSON.stringify(config.ui ?? {})
       || JSON.stringify(nextAgent) !== JSON.stringify(config.agent ?? {}) || JSON.stringify(nextPermissions) !== JSON.stringify(config.permissions ?? {})
       || JSON.stringify(nextPlugins) !== JSON.stringify(config.plugins ?? {})
     if (!changed) {
@@ -722,7 +727,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
       // 让前端把"什么都没改就点保存"报成红色失败弹窗。直接返回当前 payload。
       return settingsPayload(workspaceRoot)
     }
-    await writeConfig(workspaceRoot, { ...config, llm: nextLlm, ui: nextUi, agent: nextAgent, permissions: nextPermissions, plugins: nextPlugins })
+    await writeConfig(workspaceRoot, { ...config, providers, llm: nextLlm, ui: nextUi, agent: nextAgent, permissions: nextPermissions, plugins: nextPlugins })
     return settingsPayload(workspaceRoot)
   })
 }

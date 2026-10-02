@@ -149,7 +149,7 @@ function deprecatedModel(model: string): boolean {
   return model === 'deepseek-chat' || model === 'deepseek-reasoner'
 }
 
-async function ensureSessionModel(workspaceRoot: string, courseId: string, sessionId: string): Promise<SessionModelSelection | null> {
+async function ensureSessionModel(workspaceRoot: string, courseId: string, sessionId: string, configRoot = workspaceRoot): Promise<SessionModelSelection | null> {
   const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
   const eventStore = new SessionEventStore(historyDir)
   const eventModel = (await eventStore.load(sessionId).catch(() => []))
@@ -167,7 +167,7 @@ async function ensureSessionModel(workspaceRoot: string, courseId: string, sessi
   const store = new SessionStore(historyDir)
   const existing = await store.latestModel(sessionId).catch(() => null)
   if (existing !== null) return { provider: existing.provider, model: existing.model, ...(existing.effort === undefined ? {} : { effort: existing.effort }) }
-  const config = await loadChatConfig(workspaceRoot)
+  const config = await loadChatConfig(configRoot)
   if (config.providerId === '' || config.model === '' || deprecatedModel(config.model)) return null
   if (await eventStore.exists(sessionId)) {
     await eventStore.append(sessionId, { ts: utcTs(), type: 'session/model', payload: { provider: config.providerId, model: config.model } })
@@ -177,15 +177,15 @@ async function ensureSessionModel(workspaceRoot: string, courseId: string, sessi
   return { provider: config.providerId, model: config.model }
 }
 
-export async function sessionModels(workspaceRoot: string, courseId: string, sessionId: string): Promise<SessionModelDirectory> {
-  const current = await ensureSessionModel(workspaceRoot, courseId, sessionId)
-  const payload = await settingsPayload(workspaceRoot)
+export async function sessionModels(workspaceRoot: string, courseId: string, sessionId: string, configRoot = workspaceRoot): Promise<SessionModelDirectory> {
+  const current = await ensureSessionModel(workspaceRoot, courseId, sessionId, configRoot)
+  const payload = await settingsPayload(configRoot)
   const groups: SessionModelGroup[] = []
   const failures: Array<{ id: string; name: string; message: string }> = []
   const discovered = await Promise.all(payload.providers.map(async (provider) => {
     if (provider.models.length > 0 || provider.baseUrl === null || provider.baseUrl === '' || !provider.apiKeyConfigured) return { provider, models: [] as SessionModelEntry[] }
     try {
-      const config = await loadChatConfig(workspaceRoot, { providerId: provider.id })
+      const config = await loadChatConfig(configRoot, { providerId: provider.id })
       const models = await discoverModels({ baseUrl: provider.baseUrl, apiKey: config.apiKey, apiKeyEnv: provider.apiKeyEnv, protocol: provider.protocol })
       return { provider, models: models.filter(model => model.id !== '' && !deprecatedModel(model.id)).map(model => ({ id: model.id, name: model.name || model.id })) }
     } catch (error) {
@@ -199,7 +199,7 @@ export async function sessionModels(workspaceRoot: string, courseId: string, ses
     // 只展示「可用」路由：未配 Key 的供应商（如残留的 mock）不该出现在
     // 选模目录里诱导用户选中死路由；配置入口在设置页。
     if (selected.length > 0 && provider.apiKeyConfigured) {
-      const config = await loadChatConfig(workspaceRoot, { providerId: provider.id }).catch(() => null)
+      const config = await loadChatConfig(configRoot, { providerId: provider.id }).catch(() => null)
       const enriched = await Promise.all(selected.map(async model => {
         if (config === null) return model
         const efforts = await reasoningEffortsForConfig(config, model.id).catch(() => [])
@@ -217,21 +217,21 @@ export async function sessionModels(workspaceRoot: string, courseId: string, ses
   return { current, routable, groups, failures }
 }
 
-export async function selectSessionModel(workspaceRoot: string, courseId: string, sessionId: string, selection: SessionModelSelection): Promise<SessionModelSelection> {
-  const directory = await sessionModels(workspaceRoot, courseId, sessionId)
+export async function selectSessionModel(workspaceRoot: string, courseId: string, sessionId: string, selection: SessionModelSelection, configRoot = workspaceRoot): Promise<SessionModelSelection> {
+  const directory = await sessionModels(workspaceRoot, courseId, sessionId, configRoot)
   const group = directory.groups.find(item => item.id === selection.provider)
   const model = group?.models.find(item => item.id === selection.model)
   if (model === undefined) throw new SessionError(`模型不可用: ${selection.provider}/${selection.model}`)
   if (selection.effort !== undefined && selection.effort !== null && !(model.efforts ?? []).some(effort => effort.id === selection.effort)) {
     throw new SessionError(`思考强度不可用: ${selection.provider}/${selection.model}/${selection.effort}`)
   }
-  const payload = await settingsPayload(workspaceRoot)
+  const payload = await settingsPayload(configRoot)
   const target = payload.providers.find(item => item.id === selection.provider)
   if (target?.apiKeyConfigured !== true) throw new SessionError(`Provider 未配置凭据: ${selection.provider}`)
   // 首次选择即成为默认模型：会话内选过模型却让 /build 一直读到「未设置默认
   // 模型」是最常见的配置落差（合并语义保留其余字段，失败静默不影响选模）。
   if (target !== undefined && target.model === '') {
-    await saveProvider(workspaceRoot, {
+    await saveProvider(configRoot, {
       id: target.id,
       name: target.name,
       model: selection.model,
@@ -404,16 +404,17 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
       const effort = selectedEffort ?? (typeof metadata['effort'] === 'string' ? metadata['effort'] : null)
       const requestId = typeof metadata['requestId'] === 'string' ? metadata['requestId'] : null
       const fileRefs = Array.isArray(metadata['fileRefs']) ? metadata['fileRefs'].filter((value): value is string => typeof value === 'string') : []
-      const selection = context.modelSelection ?? await ensureSessionModel(options.workspaceRoot, options.courseId, options.sessionId)
+      const selection = context.modelSelection ?? await ensureSessionModel(options.workspaceRoot, options.courseId, options.sessionId, options.inputConfig?.configRoot)
       const selectedConfig = selection !== null
         && options.inputConfig !== null
         && options.inputConfig !== undefined
         && options.inputConfig.providerId === selection.provider
         && options.inputConfig.model === selection.model
+        && (options.inputConfig.configRoot === undefined || options.inputConfig.configRoot === options.workspaceRoot)
         ? options.inputConfig
         : selection === null
-          ? options.inputConfig ?? await loadChatConfig(options.workspaceRoot)
-          : await loadChatConfig(options.workspaceRoot, { providerId: selection.provider, model: selection.model })
+          ? options.inputConfig?.configRoot ? await loadChatConfig(options.inputConfig.configRoot) : options.inputConfig ?? await loadChatConfig(options.workspaceRoot)
+          : await loadChatConfig(options.inputConfig?.configRoot ?? options.workspaceRoot, { providerId: selection.provider, model: selection.model })
       const config: ResolvedChatConfig = {
         ...(options.runtimeConfig === undefined ? selectedConfig : { ...selectedConfig, ...options.runtimeConfig }),
         reasoningEffort: effort,
@@ -518,7 +519,7 @@ export class LearningAgentService {
     return map.get(turnId)?.handle
   }
 
-  constructor(readonly registry: AgentRegistry, readonly approvals = new ApprovalQueue()) {
+  constructor(readonly registry: AgentRegistry, readonly approvals = new ApprovalQueue(), readonly configRoot?: string) {
     this.approvals.onResolved((request, decision) => {
       // Explicit allow/deny is persisted by resolveApproval before the
       // promise is released. The queue callback owns timeout/cancel paths.
@@ -568,7 +569,7 @@ export class LearningAgentService {
   }
 
   async create(workspaceRoot: string, courseId: string, mode: string, title: string | null): Promise<{ agentId: string; sessionId: string; status: Record<string, unknown> }> {
-    const created = await createSession(workspaceRoot, courseId, mode as LearningMode, title)
+    const created = await createSession(workspaceRoot, courseId, mode as LearningMode, title, this.configRoot)
     return this.register(workspaceRoot, courseId, created.sessionId, mode as LearningMode)
   }
 
@@ -632,6 +633,7 @@ export class LearningAgentService {
   async register(workspaceRoot: string, courseId: string, sessionId: string, mode: LearningMode): Promise<{ agentId: string; sessionId: string; status: Record<string, unknown> }> {
     const agentId = `study-${sessionId}`
     const existing = this.registry.get(agentId)
+    const inputConfig = await loadChatConfig(this.configRoot ?? workspaceRoot)
     let runtimeConfig: AgentRuntimeConfig | undefined
     if (existing === undefined) {
       const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
@@ -640,10 +642,10 @@ export class LearningAgentService {
         const meta = await new SessionStore(historyDir).readMeta(sessionId)
         await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode, agentId, ...(meta?.title ? { title: meta.title } : {}) } })
       }
-      runtimeConfig = await ensureAgentRuntimeConfig(events, sessionId, await loadChatConfig(workspaceRoot))
+      runtimeConfig = await ensureAgentRuntimeConfig(events, sessionId, inputConfig)
     }
-    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, sessionId)
-    const agent = existing ?? createLearningAgent({ workspaceRoot, courseId, sessionId, mode, approvals: this.approvals, agentRegistry: this.registry, modelSelection, ...(runtimeConfig === undefined ? {} : { runtimeConfig }) })
+    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, sessionId, this.configRoot)
+    const agent = existing ?? createLearningAgent({ workspaceRoot, courseId, sessionId, mode, inputConfig, approvals: this.approvals, agentRegistry: this.registry, modelSelection, ...(runtimeConfig === undefined ? {} : { runtimeConfig }) })
     if (existing === undefined) {
       this.registry.register(agent)
     }
@@ -995,6 +997,7 @@ export async function createSession(
   courseId: string,
   mode: LearningMode,
   title: string | null,
+  configRoot = workspaceRoot,
 ): Promise<{ sessionId: string; file: string }> {
   const courseDir = courseDirOf(workspaceRoot, courseId)
   const store = new SessionStore(join(stateDirOf(courseDir), 'history'))
@@ -1004,7 +1007,7 @@ export async function createSession(
   // 先建会话再发消息（CLI 路径）不会报「会话不存在」。
   const events = new SessionEventStore(join(stateDirOf(courseDir), 'history'))
   await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode, agentId: `study-${sessionId}` } })
-  const config = await loadChatConfig(workspaceRoot)
+  const config = await loadChatConfig(configRoot)
   if (config.providerId !== '' && config.model !== '' && !deprecatedModel(config.model)) {
     await store.append(sessionId, sessionModelLine.parse({ type: 'session_model', ts: utcTs(), provider: config.providerId, model: config.model }))
   }
@@ -1384,7 +1387,7 @@ export async function* chatStream(
       await store.append(session.sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: input.mode ?? 'socratic', agentId: `study-${session.sessionId}` } })
     }
     const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, inputConfig ?? await loadChatConfig(workspaceRoot))
-    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId)
+    const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId, inputConfig?.configRoot)
     // DSH ensureFallback: the deterministic first-prompt title lands at send
     // time (independent of turn outcome) so the sidebar drops the blank
     // "新对话" placeholder as soon as the first message exists.
@@ -1522,7 +1525,7 @@ export async function* chatStream(
       // send time and never overrides a user rename (pin check in store).
       void (async () => {
         const config = modelSelection !== null
-          ? await loadChatConfig(workspaceRoot, { providerId: modelSelection.provider, model: modelSelection.model })
+          ? await loadChatConfig(inputConfig?.configRoot ?? workspaceRoot, { providerId: modelSelection.provider, model: modelSelection.model })
           : inputConfig ?? await loadChatConfig(workspaceRoot)
         const title = await generateLlmSessionTitle(config, input.message)
         if (title !== '') {

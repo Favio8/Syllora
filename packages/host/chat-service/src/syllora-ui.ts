@@ -3,6 +3,7 @@ import { learningSources, type Course, type Source } from './syllora-domain.ts'
 import { SylloraError } from './syllora.ts'
 
 export const COURSE_ICONS = ['math','statistics','code','science','physics','language','literature','art','music','geography','history','notebook'] as const
+export const courseColorSchema = z.enum(['blue','green','orange','purple','rose','slate'])
 export const courseIconSchema = z.enum(COURSE_ICONS)
 export const uiPreferencesSchema = z.object({ name:z.string().trim().min(1).max(16), theme:z.enum(['light','dark']), dailyMinutes:z.number().int().min(5).max(480) })
 export type UiPreferences = z.infer<typeof uiPreferencesSchema> & { revision:number }

@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat } fro
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Material, PageIssue, Source } from './syllora-domain.ts'
 import type { FileCandidate } from './syllora-project-types.ts'
+import { workspaceStateDirOf } from '@syllora/tools'
 export type { FileCandidate } from './syllora-project-types.ts'
 
 export const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex')
@@ -15,6 +16,30 @@ export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:
   return Array.from({length:result.total},(_,i)=>i+1).flatMap<PageIssue>(num=>!seen.has(num)?[{num,reason:'unextracted-text'}]:!seen.get(num)!.trim()?[{num,reason:'blank-page'}]:[])
 }
 const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__'])
+/** Course material formats; office/HTML files go through the injected document extractor. */
+export const MATERIAL_EXTENSIONS = ['.pdf', '.md', '.txt', '.docx', '.xlsx', '.html', '.htm'] as const
+export const DOCUMENT_EXTENSIONS = ['.docx', '.xlsx', '.html', '.htm'] as const
+export const MATERIAL_FORMATS = 'PDF、MD/TXT、DOCX、XLSX、HTML'
+export const isMaterialFile = (name: string) => (MATERIAL_EXTENSIONS as readonly string[]).includes(extname(name).toLowerCase())
+export const isDocumentFile = (name: string) => (DOCUMENT_EXTENSIONS as readonly string[]).includes(extname(name).toLowerCase())
+/**
+ * PDF exporters often encode common Han characters as Kangxi / CJK radical code points
+ * (⼀ U+2F00 for 一, ⻅ U+2EC5 for 见). Models quote the ordinary characters, so text is
+ * normalized once at parse time. Only radical code points change: NFKC on the whole text
+ * would also turn Chinese full-width punctuation (，：（) into ASCII. The table covers
+ * simplified radicals NFKC leaves untouched and ⼾, which NFKC maps to the traditional 戶.
+ */
+const RADICALS: Record<string, string> = {
+  '⺁':'厂','⺇':'几','⺈':'刀','⺊':'卜','⺋':'卩','⺍':'小','⺐':'尢','⺓':'幺','⺕':'彐','⺗':'心','⺘':'手','⺙':'攵','⺟':'母','⺠':'民','⺡':'水','⺢':'水','⺣':'火','⺤':'爪','⺥':'爪','⺦':'丬','⺧':'牛','⺨':'犭','⺩':'王','⺪':'疋','⺫':'目','⺬':'示','⺭':'礻','⺮':'竹','⺯':'糸','⺰':'纟','⺲':'罒','⺳':'网','⺶':'羊','⺷':'羊','⺸':'羊','⺹':'耂','⺺':'聿','⺻':'聿','⺼':'肉','⺽':'臼','⺾':'艹','⺿':'艹','⻀':'艹','⻁':'虎','⻂':'衤','⻃':'襾','⻄':'西','⻅':'见','⻆':'角','⻇':'角','⻈':'讠','⻉':'贝','⻋':'车','⻌':'辶','⻍':'辶','⻎':'辶','⻏':'阝','⻐':'钅','⻑':'長','⻒':'镸','⻓':'长','⻔':'门','⻕':'阝','⻖':'阝','⻗':'雨','⻘':'青','⻙':'韦','⻚':'页','⻛':'风','⻜':'飞','⻝':'食','⻟':'食','⻠':'饣','⻡':'饣','⻢':'马','⻣':'骨','⻤':'鬼','⻥':'鱼','⻦':'鸟','⻧':'卤','⻨':'麦','⻩':'黄','⻪':'黾','⻫':'斉','⻬':'齐','⻭':'歯','⻮':'齿','⻯':'竜','⻰':'龙','⻱':'龜','⻲':'亀','⻳':'龟','⼾':'户',
+}
+const RADICAL_PATTERN = new RegExp(`[${Object.keys(RADICALS).join('')}]`, 'gu')
+export function normalizeExtractedText(text: string): string {
+  return text.replace(RADICAL_PATTERN, ch => RADICALS[ch] ?? ch).replace(/[⼀-⿟]/gu, ch => ch.normalize('NFKC'))
+}
+/** Comparison key for quotes: radicals, width variants and all whitespace (PDF line breaks) are ignored. */
+export function quoteKey(text: string): string {
+  return normalizeExtractedText(text).normalize('NFKC').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[‐‑‒–—―]/g, '-').replace(/\s+/gu, '')
+}
 
 export async function atomicJson(path: string, value: unknown) {
   return atomicText(path, JSON.stringify(value, null, 2))
@@ -48,7 +73,7 @@ export async function within(root: string, name: string): Promise<string> {
   return target
 }
 export async function stateDirectory(root: string) {
-  const base = await realpath(root), path = join(base, '.syllora')
+  const base = await realpath(root), path = workspaceStateDirOf(base)
   await mkdir(path, { recursive: true })
   if (await realpath(path) !== path) throw new Error('.syllora 必须是课程内的普通目录，不能是目录链接')
   return path
@@ -78,16 +103,16 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
   const found: FileCandidate[] = []
   async function walk(dir: string) {
     for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
-      if (entry.name.startsWith('.') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
+      if (entry.name.startsWith('.') || entry.name.startsWith('~$') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
       const path = join(dir, entry.name), name = relative(root, path).split(sep).join('/')
       if (entry.isDirectory()) { await walk(path); continue }
       if (!entry.isFile()) continue
-      const size = (await stat(path)).size, supported = ['.pdf', '.md', '.txt'].includes(extname(entry.name).toLowerCase())
+      const size = (await stat(path)).size, supported = isMaterialFile(entry.name)
       let status: FileCandidate['status'] = !supported ? 'unsupported' : size > SOURCE_LIMIT ? 'too-large' : 'ready'
       let fingerprint: string | null = null
       if (status === 'ready') try { fingerprint = sha(await readFile(path)) } catch { status = 'unreadable' }
       const old = materials.find(m => m.path === name && m.status !== 'deleted')
-      found.push({ path: name, size, fingerprint, status, change: !old ? 'added' : old.fingerprint === fingerprint ? 'unchanged' : 'changed', reason: status === 'ready' ? '' : status === 'too-large' ? '单文件超过 20 MiB' : status === 'unreadable' ? '文件无法读取' : '本轮仅支持文本 PDF、MD/TXT' })
+      found.push({ path: name, size, fingerprint, status, change: !old ? 'added' : old.fingerprint === fingerprint ? 'unchanged' : 'changed', reason: status === 'ready' ? '' : status === 'too-large' ? '单文件超过 20 MiB' : status === 'unreadable' ? '文件无法读取' : `仅支持 ${MATERIAL_FORMATS}` })
     }
   }
   await walk(root)

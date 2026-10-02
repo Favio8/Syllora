@@ -4,10 +4,10 @@ import { basename, extname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { SylloraError, SylloraService } from './syllora.ts'
 import { normalizeCourse, type Course } from './syllora-domain.ts'
-import { atomicJson, jsonFile, managedDirectory, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
+import { atomicJson, isMaterialFile, jsonFile, managedDirectory, MATERIAL_FORMATS, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
 import { loadChatConfig } from './config.ts'
 
-import { courseIconSchema, defaultUiPreferences, uiPreferencesSchema, type UiPreferences } from './syllora-ui.ts'
+import { courseColorSchema, courseIconSchema, defaultUiPreferences, uiPreferencesSchema, type UiPreferences } from './syllora-ui.ts'
 
 interface Project { id:string;path:string;name:string;deletion?:'pending'|'failed' }
 interface Preferences { consent:boolean }
@@ -67,7 +67,7 @@ export class SylloraProjects {
     await this.options.registerProject?.(project.path)
   }
   private async openFolder(payload:unknown) {
-    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional()}).parse(payload)
+    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional(),color:courseColorSchema.optional()}).parse(payload)
     return this.serialize(async()=>{
       const root=await realpath(resolve(p.path))
       if(this.projects.some(project=>project.path===root&&(project.deletion||this.deleting.has(project.id))))throw new SylloraError('DELETING','课程删除未完成，请先重试清理，不能重新打开')
@@ -83,7 +83,7 @@ export class SylloraProjects {
       const previous=this.projects.find(v=>v.id===courseId&&v.path===root)
       const service=(previous?this.services.get(courseId):undefined)??this.makeService(project)
       if(!stored)await service.handle('create',{requestId:courseId,name:project.name,timezone:p.timezone})
-      if(p.icon)await service.handle('coursePresentation',{courseId,icon:p.icon})
+      if(p.icon)await service.handle('coursePresentation',{courseId,icon:p.icon,...(p.color?{color:p.color}:{})})
       this.services.set(courseId,service);await this.remember(project)
       return {id:courseId,path:root,created:!stored}
     })
@@ -189,7 +189,7 @@ export class SylloraProjects {
     const service=await this.service(p.courseId), state=await service.handle('state',{}) as {courses:Course[];jobs:Array<{id:string;state:string}>}
     if(state.courses[0]?.archived)throw new SylloraError('ARCHIVED','请先恢复归档课程')
     const project=this.projects.find(v=>v.id===p.courseId)!, name=basename(p.name.replaceAll('\\','/'))
-    if(!['.pdf','.md','.txt'].includes(extname(name).toLowerCase()))throw new SylloraError('UNSUPPORTED_INPUT','仅支持文本 PDF、MD/TXT')
+    if(!isMaterialFile(name))throw new SylloraError('UNSUPPORTED_INPUT',`仅支持 ${MATERIAL_FORMATS}`)
     const bytes=p.base64?Buffer.from(p.base64,'base64'):Buffer.from(p.text??'','utf8')
     if(bytes.length>SOURCE_LIMIT)throw new SylloraError('LIMIT_EXCEEDED','单文件不能超过 20 MiB')
     const duplicate=(await scanFiles(project.path,state.courses[0]!.materials)).find(f=>f.fingerprint===sha(bytes))

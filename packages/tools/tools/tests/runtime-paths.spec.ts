@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -69,4 +69,21 @@ describe('runtime layout migration', () => {
     expect(() => migrateLegacyHome()).toThrow('旧 Host 锁仍存在')
     expect(existsSync(join(fake.home, '.studyclaw', 'host.lock'))).toBe(true)
   })
+})
+
+
+it('repairs the workbench-created split directory and keeps the complete legacy backup', async () => {
+  const path=await root()
+  await mkdir(join(path,'.syllora'))
+  await mkdir(join(path,'.studyclaw','history'),{recursive:true})
+  await writeFile(join(path,'.syllora','course.json'),'new course state')
+  await writeFile(join(path,'.studyclaw','config.yaml'),'legacy configuration')
+  await writeFile(join(path,'.studyclaw','history','session.json'),'historical answers')
+  const target=workspaceStateDirOf(path)
+  expect(await readFile(join(target,'course.json'),'utf8')).toBe('new course state')
+  expect(await readFile(join(target,'history','session.json'),'utf8')).toBe('historical answers')
+  const backup=(await readdir(path)).find(name=>name.startsWith('.studyclaw-backup-'))!
+  expect(backup).toBeTruthy()
+  expect(await readFile(join(path,backup,'config.yaml'),'utf8')).toBe('legacy configuration')
+  expect(workspaceStateDirOf(path)).toBe(target)
 })

@@ -102,11 +102,11 @@ export async function configForSession(workspaceRoot: string, courseId: string, 
       && typeof row.payload['model'] === 'string' && String(row.payload['model']) !== ''
   })
   if (eventSelection !== undefined) {
-    return loadChatConfig(workspaceRoot, { providerId: String(eventSelection.payload['provider']), model: String(eventSelection.payload['model']) })
+    return loadChatConfig(fallback?.configRoot ?? workspaceRoot, { providerId: String(eventSelection.payload['provider']), model: String(eventSelection.payload['model']) })
   }
   const selected = await new SessionStore(historyDir).latestModel(sessionId)
   if (selected === null) return fallback
-  return loadChatConfig(workspaceRoot, { providerId: selected.provider, model: selected.model })
+  return loadChatConfig(fallback?.configRoot ?? workspaceRoot, { providerId: selected.provider, model: selected.model })
 }
 
 /** Missing-configuration diagnosis; names the exact field to fix (DSH posture). */

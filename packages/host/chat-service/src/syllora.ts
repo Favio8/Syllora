@@ -6,7 +6,7 @@ import { structuredCall, type StructuredCallClient } from '@syllora/course-build
 import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { loadChatConfig, type ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient } from './adapter.ts'
-import { atomicJson, jsonFile, managedDirectory, pdfPageIssues, scanFiles, selectContext, SOURCE_LIMIT, stateDirectory, structuredSources, within } from './syllora-files.ts'
+import { atomicJson, jsonFile, managedDirectory, normalizeExtractedText, pdfPageIssues, scanFiles, selectContext, SOURCE_LIMIT, stateDirectory, structuredSources, within } from './syllora-files.ts'
 import { initializeFolder, lectureSchema, type Lecture, type InitProgress } from './syllora-initialize.ts'
 import { ruleSnapshot, learningSources, pointHasSources, diffPlan, placeTasks, buildPlan, duePointIds, localDate, nextSyncTrigger, normalizeCourse, noteChange, proposeReviews, publicCourse, recordNext, refreshNotice, restoreNotice, usableSources, type Attempt, type Course, type JobCoverage, type MaterialFile, type Message, type PageIssue, type Question } from './syllora-domain.ts'
 
@@ -14,7 +14,7 @@ import { finishJob, generationFailure, jobDiagnostics, recordTokenUsage, type Jo
 import { learningSettings, validReviewHours } from './syllora-policy.ts'
 import { currentSession, endSession, expireSessions, recordLearningEvent, sessionNeedsExpiry, sourceVersions, touchSession } from './syllora-sessions.ts'
 
-import { courseIconSchema, readingContextSchema, readingDocument, validateReading, recordActivity, type ReadingContext } from './syllora-ui.ts'
+import { courseColorSchema, courseIconSchema, readingContextSchema, readingDocument, validateReading, recordActivity, type ReadingContext } from './syllora-ui.ts'
 
 const key = z.string().uuid()
 const title = z.string().trim().min(1).max(60)
@@ -55,6 +55,7 @@ export class SylloraService {
     config?: () => Promise<ResolvedChatConfig>;
     client?: (config: ResolvedChatConfig) => StructuredCallClient;
     pdf?: (data: Uint8Array) => Promise<{ pages: Array<{ text: string; num: number }>; total: number }>;
+    document?: (path: string) => Promise<string>;
     fileName?: string;
     courseRoot?: string;
     isConsented?: () => Promise<boolean>;
@@ -183,8 +184,8 @@ export class SylloraService {
     return this.transaction(db => {
       const course = this.course(db, base.courseId, !['rename','coursePresentation','archive','delete','cancel','saveDraft'].includes(action))
       switch (action) {
-        case 'coursePresentation': course.icon=courseIconSchema.parse(base['icon']);break
-        case 'rename': course.name = title.parse(base['name']); if(base['icon']!==undefined)course.icon=courseIconSchema.parse(base['icon']); break
+        case 'coursePresentation': course.icon=courseIconSchema.parse(base['icon']);if(base['color']!==undefined)course.color=courseColorSchema.parse(base['color']);break
+        case 'rename': course.name = title.parse(base['name']); if(base['icon']!==undefined)course.icon=courseIconSchema.parse(base['icon']); if(base['color']!==undefined)course.color=courseColorSchema.parse(base['color']); break
         case 'learningSettings': {
           const p=z.object({baseVersion:z.number().int().min(0),reviewHours:z.array(z.number()).refine(validReviewHours,'间隔须为不递减的三个整数小时，范围 24–8760'),sessionIdleMinutes:z.number().int().min(5).max(1440).default(30)}).parse(base)
           if(p.baseVersion!==learningSettings(course).revision)fail('VERSION_CONFLICT','学习设置已被另一页面修改，请检查最新值后重试')
@@ -460,7 +461,7 @@ export class SylloraService {
       pages = parsed.total
       if (pages > 50) fail('LIMIT_EXCEEDED','单份 PDF 不能超过 50 页')
       pageIssues=pdfPageIssues(parsed);partial=pageIssues.length>0
-      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, anchor: `第 ${p.num} 页` }))
+      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: normalizeExtractedText(p.text), anchor: `第 ${p.num} 页` }))
     } else {
       let text: string
       try { text = new TextDecoder('utf-8',{ fatal: true }).decode(data) } catch { fail('UNSUPPORTED_INPUT','请将文本转换为 UTF-8 编码') }
@@ -651,7 +652,7 @@ export class SylloraService {
     },false)
     try {
       const delegate=this.options.client?.(config)??createDeepSeekToolClient(config)
-      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),check,
+      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),...(this.options.document?{document:this.options.document}:{}),check,
         progress:async progress=>{await check();await this.transaction(db=>{const current=db.jobs.find(j=>j.id===job.id)!;current.progress=progress;current.message=progress.message})},
         call:async (sources,prompt)=>{
           await check()

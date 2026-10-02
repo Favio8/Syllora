@@ -13,6 +13,8 @@ import { workspaceStateDirOf } from '@syllora/tools'
 import { normalizeProtocol, type ProviderProtocol } from './settings.ts'
 
 export interface ResolvedChatConfig {
+  /** Internal source of provider routes; never included in public settings. */
+  readonly configRoot?: string
   readonly providerId: string
   readonly model: string
   /** DSH-style per-Agent reasoning effort; absent means provider default. */
@@ -67,10 +69,10 @@ export function providerFacts(config: ConfigYaml, providerId: string): {
 } {
   const entry = config.providers?.[providerId]
   return {
-    baseUrl: entry?.base_url ?? null,
+    baseUrl: entry?.base_url?.trim() || null,
     protocol: normalizeProtocol(entry?.protocol),
-    model: entry?.model ?? null,
-    apiKeyEnv: entry?.api_key_env ?? null,
+    model: entry?.model?.trim() || null,
+    apiKeyEnv: entry?.api_key_env?.trim() || null,
     temperature: entry?.temperature ?? null,
     maxConcurrency: entry?.max_concurrency ?? null,
     maxTokens: entry?.max_tokens ?? null,
@@ -125,12 +127,13 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
       plugins: {},
     }
   }
-  const config = yaml.load(raw) as ConfigYaml
+  const config = (yaml.load(raw) ?? {}) as ConfigYaml
   const providerId = selection?.providerId ?? resolveActiveProvider(config)
   const direct = providerFacts(config, providerId)
-  const baseUrl = normalizeBaseUrl(direct.baseUrl ?? config.llm?.api_base ?? '')
-  const model = selection?.model ?? direct.model ?? config.llm?.model ?? ''
-  const apiKeyEnv = direct.apiKeyEnv ?? config.llm?.api_key_env ?? null
+  const legacy = config.llm?.provider === providerId ? config.llm : undefined
+  const baseUrl = normalizeBaseUrl(direct.baseUrl ?? legacy?.api_base ?? '')
+  const model = selection?.model?.trim() || direct.model || legacy?.model?.trim() || ''
+  const apiKeyEnv = direct.apiKeyEnv ?? legacy?.api_key_env ?? null
   const apiKey = await resolveCredential(workspaceRoot, providerId, apiKeyEnv)
   const temperature = direct.temperature ?? config.llm?.temperature ?? 0.3
   const maxConcurrency = direct.maxConcurrency ?? config.llm?.max_concurrency ?? 4
@@ -148,6 +151,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
     ? judgeEffortRaw
     : null
   return {
+    configRoot: workspaceRoot,
     providerId,
     model,
     reasoningEffort: null,
