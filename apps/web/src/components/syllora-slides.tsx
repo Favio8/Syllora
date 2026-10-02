@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SlideCanvas } from '@openmaic/renderer';
 import { slideToPng } from '@openmaic/renderer/snapshot';
 import { workbenchRpc } from '../features/workbench/services';
+import { exportDecksToPptx } from '../features/workbench/slide-export';
 
 /**
  * 幻灯片讲义：按章节读取 `slides.json`，用 `@openmaic/renderer` 的只读画布渲染。
@@ -79,6 +80,17 @@ export default function SlideDeckReader({ courseId, sources }: { courseId: strin
     } finally { setExporting(false); }
   }, [deck, scene, sceneIndex]);
 
+  /** 导出全部章节为一份 PPTX（布局按画布坐标映射）。 */
+  const exportPptx = useCallback(async () => {
+    if (!decks || decks.length === 0) return;
+    setExporting(true); setExportError('');
+    try {
+      await exportDecksToPptx(decks, 'syllora-幻灯片.pptx');
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : '导出失败');
+    } finally { setExporting(false); }
+  }, [decks]);
+
   if (error) return <p role="alert" className="sy-muted">{error}</p>;
   if (decks === null) return <p className="sy-muted">正在读取幻灯片…</p>;
   if (decks.length === 0) {
@@ -110,6 +122,7 @@ export default function SlideDeckReader({ courseId, sources }: { courseId: strin
         <button type="button" disabled={atStart} onClick={() => move(-1)}>上一页</button>
         <button type="button" disabled={atEnd} onClick={() => move(1)}>下一页</button>
         <button type="button" disabled={exporting || !scene} onClick={() => void exportPng()}>{exporting ? '导出中…' : '导出本页 PNG'}</button>
+        <button type="button" disabled={exporting} onClick={() => void exportPptx()}>导出全部 PPTX</button>
       </div>
       {exportError && <p role="alert" className="sy-muted">导出失败：{exportError}</p>}
 

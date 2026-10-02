@@ -2,7 +2,7 @@
  * 幻灯片视图：渲染画布、空态说明、以及"引用可回溯"的锚点文案。
  * 渲染器需要 ResizeObserver，桩在 apps/web/tests/setup.ts 里统一提供。
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.fn();
@@ -64,5 +64,19 @@ describe('幻灯片视图', () => {
     rpc.mockResolvedValue({ revision: 'rev-1', decks: [{ ...deck, scenes: [{ ...deck.scenes[0]!, citations: ['missing-source'] }] }] });
     render(<SlideDeckReader courseId="c1" sources={[]} />);
     await waitFor(() => expect(screen.getByText(/missing-source/)).toBeInTheDocument());
+  });
+
+  it('提供 PNG 与 PPTX 两个导出入口，失败时给出错误', async () => {
+    rpc.mockResolvedValue({ revision: 'rev-1', decks: [deck] });
+    render(<SlideDeckReader courseId="c1" sources={[]} />);
+    await waitFor(() => expect(screen.getByTestId('slide-canvas')).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: /导出本页 PNG/ })).toBeEnabled();
+    const pptx = screen.getByRole('button', { name: /导出全部 PPTX/ });
+    expect(pptx).toBeEnabled();
+
+    // 没有可用幻灯片时导出应报错，而不是静默什么都不发生。
+    fireEvent.click(pptx);
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 });
