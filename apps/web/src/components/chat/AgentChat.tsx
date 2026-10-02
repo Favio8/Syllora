@@ -13,6 +13,7 @@ import { useEffect, useMemo } from "react";
 import ChatArea from "@/src/components/chat/ChatArea";
 import CommandPalette from "@/src/components/palette/CommandPalette";
 import { api } from "@/src/lib/api";
+import { abortActiveChat } from "@/src/lib/chatStream";
 import { useAppStore } from "@/src/store/useAppStore";
 import "@/src/components/chat/agent-chat.css";
 
@@ -45,7 +46,16 @@ export default function AgentChat({ folder, courseName, onOpenSettings }: AgentC
     if (chatCourseId === "") return;
     setWorkspacePath(folder);
     setCourses([{ id: chatCourseId, title: courseName, overallMastery: 0, dueToday: 0, lastActiveAt: null }]);
-    if (useAppStore.getState().activeCourseId !== chatCourseId) setActiveCourse(chatCourseId);
+    if (useAppStore.getState().activeCourseId !== chatCourseId) {
+      // chatStream.ts 的约定：对话切换前必须先 abortActiveChat()，保证同一时刻只有
+      // 一条活跃流。缺少这一步时，切课后旧流的 meta/done 帧会按新的 activeCourseId
+      // 落地，把上一门课的 sessionId 写进新课（服务端还会就地物化 session/create），
+      // 同时 streaming 残留为 true，新课会一直显示「停止生成」。
+      // 与 useSessionActions.selectSession 同序：先 abort，再清 streaming，再切课。
+      abortActiveChat();
+      useAppStore.getState().setStreaming(false);
+      setActiveCourse(chatCourseId);
+    }
   }, [folder, chatCourseId, courseName, setWorkspacePath, setCourses, setActiveCourse]);
 
   // 工作台没有 Console 的设置弹层：聊天里的「打开模型配置」转给 Syllora 设置。
