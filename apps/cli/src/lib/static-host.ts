@@ -77,41 +77,34 @@ function withBootstrapTap(html: string, bootstrap: Record<string, unknown> | nul
 }
 
 /**
- * CR-16：会话票据页。HTML 里绝不内嵌访问 token——页面脚本把本地发现文件
- * (host.json) 里的 token 作为头部字段提交给 `/api/session`，换取 HttpOnly
+ * CR-16：会话票据页。HTML 里绝不内嵌访问 token——页面脚本把启动链接的
+ * URL fragment 或用户输入中的 token 作为头部提交给 `/api/session`，换取 HttpOnly
  * 会话 Cookie，之后由 Cookie 授权 `/api/*`。未持凭据的本机进程 `curl /`
  * 只能拿到一个不含任何凭据的表单页。
  * `nonce` 用于脚本 CSP 白名单（调用方保证只含随机十六进制字符）。
  */
 export function sessionBootstrapPage(nonce: string): string {
-  // 页面脚本：从同源发现文件桥取 token → 换票 → 带会话回到真正的 SPA。
-  // 失败时必须停下并给出可见原因，绝不能无条件 `location.replace('/')`——
-  // 没拿到会话就回 `/` 只会再得到这张票据页，形成无限重定向。
+  // 只接受终端登录链接的 fragment 或用户输入，HTTP 不提供匿名凭据出口。
   const script = [
-    'const note=text=>{const el=document.querySelector("p");if(el)el.textContent=text};',
-    'const run=async()=>{',
+    'const note=text=>{document.querySelector("p").textContent=text};',
+    'const run=async token=>{',
+    '  if(!token){note("请使用终端中的登录链接，或填写本地访问令牌。");return;}',
     '  try{',
-    "    const cfg=await fetch('/api/host-config',{cache:'no-store'});",
-    '    if(!cfg.ok)throw new Error("发现文件桥返回 HTTP "+cfg.status);',
-    '    const parsed=await cfg.json();',
-    "    const token=parsed&&typeof parsed.token==='string'?parsed.token:'';",
-    '    if(!token)throw new Error("宿主未提供访问令牌");',
     "    const granted=await fetch('/api/session',{method:'POST',headers:{'x-syllora-token':token}});",
     '    if(!granted.ok)throw new Error("会话换票被拒绝（HTTP "+granted.status+"）");',
-    '  }catch(error){',
-    '    note("无法建立本机会话："+(error&&error.message?error.message:String(error))+"。请重启 Syllora 或检查本地发现文件。");',
-    '    return;',
-    '  }',
+    '  }catch(error){note("无法建立本机会话，请检查访问令牌或重新使用终端中的登录链接。");return;}',
     "  location.replace('/');",
     '};',
-    'void run();',
+    'document.querySelector("form").addEventListener("submit",event=>{event.preventDefault();const input=document.querySelector("input");const token=input.value.trim();input.value="";void run(token)});',
+    'const token=new URLSearchParams(location.hash.slice(1)).get("token");',
+    'if(token){history.replaceState(null,"",location.pathname+location.search);void run(token)}else{void run("")};',
   ].join('\n')
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Syllora</title></head><body><p>正在建立本机会话…</p><script nonce="${nonce}">${script}</script><noscript><p>请在本地发现文件中取 token，并以 <code>Authorization: Bearer &lt;token&gt;</code> 调用接口。</p></noscript></body></html>`
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Syllora</title></head><body><p>正在建立本机会话…</p><form><label>本地访问令牌 <input type="password" autocomplete="off" required></label><button type="submit">连接 Syllora</button></form><script nonce="${nonce}">${script}</script><noscript><p>请启用 JavaScript，或以 <code>Authorization: Bearer &lt;token&gt;</code> 调用接口。</p></noscript></body></html>`
 }
 
-/** `/api/session` 的发现文件桥（仅回环请求可达，用于本机浏览器/桌面壳握手）。 */
-export function sessionHandshakeBootstrap(hostConfigUrl: string): Record<string, unknown> {
-  return { hostConfigUrl }
+/** 仅注入非敏感的会话端点元数据。 */
+export function sessionHandshakeBootstrap(sessionUrl: string): Record<string, unknown> {
+  return { sessionUrl }
 }
 
 export async function createStaticHost(options: StaticHostOptions): Promise<StaticHost | null> {

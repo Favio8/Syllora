@@ -1409,7 +1409,8 @@ export async function* chatStream(
     if (!(await store.exists(session.sessionId))) {
       await store.append(session.sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: input.mode ?? 'socratic', agentId: `study-${session.sessionId}` } })
     }
-    const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, inputConfig ?? await loadChatConfig(configRoot))
+    const effectiveConfig = inputConfig ?? await loadChatConfig(configRoot)
+    const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, effectiveConfig)
     const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId, inputConfig?.configRoot ?? configRoot)
     // DSH ensureFallback: the deterministic first-prompt title lands at send
     // time (independent of turn outcome) so the sidebar drops the blank
@@ -1426,7 +1427,7 @@ export async function* chatStream(
       sessionId: session.sessionId,
       mode: input.mode ?? 'socratic',
       conceptId: input.conceptId ?? null,
-      inputConfig,
+      inputConfig: effectiveConfig,
       modelSelection,
       ...(agentRegistry === undefined ? {} : { agentRegistry }),
       ...(approvals === undefined ? {} : { approvals }),
@@ -1549,7 +1550,7 @@ export async function* chatStream(
       void (async () => {
         const config = modelSelection !== null
           ? await loadChatConfig(inputConfig?.configRoot ?? configRoot, { providerId: modelSelection.provider, model: modelSelection.model })
-          : inputConfig ?? await loadChatConfig(workspaceRoot)
+          : inputConfig ?? await loadChatConfig(configRoot)
         const title = await generateLlmSessionTitle(config, input.message)
         if (title !== '') {
           await historyStore.applyAutoTitle(session.sessionId, title, 'llm', { provider: config.providerId, model: config.model })

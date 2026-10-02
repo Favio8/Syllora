@@ -10,17 +10,17 @@ export const metadata: Metadata = {
 /**
  * CR-16：不再向页面注入任何访问凭据（旧实现把宿主 token 写进
  * `window.__SYLLORA__`，任意本机进程 `curl /` 即可提取 token 并调用全部
- * `/api/*`）。生产路径由宿主静态托管交付票据页，页面用本地发现文件里的
+ * `/api/*`）。生产路径由宿主静态托管交付票据页，页面用终端登录链接或用户填写的
  * token 向 `/api/session` 换取 HttpOnly 会话 Cookie；开发模式（`next dev`）
  * 跨端口，README 记录了带 token 的开发调用方式。
  */
-const BOOTSTRAP = 'window.__SYLLORA__={hostConfigUrl:"/api/host-config"};'
+const BOOTSTRAP = 'window.__SYLLORA__={sessionUrl:"/api/session"};'
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <head>
-        {/* 只放发现文件桥，不放凭据。 */}
+        {/* 只放会话端点，不放凭据。 */}
         <script dangerouslySetInnerHTML={{ __html: BOOTSTRAP }} />
       </head>
       <body className="h-full overflow-hidden">

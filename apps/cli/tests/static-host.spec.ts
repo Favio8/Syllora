@@ -77,7 +77,7 @@ describe('createStaticHost', () => {
     const nonce = 'abc123'
     const host = (await createStaticHost({
       root,
-      bootstrap: { hostConfigUrl: '/api/host-config' },
+      bootstrap: { sessionUrl: '/api/session' },
       bootstrapPage: sessionBootstrapPage(nonce),
     }))!
     const ticket = (await host.respond('/'))!
@@ -91,7 +91,7 @@ describe('createStaticHost', () => {
 
     const spa = (await host.respond('/', { sessionCookie: 'granted' }))!
     expect(String(spa.body)).toContain('real-spa')
-    expect(String(spa.body)).toContain('window.__SYLLORA__={"hostConfigUrl":"/api/host-config"}')
+    expect(String(spa.body)).toContain('window.__SYLLORA__={"sessionUrl":"/api/session"}')
     // 静态资源（非 HTML）不受门禁影响。
     const js = await makeDist({ 'index.html': 'x', 'app.js': 'console.log(1)' })
     const jsHost = (await createStaticHost({ root: js, bootstrapPage: sessionBootstrapPage(nonce) }))!

@@ -190,15 +190,18 @@ async function resolveCredential(workspaceRoot: string, providerId: string, apiK
     // 但必须留痕（L7）：master.key 与工作区错位时静默降级会让排障变成猜谜。
     const { unsealCredentials } = await import('./secret-box.ts')
     creds = (await unsealCredentials(credsRaw)).data
-  } catch (error) {
-    console.warn(`[config] credentials.json 解密失败，本次按未配置凭据处理：${error instanceof Error ? error.message : String(error)}`)
+  } catch {
+    console.warn('[config] credentials.json 解密失败，本次按未配置凭据处理；请在设置中重新填写 API Key')
     return null
   }
-  // Settings writes credentials under the generated apiKeyEnv ref
-  // (e.g. `MOCK_API_KEY`), while older workspaces may still use the
-  // provider id or a `default` entry. Accept all compatible keys without
-  // exposing the secret in the resolved config payload.
-  for (const key of [apiKeyEnv, providerId, providerId.replace(/^openai\//, ''), 'default']) {
+  // CR-08：旧实现在末尾无条件回退 `default` 键——A 供应商没有自己的凭据时，
+  // 会把凭据表里 `default` 的密钥（往往是另一个供应商的）发往 A 的 baseUrl，
+  // 造成跨供应商密钥泄漏。改为只接受能确切对应本供应商的键：apiKeyEnv（设置
+  // 层生成的 <PROVIDER>_API_KEY）、providerId 本身、去命名空间前缀的 id，以及
+  // providers.<providerId> 的嵌套写法。缺失即返回 null（上层按"未配置"报错），
+  // 不再借用其他供应商的密钥。
+  const exactKeys = [apiKeyEnv, providerId, providerId.replace(/^openai\//, '')]
+  for (const key of exactKeys) {
     if (key === null) continue
     const value = creds[key]
     if (typeof value === 'string' && value !== '') return value

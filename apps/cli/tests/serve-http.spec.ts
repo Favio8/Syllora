@@ -343,11 +343,10 @@ describe("serve HTTP 边界（集成）", () => {
     });
     expect(forged.status).toBe(401);
 
-    // 发现文件桥只回环可达，且内容是本机进程本就能读的 host.json 同源信息。
+    // CR-16：不能把 HTML 中移除的 token 再放到匿名 HTTP 发现接口。
     const bridge = await fetch(`${base()}/api/host-config`, { signal: AbortSignal.timeout(8_000) });
-    expect(bridge.status).toBe(200);
-    expect((await bridge.json() as { token?: string }).token).toBe(host!.token);
-    expect(bridge.headers.get("cache-control")).toBe("no-store");
+    expect(bridge.status).toBe(401);
+    expect(await bridge.text()).not.toContain(host!.token);
 
     const js = await fetch(`${base()}/app.js`, { signal: AbortSignal.timeout(8_000) });
     expect(js.status).toBe(200);

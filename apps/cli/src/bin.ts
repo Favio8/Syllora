@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { onClientDisconnect } from './lib/client-disconnect.ts'
 /**
  * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
@@ -54,6 +55,7 @@ import {
   exportProviders,
   importProviders,
   agentEventToFrame,
+  verifyCredentialsReadable,
   LearningAgentService,
 } from '@syllora/chat-service'
 import { migrateLegacySession } from '@syllora/session'
@@ -235,29 +237,6 @@ function requestToken(request: import('node:http').IncomingMessage, url: URL): s
 
 /** CR-16：会话 Cookie 名与会话密钥（每次启动轮换，进程内有效）。 */
 const SESSION_COOKIE = 'syllora_session'
-
-/**
- * CR-01/CR-15：请求是否真的「客户端已消失」。
- * 现代 Node（≥16）的 `request` 是可读流：请求体读完即触发 'close'，正常
- * 上传/正常 SSE 回合都会命中——旧实现只监听 'close'，于是正常请求被误判为
- * 断连（临时文件被删、响应不发、不触发构建；三处 SSE 断连清理监听又注册得
- * 比 body 读取更晚，注册时 `destroyed` 已为 true，监听器永不执行，回合在
- * 宿主侧跑完）。判定必须以「是否完整收到请求体」为准：
- *  - `req.complete` 为 true 表示请求体已完整送达（不是断连）；
- *  - `req.destroyed` 且未 complete 表示连接被中断。
- * 'aborted' 与 'error' 仍是真实断连的补充信号。
- */
-function onClientDisconnect(request: import('node:http').IncomingMessage, listener: () => void): void {
-  const trigger = (): void => {
-    if (request.complete && !request.destroyed) return
-    listener()
-  }
-  request.once('aborted', trigger)
-  request.once('error', trigger)
-  request.once('close', trigger)
-  // 注册时机若已经晚于断连（监听器永不触发），就地补一次判定。
-  if (!request.complete && request.destroyed) listener()
-}
 
 /** 解析请求携带的会话 Cookie。 */
 function sessionCookieOf(request: import('node:http').IncomingMessage): string {
@@ -600,18 +579,16 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   // 显式逃生口（host.json 的 token 记 null，便于排查）。
   const token = options.insecureNoToken === true ? null : randomBytes(24).toString('hex')
   // CR-16：会话密钥（每次启动轮换）+ 票据页 nonce。票据页 HTML 里不含访问
-  // token，只带 nonce（CSP 白名单）与发现文件桥路径。
+  // token，只带 nonce（CSP 白名单）与会话换票路径。
   const sessionSecret = randomBytes(24).toString('hex')
-  /** 由 listen 回调写入的实际端口（--port 0 时内核分配），供 /api/host-config 回显。 */
-  let observedPort = port
   const bootstrapNonce = randomBytes(16).toString('hex')
   // FL-21：同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
   // 纯 API 行为。CR-16：index.html 不再注入访问 token（旧实现让任意本机进程
-  // `curl /` 就能提取 token 并调用全部 /api/*）；改为注入票据页回退与发现
-  // 文件桥路径，页面据此换取 HttpOnly 会话 Cookie。
+  // `curl /` 就能提取 token 并调用全部 /api/*）；改为注入票据页回退与登录
+  // 链接，页面从终端登录链接取得凭据并换取 HttpOnly 会话 Cookie。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
-    bootstrap: token === null ? null : sessionHandshakeBootstrap('/api/host-config'),
+    bootstrap: token === null ? null : sessionHandshakeBootstrap('/api/session'),
     bootstrapPage: token === null ? null : sessionBootstrapPage(bootstrapNonce),
   })
   const ctx = new Context()
@@ -635,6 +612,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
   await mkdir(settingsRoot, { recursive: true })
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
+  // CR-07：启动时校验凭据可解密（错配/损坏留明确告警，不等到第一次对话才炸）。
+  await verifyCredentialsReadable(join(settingsRoot, '.syllora', 'credentials.json'))
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
   const agentService = new LearningAgentService(agentRegistry, undefined, settingsRoot)
@@ -1066,20 +1045,6 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end(JSON.stringify({ ok: true, session: 'granted' }))
       return
     }
-    // CR-16：本地发现文件桥——只有回环请求能读到（Origin 门禁已挡跨站；这是
-    // 本机浏览器无法自行读盘的唯一缺口）。返回的是本机进程本就可达的 host.json
-    // 同源内容，供票据页换取会话 Cookie。
-    if (url.pathname === '/api/host-config') {
-      if (request.method !== 'GET') {
-        response.writeHead(405)
-        response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: 'method not allowed', details: null } }))
-        return
-      }
-      response.setHeader('Cache-Control', 'no-store')
-      response.writeHead(200)
-      response.end(JSON.stringify({ port: observedPort, token }))
-      return
-    }
     // FL-30/CR-16：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
     // 宿主签发的凭据。凭据可以是 Authorization/x-syllora-token 头，或 /api/session
     // 下发的 HttpOnly 会话 Cookie（旧版把 token 内嵌进静态 HTML，任意本机进程
@@ -1252,7 +1217,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const abortController = new AbortController()
     // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
     // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, () => { if (!response.writableEnded) abortController.abort('client') })
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let rpcRequest: AcpRequest
     try { rpcRequest = parseAcpRequest(JSON.parse(body === '' ? '{}' : body) as unknown) } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : -32700
@@ -1403,7 +1368,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // Node（≥16）请求体完成即触发 'close'，正常上传也命中 clientGone：临时
       // 文件被删、响应不发、后续构建不触发，整个上传端点对正常请求失效。
       // 改用「请求体未完整送达」判定（同 CR-15 的 onClientDisconnect）。
-      onClientDisconnect(request, () => {
+      onClientDisconnect(request, response, () => {
         clientGone = true
         abortPending('上传中断: 客户端断连')
         busboy.destroy()
@@ -1526,7 +1491,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const abortController = new AbortController()
     // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
     // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, () => { if (!response.writableEnded) abortController.abort('client') })
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { courseId?: unknown; message?: unknown; mode?: unknown; sessionId?: unknown; turnId?: unknown; conceptId?: unknown; fileRefs?: unknown; effort?: unknown; requestId?: unknown }
     try {
       const parsed = JSON.parse(body === '' ? '{}' : body) as typeof input
@@ -1630,7 +1595,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const abortController = new AbortController()
     // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
     // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, () => { if (!response.writableEnded) abortController.abort('client') })
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { agentId?: unknown; answer?: unknown; requestId?: unknown }
     try { input = JSON.parse(body === '' ? '{}' : body) as typeof input } catch {
       response.writeHead(400)
@@ -1696,11 +1661,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // 连同 token 写入 host.json 供 CLI/桌面端握手发现。
       const address = server.address()
       const actualPort = typeof address === 'object' && address !== null ? address.port : port
-      observedPort = actualPort
       instanceLock.noteActualPort(actualPort)
       void writeHostConfig(actualPort, token).then(() => {
         console.log(`[syllora] host listening on http://127.0.0.1:${actualPort} (home: ${hostHome()}, logs: ${hostLogger.logDir}${token === null ? ', auth: DISABLED' : ''})`)
-        if (options.open === true) void openBrowser(`http://127.0.0.1:${actualPort}`)
+        const loginUrl = `http://127.0.0.1:${actualPort}/${token ? `#token=${token}` : ''}`
+        // 登录链接只写终端，不经过文件日志；fragment 不会随 HTTP 请求发给服务器。
+        if (token) process.stdout.write(`[syllora] browser login: ${loginUrl}\n`)
+        if (options.open === true) void openBrowser(loginUrl)
         resolve()
       }).catch(reject)
     })
