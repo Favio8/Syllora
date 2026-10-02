@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -6,6 +6,7 @@ import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects, migrateSharedSettings } from '../src/syllora-projects.ts'
 import { SylloraService } from '../src/syllora.ts'
 import { selectContext, structuredSources, within } from '../src/syllora-files.ts'
+import * as files from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
 import { validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
@@ -134,6 +135,26 @@ describe('course folder initialization',()=>{
     const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC);await initialize(s);await mkdir(join(s.folder,'.syllora','history'));await writeFile(join(s.folder,'.syllora','history','legacy.txt'),'history')
     await s.projects.handle('delete',{courseId:s.id,confirmed:true})
     expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC);expect(await readFile(join(s.folder,'.syllora','history','legacy.txt'),'utf8')).toBe('history');expect(await stat(join(s.folder,'.syllora','course.json')).catch(()=>null)).toBeNull()
+  })
+  it('a repeated delete of the same material does not run the destructive cleanup twice',async()=>{
+    // 多标签页/陈旧快照会用同一 materialId 重发删除。首次请求已把资料置为
+    // deleted 并清掉 revision；重复请求不得再执行一次破坏性清理
+    // （`delete course.revision` + syllora-projects 的 removeProducts('revisions')）。
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded')
+    const materialId=first.state.courses[0].materials[0].id
+    const spy=vi.spyOn(files,'removeProducts')
+    try {
+      const one=await s.projects.handle('deleteMaterial',{courseId:s.id,materialId,confirmed:true}) as any
+      expect(one).toEqual({saved:true})
+      expect(spy).toHaveBeenCalledTimes(1)
+      const two=await s.projects.handle('deleteMaterial',{courseId:s.id,materialId,confirmed:true}) as any
+      expect(two).toEqual({saved:true})
+      // 守卫在这里生效：不再执行第二次 removeProducts
+      expect(spy).toHaveBeenCalledTimes(1)
+      const after=await s.projects.handle('state',{}) as any
+      expect(after.courses[0].materials.find((m:any)=>m.id===materialId).status).toBe('deleted')
+    } finally { spy.mockRestore() }
   })
   it('does not follow a .syllora directory junction outside the chosen folder',async()=>{
     const s=await setup(),target=join(s.root,'outside'),folder=join(s.root,'linked');await mkdir(target);await mkdir(folder);await symlink(target,join(folder,'.syllora'),'junction')
