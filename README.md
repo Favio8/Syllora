@@ -51,6 +51,8 @@ pnpm serve --port 8081
 
 ## 目录与复用关系
 
+独立 UI 原型位于 [ui/](ui/README.md)，默认使用浏览器本地演示数据，可单独安装、启动与静态构建。原前端与后端启动命令继续保持现有行为。交付内容见 [UI 修改报告](ui/docs/change-report.md)，后端接入入口、现有接口映射与待补齐项见 [接口说明](ui/docs/backend-integration.md)。
+
 ```text
 apps/web/                           Next.js / React 前端
 apps/cli/                           原 Node Host 与本地访问保护

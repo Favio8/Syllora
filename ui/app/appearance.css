@@ -1,0 +1,98 @@
+/* Appearance choices keep the familiar Syllora blue as the anchor. */
+.theme-options{border:0;margin:0;padding:0}
+.theme-options>legend{font-size:11px;color:#879ab7;margin-bottom:15px;padding:0}
+.theme-option-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.theme-option{display:block;position:relative;padding:10px 10px 14px;border:1px solid #e1e8f4;border-radius:11px;cursor:pointer;background:#fff;transition:border-color .18s,box-shadow .18s,background .18s}
+.theme-option.selected{border-color:#9bb3e2;box-shadow:0 0 0 2px #edf3ff;background:#fbfcff}
+.theme-option:hover{border-color:#b0c3e6}
+.theme-option:has(input:focus-visible){outline:2px solid var(--blue);outline-offset:4px}
+.theme-option>input{position:absolute;opacity:0;width:1px;height:1px}
+.theme-preview{height:128px;border:1px solid #dfe6f3;border-radius:7px;display:flex;overflow:hidden;background:#fff}
+.theme-preview>.preview-rail{width:23px;padding:11px 6px;display:flex;align-items:center;flex-direction:column;gap:10px;background:#f0f3f9;border-right:1px solid #e4eaf5;flex-shrink:0}
+.preview-rail>i{width:9px;height:9px;border-radius:3px;background:#c8d4ec}
+.preview-rail>i:first-child{background:#002fa7;margin-bottom:8px}
+.preview-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.preview-top{height:24px;display:flex;align-items:center;justify-content:space-between;padding:7px 9px;border-bottom:1px solid #e8edf6}
+.preview-top>i{height:3px;width:27%;background:#d3ddef;border-radius:1px}.preview-top>i:last-child{width:25%;background:#b6c7eb}
+.preview-body{padding:12px 10px;display:flex;flex-direction:column;gap:12px;flex:1}
+.preview-body>i{display:block;height:31px;background:#edf2fc;border:1px solid #dbe5f9;border-radius:4px}
+.preview-body>span{display:flex;gap:6px;flex:1}
+.preview-body>span>i{height:100%;flex:1;background:#f8faff;border:1px solid #e4ebf8;border-radius:3px}
+.theme-preview.dark{background:#161e2c;border-color:#303f57}.theme-preview.dark .preview-rail{background:#101724;border-color:#273448}.theme-preview.dark .preview-rail>i{background:#314667}.theme-preview.dark .preview-rail>i:first-child{background:#8dadfa}.theme-preview.dark .preview-top{border-color:#2a374c}.theme-preview.dark .preview-top>i{background:#425979}.theme-preview.dark .preview-top>i:last-child{background:#7b9ccf}.theme-preview.dark .preview-body>i{background:#213354;border-color:#314970}.theme-preview.dark .preview-body>span>i{background:#1b273a;border-color:#2e3f5a}
+.theme-option-caption{display:flex;align-items:center;gap:8px;margin:13px 3px 4px;color:#93a5c2;font-size:12px}
+.theme-option-caption strong{font-weight:500;color:#607da6}.theme-option-caption>svg:last-child:not(:first-child){margin-left:auto;color:var(--blue)}
+.theme-option>small{font-size:9px;color:#a0b0c7;display:block;margin:0 3px;line-height:1.8}
+.appearance-note{font-size:10px;line-height:1.9;color:#a0afc5;margin-top:20px;max-width:400px}
+@media(max-width:560px){.theme-option-grid{grid-template-columns:1fr;gap:13px}.theme-preview{height:95px}.theme-option{padding:8px 8px 11px}.theme-option-caption{margin-top:9px;font-size:11px}.theme-option>small{font-size:8px}.appearance-note{font-size:9px;margin-top:16px}}
+
+:root[data-theme=dark]{color-scheme:dark;--blue:#8dadfa;--blue-deep:#adc5ff;--blue-light:#233657;--ink:#dce5f3;--muted:#96a4ba;--line:#2b3649;--sidebar:#131b28;--white:#171f2e;--green:#8cc7ae;--orange:#d7ae8a;--dark-canvas:#101724;--dark-surface:#171f2e;--dark-raised:#1c273a;--dark-soft:#202f47;--dark-secondary:#9dadc5}
+:root[data-theme=dark],:root[data-theme=dark] body{background:var(--dark-canvas)}
+:root[data-theme=dark] :is(.app-shell,.home-scroll,.catalog-scroll,.learning-workspace,.app-loading,.reader-layout){background:var(--dark-canvas)}
+:root[data-theme=dark] :is(.topbar,.modal,.composer,.panel-rail,.progress-card,.course-card,.home-course-card,.material-row,.review-card,.review-detail-card,.reading-paper,.stats-card,.dropdown-list,.course-action-menu,.user-menu,.help-submenu,.rail-tooltip,.selection-tools,.toast,.reading-search-results article,.theme-option,.settings-page-footer){background:var(--dark-surface);border-color:var(--line);box-shadow:none}
+:root[data-theme=dark] .sidebar.icon-rail{background:var(--sidebar);border-color:var(--line)}
+:root[data-theme=dark] .rail-create{background:var(--dark-surface);border-color:#334763}
+:root[data-theme=dark] .rail-divider{background:var(--line)}
+:root[data-theme=dark] .modal::backdrop{background:#030914aa}
+:root[data-theme=dark] :is(.study-panel,.reader-assistant,.reader-toolbar,.reader-bottom-hint,.settings-navigation,.panel-footer,.stats-summary,.home-today,.settings-data-card,.library-add,.add-course-card,.home-add-course){background:#141e2d;border-color:var(--line)}
+:root[data-theme=dark] :is(.home-continue,.next-step){background:#1a2a47;border-color:#2e4267}
+:root[data-theme=dark] :is(.home-mode-card,.settings-info,.concept-note,.session-tip,.settings-preview-note,.course-identity-preview){background:#19273d;border-color:#2b3d5a}
+:root[data-theme=dark] .home-mode-card.reading{background:#192b2b;border-color:#2d4340}
+:root[data-theme=dark] .home-mode-card:hover{background:#203452;border-color:#49648e}
+:root[data-theme=dark] .home-mode-card.reading:hover{background:#203630;border-color:#3e6554}
+:root[data-theme=dark] :is(.home-welcome h1,.workspace-intro h1,.catalog-intro h1,.modal-header h2,.session-heading h3,.practice-question h3,.settings-page-heading h3,.reading-paper h1,.reading-paper h2,.reading-paper h3,.course-card-content h2,.home-course-card h3,.home-continue h2,.next-step h2,.review-detail-card h2){color:#d6e3f7}
+:root[data-theme=dark] :is(.home-section-heading h2,.stats-card h3,.home-task-list strong,.task-main strong,.outline-item strong,.message-meta strong,.reading-assistant-empty h3,.reading-assistant-empty strong,.reader-assistant>header>span,.home-mode-card h3,.course-identity-preview strong,.course-picker-list strong,.theme-option-caption strong,.settings-static-row strong,.settings-data-card h4,.settings-reset strong,.review-card h4,.material-detail strong,.panel-file strong){color:#bdcce3}
+:root[data-theme=dark] :is(.message-text,.reading-paper,.reading-explanation p,.dropdown-trigger,.course-action-menu>button,.user-menu button,.agreement-copy p,.user-guide section p,.form-field,.course-confirm-heading,.session-tip p,.settings-data-card p,.course-picker-list small){color:#acbed9}
+:root[data-theme=dark] .message.user .message-text{background:var(--dark-soft);border-color:#334963;color:#cedbf1}
+:root[data-theme=dark] .review-overview{background:#192b2b;border-color:#2d4340}
+:root[data-theme=dark] .review-overview-icon{background:#284039;color:#a1ceb9}
+:root[data-theme=dark] .review-overview strong{color:#b0d6c4}
+:root[data-theme=dark] .review-overview p{color:#9ebeb2}
+:root[data-theme=dark] :is(.eyebrow,.workspace-intro>p,.home-welcome p,.home-continue>p,.next-step p,.catalog-intro p,.home-task-list small,.home-course-card>p,.home-course-card footer,.home-mode-card p,.stats-card header p,.stats-summary>div>span,.stats-footnote,.stats-card header>span,.heatmap-footer,.home-today-footer,.home-date,.home-breadcrumb,.breadcrumb-link,.breadcrumbs,.modal-description,.modal-footnote,.panel-description,.settings-page-heading p,.settings-page .form-field>small,.settings-info p,.appearance-note,.theme-option>small,.reading-intro p,.reading-assistant-empty>p,.reading-assistant-empty small,.reader-assistant>footer,.paper-meta,.paper-end,.reader-bottom-hint,.reading-search-results article p,.material-detail>span,.task-main small,.learning-tip p,.course-card-content>p,.home-no-tasks,.home-add-course>span,.course-status-tabs>p,.composer-actions>span,.message-meta>span,.composer-hint,.toast){color:#95a6c0}
+:root[data-theme=dark] :is(.stats-summary strong,.panel-footer strong,.home-continue-bottom>span,.progress-card p,.course-card-progress,.course-card-meta span,.home-footer,.stats-summary small,.course-icon-picker legend,.icon-choice>span,.course-identity-preview small,.theme-options>legend,.settings-navigation>span,.settings-navigation>small,.settings-navigation>button){color:#a4b5d0}
+:root[data-theme=dark] :is(.course-card,.home-course-card,.stats-summary>div,.panel-header,.panel-tabs,.panel-footer,.reader-assistant>header,.reader-assistant>footer,.reader-bottom-hint,.paper-meta,.settings-navigation,.settings-modal .modal-header,.settings-page-footer,.settings-static-row,.material-row,.panel-file,.home-today-footer,.learning-tip,.user-menu .logout-menu-item,.course-action-menu .danger-action,.archive-tag){border-color:var(--line)}
+:root[data-theme=dark] :is(.button:hover,.icon-button:hover,.home-task-list>button:hover,.dropdown-trigger:hover,.dropdown-trigger.is-open,.course-action-menu>button:hover,.course-action-menu>button:focus-visible,.user-menu button:hover,.user-menu button:focus-visible,.home-course-card:hover,.home-add-course:hover,.add-course-card:hover,.restore-course-button:hover){background:var(--dark-raised);color:#c9d8f0;border-color:#435a7c}
+:root[data-theme=dark] :is(.button.primary,.brand-icon,.assistant-avatar,.send-button:not(:disabled)){background:var(--blue);border-color:var(--blue);color:#15233c}
+:root[data-theme=dark] .button.primary:hover{background:var(--blue-deep)}
+:root[data-theme=dark] .button.primary,:root[data-theme=dark] .button.primary:hover{color:#15233c}
+:root[data-theme=dark] .send-button:disabled{background:#2a3b57;color:#7187a8}
+:root[data-theme=dark] .learning-route>button{background:#233958;border-color:#496a9d;color:#adc5ee}
+:root[data-theme=dark] .learning-route>button.completed{background:#2e4b76;color:var(--blue);border-color:#5377b0}
+:root[data-theme=dark] .learning-route>i{background:#3e5983}
+:root[data-theme=dark] .brand-icon.is-home{box-shadow:0 0 0 4px #263753}
+:root[data-theme=dark] :is(.learning-mode-switch,.stats-period,.search-box,.composer-actions>button,.suggestions>button,.dropdown-trigger,.icon-choice,.answer-option,.task-check,.theme-option,.secret-input input,.form-field>input,.input-unit>input,.settings-tag){background:#131c2b;border-color:#33435e;color:#a7bad7}
+:root[data-theme=dark] .input-unit{background:#131c2b;border-color:#33435e;color:#a7bad7}
+:root[data-theme=dark] .input-unit>input{background:transparent;color:inherit}
+:root[data-theme=dark] .input-unit>span{color:#95a6c0}
+:root[data-theme=dark] :is(.rail-button.active,.rail-button.selected,.rail-user,.settings-navigation>button.active,.course-status-tabs>button.active,.learning-mode-switch button.active,.stats-period>button.active,.stats-demo-toggle.active,.icon-choice.selected,.answer-option.selected,.theme-option.selected,.course-options-trigger[aria-expanded=true]){background:#273b5d;border-color:#6281b9;color:var(--blue);box-shadow:none}
+:root[data-theme=dark] :is(.dropdown-list>button,.course-picker-list>button){background:var(--dark-surface);border-color:var(--line);color:#b5c6df}
+:root[data-theme=dark] :is(.dropdown-list>button.focused,.dropdown-list>button:hover,.dropdown-list>button[aria-selected=true],.course-picker-list>button:hover,.course-picker-list>button.selected){background:#273b5d;color:var(--blue);border-color:#405e8d}
+:root[data-theme=dark] .dropdown-list small{color:#9babca}
+:root[data-theme=dark] :is(.composer textarea,.search-box input){background:transparent;color:#cedbf1}
+:root[data-theme=dark] :is(input,textarea)::placeholder{color:#7588a6}
+:root[data-theme=dark] :is(.progress-track,.user-avatar,.avatar){background:#29364c;color:#a8bbd8}
+:root[data-theme=dark] .task-item.completed .task-check{background:#263c60;border-color:#263c60}
+:root[data-theme=dark] .task-item.completed .task-main strong{color:#8699b6}
+:root[data-theme=dark] .task-item:not(:last-child):before,:root[data-theme=dark] .outline-item:not(:last-child):before{background:#30405b}
+:root[data-theme=dark] :is(.home-task-icon,.home-mode-card>span,.course-symbol.blue,.home-continue-top .course-symbol,.reading-assistant-empty>span,.file-icon,.user-profile-heading>span){background:#283e63;color:#a4beff}
+:root[data-theme=dark] :is(.course-symbol.green,.home-task-icon.green,.home-mode-card.reading>span,.task-kind.review){background:#284039;color:#a1ceb9}
+:root[data-theme=dark] :is(.course-symbol.orange,.home-task-icon.orange){background:#3c302c;color:#d7b798}
+:root[data-theme=dark] .task-kind{background:#283e63;color:#b2c8f4}
+:root[data-theme=dark] .reading-quote{background:#21324e;border-color:#7496d6;color:#b4c8ea}
+:root[data-theme=dark] .reading-paper ::selection{background:#385987;color:#e5efff}
+:root[data-theme=dark] :is(.reading-result-label small,.archive-tag){color:#95aaca;border-color:#3c4f6c}
+:root[data-theme=dark] :is(.error-banner,.modal-error,.reading-error,.answer-feedback){background:#3b2a2d;border-color:#68474b;color:#e1abab}
+:root[data-theme=dark] .answer-feedback.correct{background:#213c35;border-color:#395e50;color:#acd8be}
+:root[data-theme=dark] .answer-feedback p{color:inherit}
+:root[data-theme=dark] .course-action-menu .danger-action,:root[data-theme=dark] .logout-menu-item{color:#dcaaaa}
+:root[data-theme=dark] .course-action-menu .danger-action:hover{background:#3b2b32}
+:root[data-theme=dark] .level-0{background:#222f45}:root[data-theme=dark] .level-1{background:#30496e}:root[data-theme=dark] .level-2{background:#48699f}:root[data-theme=dark] .level-3{background:#7b9bd3}:root[data-theme=dark] .level-4{background:#b0caff}
+:root[data-theme=dark] .heatmap-cell.selected{border-color:#b4cdff;box-shadow:0 0 0 2px #304974}
+:root[data-theme=dark] .heatmap-cell:hover{box-shadow:0 0 0 2px #486b9f}
+:root[data-theme=dark] .stats-trend svg :is(.stats-line,circle){stroke:var(--blue)}
+:root[data-theme=dark] .stats-trend svg circle{fill:var(--dark-surface)}
+:root[data-theme=dark] .stats-trend svg line{stroke:#2c3b53}
+:root[data-theme=dark] .stats-trend svg text{fill:#9aaecf}
+:root[data-theme=dark] .stats-trend svg stop{stop-color:var(--blue)}
+:root[data-theme=dark] .reader-assistant.is-open{border-color:var(--line);box-shadow:0 10px 45px #0007}
+:root[data-theme=dark] .rail-tooltip,:root[data-theme=dark] .dropdown-list,:root[data-theme=dark] .course-action-menu,:root[data-theme=dark] .user-menu,:root[data-theme=dark] .help-submenu,:root[data-theme=dark] .toast{box-shadow:0 10px 30px #0005}
+:root[data-theme=dark] .theme-preview.light{color-scheme:light}

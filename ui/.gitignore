@@ -1,0 +1,13 @@
+node_modules/
+.launcher/
+.next/
+out/
+*.tsbuildinfo
+.env*
+!.env.example
+__pycache__/
+# Generated editor guidance from next dev is not part of the app source.
+/AGENTS.md
+/CLAUDE.md
+# Browser runs generate screenshots; reviewed examples are explicitly tracked.
+/docs/preview*.png
