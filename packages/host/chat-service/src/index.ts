@@ -19,8 +19,12 @@ export {
   updateSettings,
   deriveKeyRef,
   ProviderExistsError,
+  testConnection,
+  reorderProviders,
+  exportProviders,
+  importProviders,
 } from './settings.ts'
-export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry } from './settings.ts'
+export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry, ConnectionTestResult, ProviderExportPayload, ProviderExportEntry } from './settings.ts'
 export { createDeepSeekToolClient } from './adapter.ts'
 export {
   listSessions,

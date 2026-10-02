@@ -60,10 +60,30 @@ export interface SettingsPayload {
     apiKeyConfigured: boolean;
   };
   providers: ProviderPayload[];
+  /** 需求七：供应商展示顺序（provider id 全序）。 */
+  providerOrder: string[];
   ui: { defaultMode: "socratic" | "quick" | "feynman" | "debug" };
   agent: { preset: string; presets: Array<{ id: string; name: string; description: string }> };
   permissions: { preset: string; presets: Array<{ id: string; name: string; sandboxMode: "read-only" | "workspace-write" | "danger-full-access"; approvalPolicy: "deny" | "ask" | "never"; description: string }> };
   plugins: { inventory: Array<{ id: string; name: string; enabled: boolean; source: "builtin" | "workspace"; reason?: string }> };
+}
+
+/** 需求七：连接测试结果分类（错误可操作）。 */
+export type ConnectionFailureKind = "unauthorized" | "not-found" | "protocol" | "model-missing" | "timeout" | "network" | "invalid-config";
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  kind: ConnectionFailureKind | null;
+  message: string;
+  modelIds: string[];
+}
+
+/** 需求七：导出结构（不含明文密钥）。 */
+export interface ProviderExportPayload {
+  version: 1;
+  activeProviderId: string;
+  providers: Array<Pick<ProviderPayload, "id" | "name" | "model" | "baseUrl" | "protocol" | "temperature" | "maxConcurrency" | "models" | "apiKeyConfigured">>;
+  credentialsExcluded: true;
 }
 
 /** 项目注册表条目（dsh 语义：uuid 键 + canonical 路径，持久化于宿主）。 */

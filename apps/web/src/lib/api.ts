@@ -25,6 +25,8 @@ import type {
   ProviderModelPayload,
   ProviderCatalogEntry,
   ProviderProtocol,
+  ConnectionTestResult,
+  ProviderExportPayload,
   SessionModelDirectory,
   SessionModelSelection,
   WorkspaceRegistryPayload,
@@ -547,4 +549,25 @@ export const api = {
 
   activateProvider: (providerId: string) =>
     rpc<SettingsPayload>("settings.activateProvider", { providerId }),
+
+  /** 需求七：连接测试（表单当前值即可测，未保存也能用）。 */
+  testProviderConnection: (payload: {
+    baseUrl: string;
+    protocol?: ProviderProtocol;
+    apiKey?: string;
+    apiKeyEnv?: string;
+    providerId?: string;
+    model?: string;
+  }) => rpc<ConnectionTestResult>("settings.testConnection", payload),
+
+  /** 需求七：供应商顺序（全序，服务端校验为已配置项的全排列）。 */
+  reorderProviders: (providerIds: string[]) =>
+    rpc<SettingsPayload>("settings.reorderProviders", { providerIds }),
+
+  /** 需求七：导出结构（不含明文密钥）。 */
+  exportProviders: () => rpc<ProviderExportPayload>("settings.exportProviders"),
+
+  /** 需求七：导入结构；密钥一律不导入，需逐项补 Key。 */
+  importProviders: (payload: unknown) =>
+    rpc<{ saved: SettingsPayload; imported: string[]; skipped: string[] }>("settings.importProviders", { payload }),
 };

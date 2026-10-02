@@ -49,6 +49,10 @@ import {
   setCredential,
   settingsPayload,
   updateSettings,
+  testConnection,
+  reorderProviders,
+  exportProviders,
+  importProviders,
   agentEventToFrame,
   LearningAgentService,
 } from '@syllora/chat-service'
@@ -859,6 +863,19 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       remove: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '删除模型供应商'); return deleteProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       activate: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '激活模型供应商'); return activateProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(settingsRoot, '保存 API Key'); return setCredential(settingsRoot, providerId, apiKey) as unknown as Record<string, unknown> },
+      // 需求七：连接测试按 discover 同一优先级解析密钥（表单新填 > 已加密存储 > 环境变量）。
+      test: async input => {
+        let apiKey = input.apiKey?.trim() ?? ''
+        const providerId = input.providerId?.trim() ?? ''
+        if (apiKey === '' && providerId !== '' && settingsRoot !== '') {
+          const resolved = await loadChatConfig(settingsRoot, { providerId }).catch(() => null)
+          apiKey = resolved?.apiKey ?? ''
+        }
+        return testConnection({ ...input, apiKey: apiKey === '' ? null : apiKey }) as unknown as Record<string, unknown>
+      },
+      reorder: async providerIds => { requireWorkspaceRootForSettings(settingsRoot, '调整供应商顺序'); return reorderProviders(settingsRoot, providerIds) as unknown as Record<string, unknown> },
+      exportProviders: async () => { requireWorkspaceRootForSettings(settingsRoot, '导出供应商配置'); return exportProviders(settingsRoot) as unknown as Record<string, unknown> },
+      importProviders: async payload => { requireWorkspaceRootForSettings(settingsRoot, '导入供应商配置'); return importProviders(settingsRoot, payload) as unknown as Record<string, unknown> },
     },
     diagnosticsService: {
       logs: () => readHostDiagnostics(),

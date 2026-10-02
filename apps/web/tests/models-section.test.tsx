@@ -30,6 +30,10 @@ const { flashStatusBanner, apiMocks, catalog, ApiError } = vi.hoisted(() => {
       activateProvider: vi.fn(),
       providerCatalog: vi.fn(),
       discoverModels: vi.fn(),
+      testProviderConnection: vi.fn(),
+      reorderProviders: vi.fn(),
+      exportProviders: vi.fn(),
+      importProviders: vi.fn(),
     },
     catalog: [
       {
@@ -73,8 +77,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makePayload(providers: SettingsPayload["providers"]): SettingsPayload {
+function makePayload(providers: SettingsPayload["providers"], providerOrder?: string[]): SettingsPayload {
   return {
+    providerOrder: providerOrder ?? providers.map((p) => p.id),
     version: 1,
     activeProviderId: providers.find((p) => p.apiKeyConfigured)?.id ?? "",
     llm: {
@@ -544,3 +549,96 @@ describe("ModelsSection 覆盖路径的 Key 失败一致性（N-1）", () => {
     expect(screen.queryByRole("dialog", { name: "Provider 已存在" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * PRD 需求七：供应商配置完备化（连接测试 / 排序 / 导入导出）的界面契约。
+ */
+describe("PRD 需求七：供应商配置完备化", () => {
+  it("renders providers in the persisted providerOrder rather than the raw list order", async () => {
+    apiMocks.settings.mockResolvedValue(
+      makePayload([configuredProvider, { ...configuredProvider, id: "zeta", name: "Zeta" }], ["zeta", "acme"]),
+    );
+    render(<ModelsSection initial={null} />);
+    await screen.findByRole("button", { name: /供应商管理/ });
+    openManage();
+    const rows = await screen.findAllByRole("button", { name: /^拖动排序/ });
+    // providerOrder 把 zeta 排在 acme 前面。
+    expect(rows[0]!.getAttribute("aria-label")).toContain("Zeta");
+    expect(rows[1]!.getAttribute("aria-label")).toContain("Acme");
+  })
+
+  it("shows an actionable message from the connection test", async () => {
+    apiMocks.settings.mockResolvedValue(makePayload([configuredProvider]));
+    apiMocks.testProviderConnection.mockResolvedValue({
+      ok: false,
+      kind: "unauthorized",
+      message: "认证失败（401/403）：请检查 API Key 是否正确、是否已激活或被服务端吊销。",
+      modelIds: [],
+    });
+    render(<ModelsSection initial={null} />);
+    await screen.findByRole("button", { name: /供应商管理/ });
+    openManage();
+    fireEvent.click(await screen.findByRole("button", { name: /测试连接 Acme/ }));
+    expect(await screen.findByText(/认证失败（401\/403）/)).toBeInTheDocument();
+    expect(apiMocks.testProviderConnection).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: "https://acme.example/v1", providerId: "acme" }));
+  })
+
+  it("persists the new order when a provider is moved", async () => {
+    apiMocks.settings.mockResolvedValue(makePayload([configuredProvider, { ...configuredProvider, id: "zeta", name: "Zeta" }], ["acme", "zeta"]));
+    apiMocks.reorderProviders.mockImplementation(async (ids: string[]) => makePayload([configuredProvider, { ...configuredProvider, id: "zeta", name: "Zeta" }], ids));
+    render(<ModelsSection initial={null} />);
+    await screen.findByRole("button", { name: /供应商管理/ });
+    openManage();
+    // 上移第二行（Zeta）。
+    fireEvent.click(await screen.findByRole("button", { name: "Zeta 上移" }));
+    await waitFor(() => expect(apiMocks.reorderProviders).toHaveBeenCalledWith(["zeta", "acme"]));
+  })
+
+  it("exports structure and refuses a body that would carry a key", async () => {
+    const createObjectURL = vi.fn(() => "blob:providers");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    apiMocks.settings.mockResolvedValue(makePayload([configuredProvider]));
+    apiMocks.exportProviders.mockResolvedValue({
+      version: 1,
+      activeProviderId: "acme",
+      providers: [configuredProvider],
+      credentialsExcluded: true,
+    });
+    render(<ModelsSection initial={null} />);
+    await screen.findByRole("button", { name: /供应商管理/ });
+    openManage();
+    fireEvent.click(screen.getByRole("button", { name: /导出配置/ }));
+    expect(await screen.findByText(/不含明文密钥/)).toBeInTheDocument();
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+
+    // 导出体若混入密钥字段，界面必须拒绝而不是把它写进文件。
+    apiMocks.exportProviders.mockResolvedValue({
+      version: 1,
+      activeProviderId: "acme",
+      providers: [{ ...configuredProvider, apiKey: "placeholder-value" }],
+      credentialsExcluded: true,
+    });
+    createObjectURL.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /导出配置/ }));
+    expect(await screen.findByText(/疑似密钥字段/)).toBeInTheDocument();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  })
+
+  it("imports structure and tells the user to fill keys in", async () => {
+    const imported = { ...configuredProvider, id: "imported", name: "Imported" };
+    apiMocks.settings.mockResolvedValue(makePayload([configuredProvider]));
+    apiMocks.importProviders.mockResolvedValue({
+      saved: makePayload([configuredProvider, imported]),
+      imported: ["imported"],
+      skipped: [],
+    });
+    render(<ModelsSection initial={null} />);
+    await screen.findByRole("button", { name: /供应商管理/ });
+    openManage();
+    const file = new File([JSON.stringify({ version: 1, providers: [imported] })], "providers.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText("导入供应商配置文件"), { target: { files: [file] } });
+    expect(await screen.findByText(/请为每个供应商补填 API Key/)).toBeInTheDocument();
+  })
+})
