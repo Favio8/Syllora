@@ -382,8 +382,9 @@ body {
 }
 .syllora-mindmap .map-container .sc-mm-badge {
   flex: 0 0 auto;
-  font-size: 10px;
-  line-height: 14px;
+  /* 需求三：全页面禁用 9–10px 正文字号。 */
+  font-size: 11px;
+  line-height: 15px;
   padding: 0 5px;
   border-radius: 6px;
   background: var(--color-bg-card);
@@ -392,7 +393,7 @@ body {
 }
 .syllora-mindmap .map-container .sc-mm-pct {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
 }

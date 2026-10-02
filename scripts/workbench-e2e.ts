@@ -99,7 +99,9 @@ try {
   await page.getByRole('button',{name:/初始化课程 · 1 份资料/}).click()
   for(let i=0;i<150;i++){if((await rpc('state')).courses[0]?.revision)break;await new Promise(r=>setTimeout(r,100))}
   assert.ok((await rpc('state')).courses[0].revision)
-  await page.getByRole('tab',{name:'讲义',exact:true}).click()
+  // 需求三：讲义标签已移除，改由「今日」卡的「阅读讲义」入口打开中栏阅读器。
+  await page.getByRole('tab',{name:'今日',exact:true}).click()
+  await page.getByRole('button',{name:/阅读讲义/}).click()
   await page.getByRole('region',{name:'课程讲义'}).getByRole('heading',{name:'矩阵与线性变换',exact:true}).waitFor()
   await page.getByRole('button',{name:/线性代数 · 自动化测试.*1 个知识点/}).waitFor()
   await page.getByRole('button',{name:'取消',exact:true}).waitFor({state:'detached'})
@@ -107,7 +109,7 @@ try {
   await page.getByRole('region',{name:'课程讲义'}).getByRole('button',{name:'原文 1',exact:true}).first().click()
   await page.getByRole('dialog',{name:'资料来源'}).waitFor()
   await page.getByRole('button',{name:'关闭来源'}).click()
-  await page.getByRole('tab',{name:'大纲',exact:true}).click()
+  await page.getByRole('tab',{name:'学习',exact:true}).click()
   await page.getByRole('button',{name:'选择全部知识点'}).waitFor({timeout:20000})
   await page.getByRole('button',{name:'选择全部知识点'}).click()
   await page.getByRole('button',{name:'生成计划草案'}).click()
@@ -132,7 +134,7 @@ try {
   await study.screenshot({path:join(testRoot,'study-session.png')});await page.getByRole('button',{name:'关闭专注学习',exact:true}).click();
   let state=await rpc('state');const courseId=state.courses[0].id,pointId=state.courses[0].points[0].id;
   assert.equal(state.courses[0].attempts.length,2);assert.equal(state.courses[0].evidence[pointId].state,'待加强');
-  await page.getByRole('tab',{name:'复习',exact:true}).click();await page.getByText('错题记录 · 1 题',{exact:true}).click();await page.getByText('你的选项 B：0',{exact:true}).waitFor();
+  await page.getByRole('tab',{name:'学习',exact:true}).click();await page.getByText('错题记录 · 1 题',{exact:true}).click();await page.getByText('你的选项 B：0',{exact:true}).waitFor();
   await page.getByRole('button',{name:'报告此题问题',exact:true}).click();const dispute=page.getByRole('dialog',{name:'题目报错',exact:true});await dispute.getByLabel('报错原因').fill('受控验收：争议题停止计入');await dispute.getByRole('button',{name:'提交报错',exact:true}).click();await dispute.waitFor({state:'detached'});
   assert.equal((await rpc('state')).courses[0].evidence[pointId].state,'待验证');
   await page.getByRole('button',{name:'辅助阅读',exact:true}).click();const paragraph=page.locator('.reading-paper [data-source-id]').filter({hasText:'主对角线'}).first();await paragraph.waitFor();
@@ -141,9 +143,21 @@ try {
   await page.screenshot({path:join(testRoot,'reading-assistant.png'),animations:'disabled'});
   state=await rpc('state');assert.ok(state.activity.some((event:any)=>event.kind==='reading'));
   await page.getByRole('button',{name:'对话学习',exact:true}).click();await page.getByRole('button',{name:'归档课程',exact:true}).click();await page.getByRole('button',{name:'恢复课程',exact:true}).click();
-  await page.reload();await page.getByRole('button',{name:'学习工作台',exact:true}).click();await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor();
+  await page.reload();await page.getByRole('button',{name:/线性代数 · 自动化测试.*1 个知识点/}).click();await page.getByRole('heading',{name:'线性代数 · 自动化测试',exact:true}).waitFor();
   state=await rpc('state');assert.equal(state.courses[0].id,courseId);assert.equal(state.courses[0].attempts.length,2);assert.equal(state.courses[0].archived,false);
   assert.deepEqual(errors,[]);assert.deepEqual(failedResponses.filter(x=>!x.startsWith('409 /api/syllora/record')),[]);
+
+  // 需求三：三组标签与视觉规范的人工核对截图（浅色 + 暗色；面板处于空闲态）。
+  await page.getByRole('tab',{name:'今日',exact:true}).click()
+  await page.screenshot({path:join(testRoot,'panel-today-light.png'),animations:'disabled'})
+  await page.getByRole('tab',{name:'学习',exact:true}).click()
+  await page.screenshot({path:join(testRoot,'panel-study-light.png'),animations:'disabled'})
+  await page.getByRole('tab',{name:'资料',exact:true}).click()
+  await page.screenshot({path:join(testRoot,'panel-materials-light.png'),animations:'disabled'})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark'})
+  await page.getByRole('tab',{name:'今日',exact:true}).click()
+  await page.screenshot({path:join(testRoot,'panel-today-dark.png'),animations:'disabled'})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='light'})
   await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,protocol,desktop:desktop??false,checks:['settings editor saves shared model','open folder','save source','initialize published lectures','source navigation','outline and plan confirmation','focused study dialog','server grading and two attempts','wrong answer history','nested source and dispute dialogs','reading assistant activity','archive restore','reload persistence'],paidCalls:0,errors,failedResponses},null,2));
   console.log(JSON.stringify({passed:true,artifacts:testRoot}));
 } catch(error) {

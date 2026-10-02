@@ -84,20 +84,23 @@ function withBootstrapTap(html: string, bootstrap: Record<string, unknown> | nul
  * `nonce` 用于脚本 CSP 白名单（调用方保证只含随机十六进制字符）。
  */
 export function sessionBootstrapPage(nonce: string): string {
+  // 页面脚本：从同源发现文件桥取 token → 换票 → 带会话回到真正的 SPA。
+  // 失败时必须停下并给出可见原因，绝不能无条件 `location.replace('/')`——
+  // 没拿到会话就回 `/` 只会再得到这张票据页，形成无限重定向。
   const script = [
+    'const note=text=>{const el=document.querySelector("p");if(el)el.textContent=text};',
     'const run=async()=>{',
-    "  let token='';",
     '  try{',
-    '    const b=globalThis.__SYLLORA_BOOTSTRAP__;',
-    "    if(b&&typeof b.token==='string')token=b.token;",
-    "    else if(b&&typeof b.hostConfigUrl==='string'){",
-    "      const cfg=await fetch(b.hostConfigUrl,{cache:'no-store'});",
-    '      const parsed=await cfg.json();',
-    "      if(parsed&&typeof parsed.token==='string')token=parsed.token;",
-    '    }',
-    '  }catch{}',
-    '  if(token){',
-    "    try{await fetch('/api/session',{method:'POST',headers:{'x-syllora-token':token}})}catch{}",
+    "    const cfg=await fetch('/api/host-config',{cache:'no-store'});",
+    '    if(!cfg.ok)throw new Error("发现文件桥返回 HTTP "+cfg.status);',
+    '    const parsed=await cfg.json();',
+    "    const token=parsed&&typeof parsed.token==='string'?parsed.token:'';",
+    '    if(!token)throw new Error("宿主未提供访问令牌");',
+    "    const granted=await fetch('/api/session',{method:'POST',headers:{'x-syllora-token':token}});",
+    '    if(!granted.ok)throw new Error("会话换票被拒绝（HTTP "+granted.status+"）");',
+    '  }catch(error){',
+    '    note("无法建立本机会话："+(error&&error.message?error.message:String(error))+"。请重启 Syllora 或检查本地发现文件。");',
+    '    return;',
     '  }',
     "  location.replace('/');",
     '};',

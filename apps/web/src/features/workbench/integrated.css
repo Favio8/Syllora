@@ -7,7 +7,7 @@
 .integrated-shell .sy-main{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--white);overflow:hidden}
 .integrated-shell .sy-top{height:76px;min-height:76px;padding:12px 28px;background:var(--white);border-color:var(--line)}
 .integrated-shell .sy-top h1{font-size:16px;line-height:1.4;margin:2px 0 0;color:var(--ink)}
-.integrated-shell .sy-top>div>span{font-size:10px;color:var(--muted)}
+.integrated-shell .sy-top>div>span{font-size:11px;color:var(--muted)}
 .integrated-shell .sy-actions{align-items:center;gap:5px}
 .integrated-shell .sy-actions>button{border:0;background:transparent;color:var(--muted);padding:8px}
 .learning-mode-switch{display:flex;gap:4px;padding:4px;background:var(--sidebar);border-radius:8px;margin-right:10px}
@@ -32,7 +32,7 @@
 .integrated-shell .sy-tabs button{font-size:11px;border-radius:0;flex-shrink:0;background:transparent;color:var(--muted)}
 .integrated-shell .sy-tabs button.is-selected{color:var(--blue)}
 .integrated-shell .sy-right-title{font-size:12px;padding:18px 20px}
-.integrated-shell .sy-right-title span{font-size:9px;color:var(--muted)}
+.integrated-shell .sy-right-title span{font-size:11px;color:var(--muted)}
 .integrated-shell .sy-draft,.integrated-shell .sy-notice{background:var(--blue-light);border:1px solid var(--line);border-radius:8px;color:var(--ink)}
 .integrated-shell .sy-right :is(input,textarea,select){background:var(--white);color:var(--ink);border-color:var(--line);border-radius:6px}
 .integrated-shell .sy-task{background:var(--white);color:var(--ink);border-color:var(--line)}
@@ -56,10 +56,10 @@
 .integrated-shell label{color:var(--muted)}
 .integrated-project-error,.integrated-migration{position:fixed;bottom:24px;left:100px;max-width:650px;z-index:20;background:var(--white);padding:12px;border:1px solid var(--line)}
 .integrated-shell .sy-lecture-reader pre,.integrated-shell .sy-source-text{color:var(--ink);background:var(--sidebar)}
-.integrated-shell .sy-course-path{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.integrated-shell .sy-course-path{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 .integrated-shell .sy-error{flex-shrink:0}
 .integrated-shell .home-scroll,.integrated-shell .catalog-scroll{min-height:0;flex:1}
-@media(max-width:1100px){.integrated-shell.sy-app{grid-template-columns:64px minmax(0,1fr) 310px}.integrated-shell.sy-no-right{grid-template-columns:64px minmax(0,1fr)}.integrated-shell .sy-content{padding:22px}.learning-mode-switch button{font-size:10px!important;padding:6px!important}.integrated-shell .sy-top{padding:12px 18px}}
-@media(max-width:760px){.integrated-shell.sy-app,.integrated-shell.sy-no-right{grid-template-columns:minmax(0,1fr)}.integrated-shell .sidebar.icon-rail{position:fixed;z-index:100;transform:translateX(-100%);width:76px;height:100dvh;left:0;top:0}.integrated-shell .sidebar.mobile-open{transform:translateX(0)}.integrated-shell .sy-right{position:fixed;right:0;top:76px;bottom:0;width:min(360px,88vw);z-index:35;box-shadow:-12px 0 40px #0002}.integrated-shell .sy-top{height:76px;gap:8px;padding:10px 12px}.integrated-shell .sy-top h1{max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.integrated-shell .sy-actions>button{padding:5px}.learning-mode-switch{margin:0}.learning-mode-switch button{font-size:9px!important;gap:3px}.learning-mode-switch svg{width:12px}.integrated-shell .sy-content{padding:16px}.integrated-shell .sy-next{padding:16px;flex-wrap:wrap}.integrated-shell .sy-next h2{font-size:18px}.integrated-shell .sy-settings-cols{grid-template-columns:105px minmax(0,1fr)}.integrated-shell .sy-settings-body{padding:15px}.integrated-shell .sy-composer{padding:12px}.appearance-preview{width:95px;height:72px}.integrated-shell .sy-main .mobile-only{display:flex}}
+@media(max-width:1100px){.integrated-shell.sy-app{grid-template-columns:64px minmax(0,1fr) 310px}.integrated-shell.sy-no-right{grid-template-columns:64px minmax(0,1fr)}.integrated-shell .sy-content{padding:22px}.learning-mode-switch button{font-size:11px!important;padding:6px!important}.integrated-shell .sy-top{padding:12px 18px}}
+@media(max-width:760px){.integrated-shell.sy-app,.integrated-shell.sy-no-right{grid-template-columns:minmax(0,1fr)}.integrated-shell .sidebar.icon-rail{position:fixed;z-index:100;transform:translateX(-100%);width:76px;height:100dvh;left:0;top:0}.integrated-shell .sidebar.mobile-open{transform:translateX(0)}.integrated-shell .sy-right{position:fixed;right:0;top:76px;bottom:0;width:min(360px,88vw);z-index:35;box-shadow:-12px 0 40px #0002}.integrated-shell .sy-top{height:76px;gap:8px;padding:10px 12px}.integrated-shell .sy-top h1{max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.integrated-shell .sy-actions>button{padding:5px}.learning-mode-switch{margin:0}.learning-mode-switch button{font-size:11px!important;gap:3px}.learning-mode-switch svg{width:12px}.integrated-shell .sy-content{padding:16px}.integrated-shell .sy-next{padding:16px;flex-wrap:wrap}.integrated-shell .sy-next h2{font-size:18px}.integrated-shell .sy-settings-cols{grid-template-columns:105px minmax(0,1fr)}.integrated-shell .sy-settings-body{padding:15px}.integrated-shell .sy-composer{padding:12px}.appearance-preview{width:95px;height:72px}.integrated-shell .sy-main .mobile-only{display:flex}}
 @media(prefers-reduced-motion:reduce){.integrated-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 @media(max-width:760px){.integrated-shell>.sy-main{grid-column:1}.integrated-shell>.sy-right{position:fixed}}

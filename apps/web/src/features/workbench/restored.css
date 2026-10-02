@@ -19,8 +19,8 @@
 .restored-workbench .study-panel{min-width:0;grid-column:3;grid-row:1;background:var(--white)}
 .restored-workbench .panel-header{height:76px;min-height:76px}
 .restored-workbench .panel-header h2{font-size:14px;font-weight:600}
-.restored-workbench .panel-tabs{grid-template-columns:repeat(5,minmax(0,1fr));flex-shrink:0;overflow-x:auto}
-.restored-workbench .panel-tabs button{flex:1;white-space:nowrap;padding:16px 8px}
+/* 需求三：面板标签由 5 个降为 3 个分段控件（样式见 syllora.css 的 .panel-tabs.segment）。 */
+.restored-workbench .panel-tabs{flex-shrink:0}
 .restored-workbench .panel-body{padding:22px;overflow:auto;min-height:0}
 .restored-workbench .panel-body :is(h2,h3){font-size:13px;font-weight:600;margin:8px 0 12px}
 .restored-workbench .panel-body p{font-size:11px;line-height:1.9;margin:8px 0 14px;color:var(--muted)}
@@ -32,19 +32,19 @@
 .restored-workbench .sy-consent{display:flex;align-items:flex-start;gap:9px;margin:14px 0}
 .restored-workbench .sy-file-candidate{display:flex;align-items:flex-start;gap:10px;padding:14px 12px;border:1px solid var(--line);border-radius:8px;margin:12px 0;background:var(--sidebar)}
 .restored-workbench .sy-file-candidate strong{font-size:12px;line-height:1.7;color:var(--ink);font-weight:500}
-.restored-workbench .sy-file-candidate small{font-size:10px;color:var(--muted);margin-top:6px}
+.restored-workbench .sy-file-candidate small{font-size:11px;color:var(--muted);margin-top:6px}
 .restored-workbench .upload-zone{width:100%;display:flex;flex-direction:column;border-style:dashed;padding:24px 12px;background:var(--sidebar);color:var(--blue);margin:14px 0}
 .restored-workbench .sy-material{display:flex;align-items:flex-start;gap:10px;border:0;border-bottom:1px solid var(--line);padding:16px 0;border-radius:0}
 .restored-workbench .sy-material>div{flex:1;min-width:0}
-.restored-workbench .sy-material small{color:var(--muted);font-size:10px;line-height:1.7;display:block}
-.restored-workbench .sy-source-link{font-size:10px;padding:4px 6px;margin:4px 3px 0 0}
+.restored-workbench .sy-material small{color:var(--muted);font-size:11px;line-height:1.7;display:block}
+.restored-workbench .sy-source-link{font-size:11px;padding:4px 6px;margin:4px 3px 0 0}
 .restored-workbench .sy-task{display:flex;width:100%;justify-content:flex-start;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:18px 0;gap:12px}
 .restored-workbench .sy-task>span:nth-child(2){flex:1}
-.restored-workbench .sy-task small,.restored-workbench .sy-task em{display:block;font-size:10px;color:var(--muted);font-style:normal;margin-top:6px}
+.restored-workbench .sy-task small,.restored-workbench .sy-task em{display:block;font-size:11px;color:var(--muted);font-style:normal;margin-top:6px}
 .restored-workbench .sy-task strong{font-size:12px;font-weight:500}
 .restored-workbench .sy-point-row{border-bottom:1px solid var(--line);padding:14px 0}
 .restored-workbench .sy-point{display:flex;align-items:flex-start;gap:10px}
-.restored-workbench .sy-point small,.restored-workbench .sy-point em{display:block;font-size:10px;color:var(--muted)}
+.restored-workbench .sy-point small,.restored-workbench .sy-point em{display:block;font-size:11px;color:var(--muted)}
 .restored-workbench .sy-plan-input{grid-template-columns:1fr 1fr}
 .restored-workbench .sy-plan-input>label:last-child{grid-column:1/-1}
 .restored-workbench .sy-rest{display:flex;flex-wrap:wrap;gap:5px;margin:14px 0}
@@ -60,7 +60,7 @@
 .course-identity-picker fieldset{border:0;padding:0;margin:20px 0}
 .course-identity-picker legend{font-size:12px;color:var(--muted);margin-bottom:12px}
 .course-identity-picker .icon-choice-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
-.course-identity-picker .icon-choice{position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:68px;padding:10px 4px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--white);color:var(--muted);font-size:10px}
+.course-identity-picker .icon-choice{position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:68px;padding:10px 4px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--white);color:var(--muted);font-size:11px}
 .course-identity-picker .icon-choice.selected{border-color:var(--identity);background:color-mix(in srgb,var(--identity) 8%,var(--white));color:var(--identity)}
 .course-identity-picker .icon-choice input,.color-choice input{position:absolute;opacity:0;width:1px;height:1px}
 .course-identity-picker .icon-choice:has(input:focus-visible),.color-choice:has(input:focus-visible){outline:2px solid var(--blue);outline-offset:3px}
@@ -72,7 +72,7 @@
 .identity-blue{--identity:#315ed0}.identity-green{--identity:#378366}.identity-orange{--identity:#b87939}.identity-purple{--identity:#8659b5}.identity-rose{--identity:#b85377}.identity-slate{--identity:#64748b}
 .course-identity-preview{display:flex;align-items:center;gap:13px;padding:14px;background:var(--sidebar);border:1px solid var(--line);border-radius:9px;margin:20px 0}
 .course-identity-preview strong{display:block;font-size:13px;font-weight:500;overflow-wrap:anywhere}
-.course-identity-preview small{display:block;color:var(--muted);font-size:10px;margin-top:5px}
+.course-identity-preview small{display:block;color:var(--muted);font-size:11px;margin-top:5px}
 .course-symbol.purple,.rail-course.purple{color:#8659b5;background:#eee7f7}.course-symbol.rose,.rail-course.rose{color:#b85377;background:#f8e7ee}.course-symbol.slate,.rail-course.slate{color:#64748b;background:#e9edf3}
 [data-theme=dark] .course-symbol.purple,[data-theme=dark] .rail-course.purple{background:#38294c;color:#c2a1e2}[data-theme=dark] .course-symbol.rose,[data-theme=dark] .rail-course.rose{background:#462d3c;color:#e39ab7}[data-theme=dark] .course-symbol.slate,[data-theme=dark] .rail-course.slate{background:#303e51;color:#b3c0d5}
 @media(max-width:1050px){.restored-workbench,.restored-workbench.without-panel{grid-template-columns:76px minmax(0,1fr)}.restored-workbench .study-panel.panel-open{position:fixed;z-index:30;right:0;top:0;bottom:0;width:350px;max-width:calc(100vw - 45px)}.restored-workbench .sy-top{padding:12px 18px}.restored-workbench .sy-top h1{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}

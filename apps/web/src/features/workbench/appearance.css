@@ -21,9 +21,9 @@
 .theme-preview.dark{background:#161e2c;border-color:#303f57}.theme-preview.dark .preview-rail{background:#101724;border-color:#273448}.theme-preview.dark .preview-rail>i{background:#314667}.theme-preview.dark .preview-rail>i:first-child{background:#8dadfa}.theme-preview.dark .preview-top{border-color:#2a374c}.theme-preview.dark .preview-top>i{background:#425979}.theme-preview.dark .preview-top>i:last-child{background:#7b9ccf}.theme-preview.dark .preview-body>i{background:#213354;border-color:#314970}.theme-preview.dark .preview-body>span>i{background:#1b273a;border-color:#2e3f5a}
 .theme-option-caption{display:flex;align-items:center;gap:8px;margin:13px 3px 4px;color:#93a5c2;font-size:12px}
 .theme-option-caption strong{font-weight:500;color:#607da6}.theme-option-caption>svg:last-child:not(:first-child){margin-left:auto;color:var(--blue)}
-.theme-option>small{font-size:9px;color:#a0b0c7;display:block;margin:0 3px;line-height:1.8}
-.appearance-note{font-size:10px;line-height:1.9;color:#a0afc5;margin-top:20px;max-width:400px}
-@media(max-width:560px){.theme-option-grid{grid-template-columns:1fr;gap:13px}.theme-preview{height:95px}.theme-option{padding:8px 8px 11px}.theme-option-caption{margin-top:9px;font-size:11px}.theme-option>small{font-size:8px}.appearance-note{font-size:9px;margin-top:16px}}
+.theme-option>small{font-size:11px;color:#a0b0c7;display:block;margin:0 3px;line-height:1.8}
+.appearance-note{font-size:11px;line-height:1.9;color:#a0afc5;margin-top:20px;max-width:400px}
+@media(max-width:560px){.theme-option-grid{grid-template-columns:1fr;gap:13px}.theme-preview{height:95px}.theme-option{padding:8px 8px 11px}.theme-option-caption{margin-top:9px;font-size:11px}.theme-option>small{font-size:11px}.appearance-note{font-size:11px;margin-top:16px}}
 
 :root[data-theme=dark]{color-scheme:dark;--blue:#8dadfa;--blue-deep:#adc5ff;--blue-light:#233657;--ink:#dce5f3;--muted:#96a4ba;--line:#2b3649;--sidebar:#131b28;--white:#171f2e;--green:#8cc7ae;--orange:#d7ae8a;--dark-canvas:#101724;--dark-surface:#171f2e;--dark-raised:#1c273a;--dark-soft:#202f47;--dark-secondary:#9dadc5}
 :root[data-theme=dark],:root[data-theme=dark] body{background:var(--dark-canvas)}
