@@ -134,7 +134,13 @@ if (fatalErrors.length > 0) console.log(fatalErrors.slice(0, 5).join('\n'))
 // UI 就绪探针：Host 侧 GET / 返回 200 即窗口 loadURL 同源可用。
 const ui = await fetch(`http://127.0.0.1:${cfg.port}/`, { signal: AbortSignal.timeout(8000) })
 const html = await ui.text()
-console.log('[smoke] GET / via sidecar →', ui.status, 'token-injected:', html.includes('__SYLLORA__'))
+const anonymousSafe = ui.ok && html.includes('/api/session') && !html.includes(cfg.token)
+const grant = await fetch(`http://127.0.0.1:${cfg.port}/api/session`, { method: 'POST', headers: { 'x-syllora-token': cfg.token }, signal: AbortSignal.timeout(8000) })
+const sessionCookie = grant.headers.get('set-cookie')?.split(';')[0]
+const authorized = await fetch(`http://127.0.0.1:${cfg.port}/`, { headers: { Cookie: sessionCookie ?? '' }, signal: AbortSignal.timeout(8000) })
+const authorizedHtml = await authorized.text()
+const authorizedSafe = grant.ok && authorized.ok && authorizedHtml.includes('__SYLLORA__') && !authorizedHtml.includes(cfg.token)
+console.log('[smoke] anonymous page without token:', anonymousSafe, '| authorized workspace without token:', authorizedSafe)
 
 // 退出：优先走应用自身的退出路径（before-quit → stopHost），验证收尾；
 // 优雅退出宽限内未生效才兜底强杀，并标记 graceful=false。
@@ -168,7 +174,7 @@ const residue = pidAlive(cfg.pid) ? 1 : 0
 console.log('[smoke] graceful exit:', graceful, '| sidecar residue:', residue)
 
 const strict = process.env.SMOKE_STRICT === '1'
-pass = fatalErrors.length === 0 && ui.ok && html.includes('__SYLLORA__')
+pass = fatalErrors.length === 0 && anonymousSafe && authorizedSafe
   && (graceful ? residue === 0 : !strict)
 console.log(pass ? '[smoke] RESULT: PASS' : '[smoke] RESULT: FAIL')
 } catch (error) {

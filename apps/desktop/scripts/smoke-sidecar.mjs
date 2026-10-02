@@ -5,7 +5,7 @@
  *   ELECTRON_RUN_AS_NODE=1 + 本机 electron.exe 作为纯 Node，
  *   拉起 resources/host/bin.js serve --port 0（免装 Node 链路）：
  *   1. 15s 内写出 host.json {pid, port, token, ...}
- *   2. GET /      → 200 且 index.html 已 tap 注入 window.__SYLLORA__
+ *   2. GET / → 无凭据票据页；会话换票后返回不含 token 的工作台
  *   3. GET /api/health → 200 {ok:true}
  *   4. GET /icon.svg   → 200（静态资源 MIME）
  *   5. POST /api/settings.saveProvider → 成功（工作区注入 + 设置写链路 + token 校验）
@@ -84,8 +84,13 @@ try {
 
   const root = await fetch(`http://127.0.0.1:${cfg.port}/`)
   const html = await root.text()
-  const injected = html.includes('__SYLLORA__')
-  console.log('[smoke] GET /          →', root.status, 'token-injected:', injected)
+  const anonymousSafe = root.ok && html.includes('/api/session') && !html.includes(cfg.token)
+  const grant = await fetch(`http://127.0.0.1:${cfg.port}/api/session`, { method: 'POST', headers: { 'x-syllora-token': cfg.token } })
+  const cookie = grant.headers.get('set-cookie')?.split(';')[0]
+  const authorized = await fetch(`http://127.0.0.1:${cfg.port}/`, { headers: { Cookie: cookie ?? '' } })
+  const authorizedHtml = await authorized.text()
+  const authorizedSafe = grant.ok && authorized.ok && authorizedHtml.includes('__SYLLORA__') && !authorizedHtml.includes(cfg.token)
+  console.log('[smoke] anonymous page without token:', anonymousSafe, '| authorized workspace without token:', authorizedSafe)
 
   const health = await fetch(`http://127.0.0.1:${cfg.port}/api/health`)
   console.log('[smoke] GET /api/health →', health.status, JSON.stringify(await health.json()).slice(0, 80))
@@ -105,7 +110,7 @@ try {
   const savedOk = saveProvider.ok && saveBody.error === undefined
   console.log('[smoke] POST settings.saveProvider →', saveProvider.status, savedOk ? 'OK' : JSON.stringify(saveBody).slice(0, 200))
 
-  const ok = root.ok && injected && health.ok && asset.ok && savedOk
+  const ok = anonymousSafe && authorizedSafe && health.ok && asset.ok && savedOk
 
   quitting = true
   if (process.platform === 'win32') {
