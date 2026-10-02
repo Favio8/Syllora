@@ -50,6 +50,9 @@ export class SylloraService {
   private deleting = false
   private controllers = new Map<string, AbortController>()
   private workers = new Map<string, Promise<void>>()
+  /** 最近一次 `deleteMaterial` 是否真的把一份活跃资料置为删除（幂等守卫命中时为 false）。
+   *  上层据此决定要不要清理 revisions／.staging 产物，避免陈旧请求重复整目录删除。 */
+  private lastMaterialDeletion = false
   constructor(private readonly root: string, private readonly options: {
     now?: () => number;
     config?: () => Promise<ResolvedChatConfig>;
@@ -60,6 +63,8 @@ export class SylloraService {
     isConsented?: () => Promise<boolean>;
   } = {}) {}
   async settleJobs() { await Promise.allSettled([...this.workers.values()]) }
+  /** 读取并复位「最近一次 deleteMaterial 是否真的删了」——只供紧邻的上层清理判断用量。 */
+  takeMaterialDeletion(): boolean { const value = this.lastMaterialDeletion; this.lastMaterialDeletion = false; return value }
   async prepareDeletion() {
     this.deleting = true
     await this.transaction(db => { for (const course of db.courses) this.cancelJobs(db, course.id) }, true, true)
@@ -252,6 +257,12 @@ export class SylloraService {
         case 'deleteMaterial': {
           if (base['confirmed'] !== true) fail('CONFIRMATION_REQUIRED','请确认删除来源并重算证据')
           const m = course.materials.find(m => m.id === base['materialId']) ?? fail('NOT_FOUND','资料不存在')
+          // 幂等守卫：重复/陈旧请求（多标签页用旧快照重发）不得再执行一次破坏性清理。
+          // 已删除资料时 sources/history 为空，级联清理本就是空操作，但下方
+          // `delete course.revision` 与 syllora-projects 的 removeProducts('revisions')
+          // 会照旧执行——那会删掉期间重新初始化产生的已发布 revision，属不可逆产物丢失。
+          // 返回 deleted:false 让上层据此跳过产物清理。
+          if (m.status === 'deleted') { this.lastMaterialDeletion = false; break }
           const removed = new Set([...m.sources,...(m.history??[])].map(s => s.id))
           m.status = 'deleted'; m.sources = []; m.history = []
           delete course.revision
@@ -262,6 +273,7 @@ export class SylloraService {
           course.drafts.answers = course.drafts.answers.filter(answer => course.questions.some(q => q.id === answer.questionId && q.status === 'valid'))
           this.cancelJobs(db,course.id)
           recordNext(course, this.now(), id, 'material')
+          this.lastMaterialDeletion = true
           break
         }
         case 'reorderPoints': {

@@ -112,6 +112,21 @@ describe("AgentChat", () => {
     expect(useAppStore.getState().streaming).toBe(true);
   });
 
+  it("wires global shortcuts so Ctrl+K opens the command palette", async () => {
+    // 此前 useKeyboardShortcuts 只挂在 Console 外壳上，而 app 渲染的是工作台、
+    // Console 已无入口：ChatArea 写着 Ctrl+K，按下去却没有任何反应。
+    render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe("高数"));
+    expect(useAppStore.getState().paletteOpen).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }));
+    });
+
+    expect(useAppStore.getState().paletteOpen).toBe(true);
+    expect(await screen.findByTestId("command-palette")).toBeInTheDocument();
+  });
+
   it("mounts the command palette only while it is open", async () => {
     render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();

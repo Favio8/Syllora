@@ -14,6 +14,7 @@ import ChatArea from "@/src/components/chat/ChatArea";
 import CommandPalette from "@/src/components/palette/CommandPalette";
 import { api } from "@/src/lib/api";
 import { abortActiveChat } from "@/src/lib/chatStream";
+import { useKeyboardShortcuts } from "@/src/hooks/useKeyboardShortcuts";
 import { useAppStore } from "@/src/store/useAppStore";
 import "@/src/components/chat/agent-chat.css";
 
@@ -39,6 +40,10 @@ export default function AgentChat({ folder, courseName, onOpenSettings }: AgentC
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
   const chatCourseId = useMemo(() => chatCourseIdOf(folder), [folder]);
+  // 全局快捷键（Ctrl+K 命令面板、Ctrl+N 新建对话、Ctrl+B 右栏、Ctrl+1~4 面板 Tab、
+  // Esc 兜底）。此前只有 Console 外壳挂了这个 hook，而 app 渲染的是工作台、
+  // Console 已无入口，于是界面上写着的快捷键全部失效。
+  useKeyboardShortcuts();
 
   // 桥接 store：项目路径、课程列表、激活课程。setActiveCourse 会清空消息与
   // 会话，所以只在课程真正变化时调用（工作台每 1.5s 轮询 state 会反复渲染）。
