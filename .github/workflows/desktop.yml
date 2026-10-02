@@ -24,6 +24,7 @@ jobs:
           - os: windows-latest
             target: win
             arch: x64
+            targets: nsis:x64
             artifact: desktop-windows
             glob: |
               dist/*.exe
@@ -32,6 +33,7 @@ jobs:
           - os: macos-latest
             target: mac
             arch: arm64
+            targets: zip:arm64 dmg:arm64
             artifact: desktop-macos-arm64
             glob: |
               dist/*.dmg
@@ -41,6 +43,7 @@ jobs:
           - os: macos-15-intel
             target: mac
             arch: x64
+            targets: zip:x64 dmg:x64
             artifact: desktop-macos-x64
             glob: |
               dist/*.dmg
@@ -50,6 +53,7 @@ jobs:
           - os: ubuntu-latest
             target: linux
             arch: x64
+            targets: AppImage:x64 deb:x64
             artifact: desktop-linux
             glob: |
               dist/*.AppImage
@@ -80,7 +84,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: electron-builder (--${{ matrix.target }})
-        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} --${{ matrix.arch }} --publish never
+        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} ${{ matrix.targets }} --publish never
         working-directory: apps/desktop
 
       # CI 上（tag 存在）electron-builder 不落盘 latest*.yml（隐式发布被

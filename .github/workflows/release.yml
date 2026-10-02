@@ -64,6 +64,7 @@ jobs:
           - os: windows-latest
             target: win
             arch: x64
+            targets: nsis:x64
             artifact: release-desktop-windows
             glob: |
               dist/*.exe
@@ -72,6 +73,7 @@ jobs:
           - os: macos-latest
             target: mac
             arch: arm64
+            targets: zip:arm64 dmg:arm64
             artifact: release-desktop-macos-arm64
             glob: |
               dist/*.dmg
@@ -81,6 +83,7 @@ jobs:
           - os: macos-15-intel
             target: mac
             arch: x64
+            targets: zip:x64 dmg:x64
             artifact: release-desktop-macos-x64
             glob: |
               dist/*.dmg
@@ -90,6 +93,7 @@ jobs:
           - os: ubuntu-latest
             target: linux
             arch: x64
+            targets: AppImage:x64 deb:x64
             artifact: release-desktop-linux
             glob: |
               dist/*.AppImage
@@ -137,7 +141,8 @@ jobs:
       # --publish never：tag 触发会激活 electron-builder 隐式发布，generic
       # provider 只下载不上传；发布统一由本 workflow 的 github-release job 上传。
       - name: electron-builder (--${{ matrix.target }})
-        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} --${{ matrix.arch }} --publish never
+        # Explicit target suffixes override the arch arrays in electron-builder.yml.
+        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} ${{ matrix.targets }} --publish never
         working-directory: apps/desktop
       - name: Verify packaged Web and Host match the shared builds
         working-directory: apps/desktop
