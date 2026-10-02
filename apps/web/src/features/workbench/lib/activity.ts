@@ -11,4 +11,3 @@ export function recentDays(count: number, today = dayKey()) {
     return dayKey(date);
   });
 }
-
