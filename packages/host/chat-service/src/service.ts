@@ -24,6 +24,7 @@ import { configProblem, createCourseService, type CourseService } from './course
 import { loadChatConfig } from './config.ts'
 import { discoverModels, settingsPayload, saveProvider } from './settings.ts'
 import { stateDirOf } from '@syllora/course-builder'
+import { createSylloraStudyActions } from './syllora-study-actions.ts'
 
 export interface SessionSummaryView {
   readonly sessionId: string
@@ -427,7 +428,10 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
       await events.append(options.sessionId, { ts: utcTs(), type: 'request/header', payload: { provider: config.providerId, model: config.model, mode, ...(effort === null ? {} : { effort }), ...(requestId === null ? {} : { requestId }) } })
       yield { type: 'session/meta', payload: { sessionId: options.sessionId, provider: config.providerId, model: config.model, mode, ...(effort === null ? {} : { effort }), ...(requestId === null ? {} : { requestId }) } }
       const courseService = createCourseService(async () => config)
-      const toolActions = createToolActions(courseService)
+      // Snapshot reads (read_material/get_study_plan/get_mistakes/get_progress_report)
+      // come from the per-course Syllora snapshot; they degrade with a plain
+      // "no snapshot yet" message on course folders that never ran the workbench.
+      const toolActions: ToolActions = { ...createToolActions(courseService), ...createSylloraStudyActions() }
       const approval = options.approvals === undefined
         ? undefined
         : async (request: { name: string; policy: string; args: Record<string, unknown> }): Promise<'allow' | 'deny'> => {

@@ -1,0 +1,65 @@
+/**
+ * 工作台「对话学习」的 agent 聊天宿主样式。
+ *
+ * syllora.css 是未分层（unlayered）普通 CSS：按级联层规则，未分层声明永远压过
+ * @layer utilities 里的 Tailwind 工具类（与 specificity 无关）。而继承自 Console
+ * 的聊天组件（ChatArea/ChatInput/ToolFold…）全部靠工具类着色——直接挂进 .sy-app
+ * 会出现白底方框输入框、按钮边框错位、标题字号被改写。
+ *
+ * 这里不改动 syllora.css，而是在 .sy-agent-chat 子树内用 `all: revert-layer`
+ * 把属性回退到上一层（即 Tailwind 的 base/utilities 层），相当于给聊天区开一个
+ * 干净的 Tailwind 岛；内联 style（如 composer 的 minHeight）不受影响。
+ * 选择器刻意比旧规则更具体（两个 :not() 属性选择器），且本文件晚于 syllora.css
+ * 加载，平级冲突时也由本文件胜出。
+ */
+.sy-agent-chat {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  height: clamp(320px, 52vh, 720px);
+  min-height: 0;
+  border-top: 1px solid var(--sy-line, #e5e6ea);
+  background: var(--color-bg-panel, #fff);
+  color: var(--color-text-primary, #1f2024);
+}
+
+.sy-app .sy-agent-chat button,
+.sy-app .sy-agent-chat button:hover,
+.sy-app .sy-agent-chat button:disabled,
+.sy-app .sy-agent-chat input:not([type="checkbox"]):not([type="file"]),
+.sy-app .sy-agent-chat textarea,
+.sy-app .sy-agent-chat label,
+.sy-app .sy-agent-chat small,
+.sy-app .sy-agent-chat h1,
+.sy-app .sy-agent-chat h2,
+.sy-app .sy-agent-chat h3,
+.sy-app .sy-agent-chat h4,
+.sy-app .sy-agent-chat p,
+.sy-app .sy-agent-chat a,
+.sy-app .sy-agent-chat ul,
+.sy-app .sy-agent-chat ol,
+.sy-app .sy-agent-chat li,
+.sy-app .sy-agent-chat pre,
+.sy-app .sy-agent-chat code,
+.sy-app .sy-agent-chat blockquote {
+  all: revert-layer;
+}
+
+/* 旧「资料问答」历史：折叠只读保留（已不在对话学习里承担问答入口）。 */
+.sy-discussion-archive {
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--sy-line);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.sy-discussion-archive > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #595b65;
+}
+
+.sy-discussion-archive .sy-discussion {
+  padding-top: 14px;
+}

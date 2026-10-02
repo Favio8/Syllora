@@ -1,7 +1,8 @@
 /**
- * Default tool specification set (all 13 tools from Python
- * `agent_tools.py::build_default_specs`). Handlers are registered in
- * `index.ts`; host-side learning actions are supplied through ToolContext.
+ * Default tool specification set: the 13 tools from Python
+ * `agent_tools.py::build_default_specs` plus five read-only Syllora
+ * course-snapshot tools. Handlers are registered in `index.ts`; host-side
+ * learning actions are supplied through ToolContext.
  * @module @syllora/tools/src/specs
  */
 
@@ -62,8 +63,10 @@ const spec = (
                   : name.includes('question') ? 'question'
                     : name === 'run_command' ? 'shell'
                       : name.includes('fetch') || name.includes('web') ? 'network'
-                        : name === 'plan' ? 'plan'
-                          : name === 'todo' ? 'todo'
+                          : name === 'plan' || name === 'get_study_plan' || name === 'get_progress_report' ? 'plan'
+                            : name === 'read_material' ? 'file'
+                              : name === 'get_mistakes' ? 'quiz'
+                                : name === 'todo' ? 'todo'
                             : name === 'spawn_agent' ? 'subagent'
                               : name.startsWith('__') ? 'warning' : 'course'
   return {
@@ -214,6 +217,52 @@ export function buildDefaultSpecs(): ToolSpec[] {
       },
       'interactive',
     ),
+    spec(
+      'read_notes',
+      '读回学生课程笔记（append-only 文件，可按概念/关键词过滤，返回最近若干行）',
+      {
+        type: 'object',
+        properties: {
+          conceptId: { type: 'string', description: '可选，只看归属该概念 ID 的笔记（匹配 [conceptId] 行前缀）' },
+          keyword: { type: 'string', description: '可选，按关键词过滤（大小写不敏感）' },
+          maxLines: { type: 'integer', minimum: 1, maximum: 120, description: '返回行数上限（取最近的），缺省 60' },
+        },
+      },
+    ),
+    spec(
+      'read_material',
+      '读取/检索本课程已导入资料的分段正文（带 materialId/anchor 来源标注）；不给条件时列出资料清单',
+      {
+        type: 'object',
+        properties: {
+          query: { type: 'string', minLength: 1, description: '可选，在资料正文中检索的关键词/概念' },
+          materialId: { type: 'string', description: '可选，读取指定资料的正文分段' },
+          maxSources: { type: 'integer', minimum: 1, maximum: 20, description: '返回片段数上限，缺省 6' },
+          maxChars: { type: 'integer', minimum: 200, maximum: 6000, description: '返回字符预算，缺省 2500' },
+        },
+      },
+    ),
+    spec('get_study_plan', '当前学习计划：目标日期、每日预算、今日与未来若干天的任务、预算放不下的项目', {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 30, description: '查看未来天数，缺省 7' },
+        includeCompleted: { type: 'boolean', description: '是否包含已完成/已跳过任务，缺省 false' },
+      },
+    }),
+    spec('get_mistakes', '错题本：按知识点列出已作答错题（题干/学生选项/正确选项/解释/来源），不泄露未作答题答案', {
+      type: 'object',
+      properties: {
+        pointId: { type: 'string', description: '可选，只看某个知识点' },
+        limit: { type: 'integer', minimum: 1, maximum: 10, description: '返回题数上限，缺省 5' },
+      },
+    }),
+    spec('get_progress_report', '学习复盘数据：完成度、评估覆盖、证据状态分布、到期与薄弱、最近行动与近 N 天作答统计', {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 30, description: '作答统计回看天数，缺省 7' },
+        pointId: { type: 'string', description: '可选，聚焦某个知识点' },
+      },
+    }),
   ]
 }
 

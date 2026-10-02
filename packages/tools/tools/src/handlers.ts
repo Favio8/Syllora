@@ -161,6 +161,15 @@ export interface ToolActions {
   readonly runQuiz: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
   readonly evaluateAnswer: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
   readonly syncSources: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
+  /**
+   * Syllora course-snapshot reads. Optional: hosts that do not run on a course
+   * folder with `.syllora/course.json` leave them out and the tools degrade
+   * with an explicit "action not injected" result instead of failing the turn.
+   */
+  readonly readMaterial?: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
+  readonly getStudyPlan?: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
+  readonly getMistakes?: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
+  readonly getProgressReport?: (ctx: ToolActionContext, args: Record<string, unknown>) => Promise<ToolHandlerResult>
 }
 
 /** One tool execution's context: course state + optional host actions. */
@@ -725,6 +734,23 @@ export function handlerSyncSources(ctx: ToolContext, args: Record<string, unknow
   return runInjectedAction(ctx, 'syncSources', args)
 }
 
+/** Syllora course-snapshot reads; the host projects `.syllora/course.json`. */
+export function handlerReadMaterial(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolHandlerResult> {
+  return runInjectedAction(ctx, 'readMaterial', args)
+}
+
+export function handlerGetStudyPlan(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolHandlerResult> {
+  return runInjectedAction(ctx, 'getStudyPlan', args)
+}
+
+export function handlerGetMistakes(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolHandlerResult> {
+  return runInjectedAction(ctx, 'getMistakes', args)
+}
+
+export function handlerGetProgressReport(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolHandlerResult> {
+  return runInjectedAction(ctx, 'getProgressReport', args)
+}
+
 /** `write_note`: append one line to notes.md (append-only, per-course lock). */
 export async function handlerWriteNote(ctx: ToolContext, args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
   const content = String(args['content'] ?? '').trim()
@@ -750,6 +776,57 @@ export async function handlerWriteNote(ctx: ToolContext, args: Record<string, un
     await writeFile(path, old + line, 'utf8')
   })
   return ['已记录', { file: 'notes.md', appended: normalized.length, lines: 1 }]
+}
+
+/** `read_notes`: read back the append-only student notes file. The legacy
+ *  layout migration (`migrateLegacyLayout`) moves a root `notes.md` into
+ *  `.syllora/`, so both locations are read newest-first. */
+export async function handlerReadNotes(ctx: ToolContext, args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
+  const candidates = [
+    { file: 'notes.md', path: join(ctx.courseDir, 'notes.md') },
+    { file: '.syllora/notes.md', path: join(workspaceStateDirOf(ctx.courseDir), 'notes.md') },
+  ]
+  const realCourse = await realpath(ctx.courseDir).catch(() => ctx.courseDir)
+  let text: string | null = null
+  let shownPath = ''
+  for (const candidate of candidates) {
+    const info = await stat(candidate.path).catch(() => null)
+    if (info === null || !info.isFile()) continue
+    // 路径虽然固定，但仍做一次真实路径包含校验：课程目录里被植入指向目录外的
+    // notes.md 链接时，笔记正文会被当上下文整段灌给模型（与 read_source 同口径）。
+    const resolved = await realpath(candidate.path).catch(() => null)
+    if (resolved === null || (resolved !== realCourse && !isWithin(realCourse, resolved))) {
+      throw new ToolRejected('笔记路径不能通过符号链接越界')
+    }
+    const body = await readFile(resolved, 'utf8').catch(() => null)
+    if (body === null) continue
+    text = body
+    shownPath = candidate.file
+    break
+  }
+  if (text === null || text.trim() === '') return ['（本课程还没有笔记）', { lines: [] }]
+  const conceptId = typeof args['conceptId'] === 'string' ? args['conceptId'].trim() : ''
+  const keywordRaw = typeof args['keyword'] === 'string' ? args['keyword'].trim() : ''
+  const keyword = keywordRaw.toLowerCase()
+  const maxLines = Math.max(1, Math.min(120, Number(args['maxLines'] ?? 60)))
+  const all = text.split(/\r?\n/).map((line, index) => ({ n: index + 1, text: line.trim() })).filter(entry => entry.text !== '')
+  let matched = all
+  if (conceptId !== '') matched = matched.filter(entry => entry.text.includes(`[${conceptId}]`))
+  if (keyword !== '') matched = matched.filter(entry => entry.text.toLowerCase().includes(keyword))
+  // 取最近的若干行（时间正序返回），并在 2600 字符预算内裁剪：
+  // 单条 tool 消息上限 4000 字符，超预算会被整段截断而不是部分省略。
+  const shown: Array<{ n: number; text: string }> = []
+  let used = 0
+  for (const entry of matched.slice(-maxLines).reverse()) {
+    const line = entry.text.length > 300 ? `${entry.text.slice(0, 300)}…` : entry.text
+    if (shown.length > 0 && used + line.length > 2600) break
+    used += line.length
+    shown.push({ n: entry.n, text: line })
+  }
+  shown.reverse()
+  const filterNote = `${conceptId === '' ? '' : ` · 概念 ${conceptId}`}${keywordRaw === '' ? '' : ` · 关键词「${keywordRaw}」`}`
+  if (shown.length === 0) return [`笔记里没有匹配内容（共 ${all.length} 行）${filterNote}`, { lines: [] }]
+  return [`已读取 ${shownPath} ${shown.length} 行（共 ${all.length} 行${filterNote}）`, { lines: shown }]
 }
 
 /** `ask_user_question`: M-C interactive tool — the chat loop ends the turn. */

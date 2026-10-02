@@ -12,7 +12,7 @@ import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { join, dirname, resolve } from 'node:path'
+import { join, dirname, resolve, basename } from 'node:path'
 import { mkdir, open, lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
@@ -238,6 +238,11 @@ function frameToSseData(frame: NonNullable<ReturnType<typeof agentEventToFrame>>
   if (frame.kind === 'ask') return { event: 'ask', data: { question: frame.question } }
   if (frame.kind === 'error') return { event: 'error', data: { code: frame.code, message: frame.message } }
   return { event: frame.kind, data: frame.payload }
+}
+
+/** 配置是否足以发起一次模型调用（判定口径与 chat-service 的 configProblem 一致）。 */
+function usableConfig(config: import('@syllora/chat-service').ResolvedChatConfig | null): config is import('@syllora/chat-service').ResolvedChatConfig {
+  return config !== null && config.providerId !== '' && config.baseUrl !== '' && config.model !== ''
 }
 
 interface StartupRegistry {
@@ -581,6 +586,20 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     await registry.setLastOpenedPath(workspace.workspace.path)
   } })
 
+  /**
+   * 工作台的课程 id 是 UUID，而 chat/agent 端点要求 courseId = 课程文件夹名
+   * （`courseDirOf` 的等值校验）。切课不会重新 openCourse，lastOpenedPath 可能
+   * 仍停留在上一门课——按基名在已注册工作区里定位课程根，找不到才回落。
+   */
+  async function workspaceForCourse(courseId: string): Promise<string> {    const target = courseId.trim()
+    if (target !== '' && !target.includes('/') && !target.includes('\\') && !target.includes('..') && !target.startsWith('.')) {
+      for (const item of registry.list()) {
+        if (basename(item.path) === target) return item.path
+      }
+    }
+    return registry.lastOpenedPath
+  }
+
   function wrapCourseService(): HostServices['courseService'] {
     const activeRoot = (): string => registry.lastOpenedPath
     const courseService = createCourseService(configFacts)
@@ -636,7 +655,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     pickDirectory: () => pickNativeDirectory(),
     browseDirectory: path => browseLocalDirectory(path, registry.lastOpenedPath),
     sessionService: {
-      list: courseId => listSessions(registry.lastOpenedPath, courseId),
+      list: async courseId => listSessions(await workspaceForCourse(courseId), courseId),
       search: async (query, limit) => {
         const normalized = query.trim().toLowerCase()
         const matches: Array<SessionSearchResultView & { rank: number }> = []
@@ -688,21 +707,21 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
           hasMore: matches.length > limit,
         }
       },
-      create: (courseId, mode, title) => createSession(registry.lastOpenedPath, courseId, mode as LearningMode, title),
-      rename: (courseId, sessionId, title) => renameSession(registry.lastOpenedPath, courseId, sessionId, title),
-      fork: (courseId, sessionId, chatIndex) => forkSession(registry.lastOpenedPath, courseId, sessionId, chatIndex),
-      archive: (courseId, sessionId) => archiveSession(registry.lastOpenedPath, courseId, sessionId),
-      reorder: (courseId, sessionId, beforeId) => reorderSession(registry.lastOpenedPath, courseId, sessionId, beforeId),
-      restore: (courseId, sessionId) => restoreSession(registry.lastOpenedPath, courseId, sessionId),
-      models: (courseId, sessionId) => sessionModels(registry.lastOpenedPath, courseId, sessionId),
-      selectModel: (courseId, sessionId, selection) => selectSessionModel(registry.lastOpenedPath, courseId, sessionId, selection),
-      events: (courseId, sessionId, afterSeq) => sessionEvents(registry.lastOpenedPath, courseId, sessionId, afterSeq),
+      create: async (courseId, mode, title) => createSession(await workspaceForCourse(courseId), courseId, mode as LearningMode, title),
+      rename: async (courseId, sessionId, title) => renameSession(await workspaceForCourse(courseId), courseId, sessionId, title),
+      fork: async (courseId, sessionId, chatIndex) => forkSession(await workspaceForCourse(courseId), courseId, sessionId, chatIndex),
+      archive: async (courseId, sessionId) => archiveSession(await workspaceForCourse(courseId), courseId, sessionId),
+      reorder: async (courseId, sessionId, beforeId) => reorderSession(await workspaceForCourse(courseId), courseId, sessionId, beforeId),
+      restore: async (courseId, sessionId) => restoreSession(await workspaceForCourse(courseId), courseId, sessionId),
+      models: async (courseId, sessionId) => sessionModels(await workspaceForCourse(courseId), courseId, sessionId),
+      selectModel: async (courseId, sessionId, selection) => selectSessionModel(await workspaceForCourse(courseId), courseId, sessionId, selection),
+      events: async (courseId, sessionId, afterSeq) => sessionEvents(await workspaceForCourse(courseId), courseId, sessionId, afterSeq),
     },
     agentService: {
-      create: (courseId, mode, title) => agentService.create(registry.lastOpenedPath, courseId, mode, title),
-      resume: (courseId, sessionId) => agentService.resume(registry.lastOpenedPath, courseId, sessionId),
+      create: async (courseId, mode, title) => agentService.create(await workspaceForCourse(courseId), courseId, mode, title),
+      resume: async (courseId, sessionId) => agentService.resume(await workspaceForCourse(courseId), courseId, sessionId),
       selectModel: (_courseId, sessionId, selection) => agentService.selectModel(sessionId, selection),
-      send: (courseId, sessionId, mode, content, metadata) => agentService.send(registry.lastOpenedPath, courseId, sessionId, mode as import('@syllora/session').LearningMode, content, metadata),
+      send: async (courseId, sessionId, mode, content, metadata) => agentService.send(await workspaceForCourse(courseId), courseId, sessionId, mode as import('@syllora/session').LearningMode, content, metadata),
       list: async () => agentService.list(),
       answer: (agentId, answer) => agentService.answer(agentId, answer),
       status: async agentId => agentService.status(agentId),
@@ -1386,13 +1405,21 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'courseId and message are required', details: null } }))
       return
     }
-    const workspaceRoot = registry.lastOpenedPath
+    // 工作台可能刚切到另一门课而 lastOpenedPath 尚未更新：按 courseId
+    // （课程文件夹名）解析课程根，避免对话跑到上一门课的目录上。
+    const workspaceRoot = await workspaceForCourse(courseId)
     if (workspaceRoot === '') {
       response.writeHead(409)
       response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))
       return
     }
-    const config = await loadChatConfig(workspaceRoot).catch(() => null)
+    // 课程文件夹可能没有自己的 .syllora/config.yaml（工作台的模型配置写在共享
+    // 设置目录）：回落到共享配置，避免「设置里已配好、对话却报未配置」。
+    let config = await loadChatConfig(workspaceRoot).catch(() => null)
+    if (!usableConfig(config)) {
+      const shared = await configFacts().catch(() => null)
+      if (usableConfig(shared)) config = shared
+    }
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
