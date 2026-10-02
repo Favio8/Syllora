@@ -158,6 +158,12 @@ try {
   await page.getByRole('tab',{name:'今日',exact:true}).click()
   await page.screenshot({path:join(testRoot,'panel-today-dark.png'),animations:'disabled'})
   await page.evaluate(()=>{document.documentElement.dataset.theme='light'})
+  // 需求五：通知胶囊（右下角）——旧的中栏横条已移除。
+  const dock=page.locator('[data-notification-dock]')
+  if(await dock.count()>0){await page.screenshot({path:join(testRoot,'notification-capsule.png'),animations:'disabled'})}
+  // 中栏底部不再出现旧横条。
+  assert.equal(await page.locator('.sy-job').count(),0,'mid-column job bar must be gone')
+  assert.equal(await page.locator('.sy-init-failures').count(),0,'mid-column failure list must be gone')
   await writeFile(join(testRoot,'result.json'),JSON.stringify({passed:true,protocol,desktop:desktop??false,checks:['settings editor saves shared model','open folder','save source','initialize published lectures','source navigation','outline and plan confirmation','focused study dialog','server grading and two attempts','wrong answer history','nested source and dispute dialogs','reading assistant activity','archive restore','reload persistence'],paidCalls:0,errors,failedResponses},null,2));
   console.log(JSON.stringify({passed:true,artifacts:testRoot}));
 } catch(error) {
