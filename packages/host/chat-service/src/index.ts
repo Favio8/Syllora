@@ -6,6 +6,8 @@
 
 export { loadChatConfig, providerFacts } from './config.ts'
 export { setSharedConfigRoot } from './shared-root.ts'
+export { AGENT_SKILLS, AGENT_SKILL_IDS, agentSkillPrompt } from './skills.ts'
+export type { AgentSkillPayload } from './skills.ts'
 export { SylloraService, SylloraError } from './syllora.ts'
 export { SylloraProjects, migrateSharedSettings } from './syllora-projects.ts'
 export type { ResolvedChatConfig } from './config.ts'

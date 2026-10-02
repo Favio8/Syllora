@@ -19,6 +19,7 @@ import {
   updateSettings,
 } from '../src/settings.ts'
 import { loadChatConfig } from '../src/config.ts'
+import { AGENT_SKILL_IDS } from '../src/skills.ts'
 import { unsealCredentials } from '../src/secret-box.ts'
 
 /** Fixture values standing in for stored secrets; none carries a provider's key
@@ -109,6 +110,26 @@ describe('settings domain', () => {
     expect(config.apiKey).toBe('mock-secret')
     expect(config.apiKeyEnv).toBe('MOCK_API_KEY')
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('projects teaching skills and validates the selection round-trip', async () => {
+    const { root, ws } = await setup()
+    try {
+      const initial = await settingsPayload(ws)
+      expect(initial.agent.skill).toBe('')
+      expect(initial.agent.skills.map(item => item.id)).toEqual(AGENT_SKILL_IDS)
+      expect(initial.agent.skills.every(item => item.name !== '' && item.description !== '')).toBe(true)
+
+      const saved = await updateSettings(ws, { agentSkill: 'zpd' })
+      expect(saved.agent.skill).toBe('zpd')
+      expect((await loadChatConfig(ws)).agentSkill).toBe('zpd')
+
+      const cleared = await updateSettings(ws, { agentSkill: '' })
+      expect(cleared.agent.skill).toBe('')
+      expect((await loadChatConfig(ws)).agentSkill).toBe('')
+
+      await expect(updateSettings(ws, { agentSkill: 'not-a-skill' })).rejects.toThrow(/教学技能不存在/)
+    } finally { await rm(root, { recursive: true, force: true }) }
   })
 
   it('projects the full payload from config.yaml', async () => {

@@ -35,6 +35,8 @@ export interface ResolvedChatConfig {
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
+  /** 教学技能 id（见 skills.ts）；空串=不启用技能。 */
+  readonly agentSkill?: string
   readonly permissionPreset?: 'read-only' | 'workspace-write' | 'danger-full-access'
   readonly plugins?: Record<string, boolean>
 }
@@ -56,7 +58,7 @@ interface ConfigYaml {
     readonly max_tokens?: number | null
   }>
   readonly ui?: { default_mode?: string }
-  readonly agent?: { preset?: string; system_prompt?: string }
+  readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
 }
@@ -167,6 +169,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
       defaultMode: 'quick',
       agentPreset: 'syllora-learning',
       agentSystemPrompt: '',
+      agentSkill: '',
       permissionPreset: 'workspace-write',
       plugins: {},
     }
@@ -209,6 +212,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     defaultMode,
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
+    agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',
     permissionPreset,
     plugins,
   }

@@ -24,7 +24,7 @@ ${FENCE}
     expect(segs[1]).toMatchObject({
       code: "<div>演示</div>",
       closed: true,
-      key: "viz-0",
+      key: "interactive-0",
     });
     expect(segs[0].key).toBe("md-0");
     expect(segs[2].key).toBe("md-1");
@@ -42,7 +42,7 @@ ${FENCE}
     ].join("\n");
     const segs = splitVizSegments(content);
     const vizKeys = segs.filter((s) => s.type === "viz").map((s) => s.key);
-    expect(vizKeys).toEqual(["viz-0", "viz-1"]);
+    expect(vizKeys).toEqual(["interactive-0", "interactive-1"]);
   });
 
   it("marks a trailing unclosed fence as closed:false", () => {
@@ -55,7 +55,7 @@ ${FENCE}sc-interactive
       type: "viz",
       closed: false,
       code: "<div>半截",
-      key: "viz-0",
+      key: "interactive-0",
     });
   });
 
@@ -115,13 +115,44 @@ ${FENCE}
       `段落\n${FENCE}sc-interactive\n<div>\n${FENCE}\n结尾`,
     ];
     const perFrame = frames.map((f) => splitVizSegments(f));
-    // 围栏成形后：md-0 与 viz-0 的 key 在后续所有帧保持稳定
+    // 围栏成形后：md-0 与 interactive-0 的 key 在后续所有帧保持稳定
     for (const segs of perFrame.slice(2)) {
       expect(segs[0].key).toBe("md-0");
-      expect(segs[1].key).toBe("viz-0");
+      expect(segs[1].key).toBe("interactive-0");
     }
     expect(perFrame[3][1].closed).toBe(true);
     expect(perFrame[4]).toHaveLength(3);
     expect(perFrame[4][2].key).toBe("md-1");
+  });
+
+  it("recognises chart and diagram fences with kind-prefixed keys", () => {
+    const content = [
+      "先看数据：",
+      `${FENCE}chart`,
+      '{"chartType":"column","data":{"labels":["甲","乙"],"legends":["人数"],"series":[[3,5]]}}',
+      `${FENCE}`,
+      "再看结构：",
+      `${FENCE}diagram`,
+      '{"nodes":[{"id":"n1","label":"开始"}],"edges":[]}',
+      `${FENCE}`,
+    ].join("\n");
+    const segs = splitVizSegments(content);
+    expect(segs.map((s) => s.type)).toEqual(["md", "viz", "md", "viz"]);
+    expect(segs[1]).toMatchObject({ kind: "chart", closed: true, key: "chart-0" });
+    expect(segs[3]).toMatchObject({ kind: "diagram", closed: true, key: "diagram-0" });
+    expect(segs[1].code).toContain('"chartType":"column"');
+  });
+
+  it("keeps each kind's counter independent while streaming", () => {
+    const frames = [
+      `${FENCE}chart\n{"chartType":"column"`,
+      `${FENCE}chart\n{"chartType":"column"}\n${FENCE}\n${FENCE}diagram\n{"nodes":[`,
+      `${FENCE}chart\n{"chartType":"column"}\n${FENCE}\n${FENCE}diagram\n{"nodes":[{"id":"n1","label":"A"}]}\n${FENCE}\n收尾`,
+    ];
+    const perFrame = frames.map((f) => splitVizSegments(f));
+    expect(perFrame[0][0]).toMatchObject({ kind: "chart", closed: false, key: "chart-0" });
+    expect(perFrame[1][0]).toMatchObject({ kind: "chart", closed: true });
+    expect(perFrame[1][1]).toMatchObject({ kind: "diagram", closed: false, key: "diagram-0" });
+    expect(perFrame[2][1]).toMatchObject({ kind: "diagram", closed: true, key: "diagram-0" });
   });
 });

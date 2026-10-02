@@ -412,6 +412,8 @@ export const api = {
     defaultMode?: SettingsPayload["ui"]["defaultMode"];
     agentPreset?: string;
     agentSystemPrompt?: string;
+    /** 教学技能 id；空串＝不启用。 */
+    agentSkill?: string;
     permissionPreset?: string;
     plugins?: Record<string, boolean>;
   }) => rpc<SettingsPayload>("settings.update", payload),

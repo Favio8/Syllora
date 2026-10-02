@@ -547,6 +547,8 @@ const handlers = {
       agentPreset: z.string().optional(),
       // 自定义预设提示词：长度上限与 config.ts 的 MAX_AGENT_PROMPT_CHARS 一致（此处留余量，精确校验在 settings.ts）。
       agentSystemPrompt: z.string().max(20000).optional(),
+      // 教学技能 id（见 chat-service/skills.ts）；空串=不启用，精确校验在 settings.ts。
+      agentSkill: z.string().max(64).optional(),
       permissionPreset: z.string().optional(),
       plugins: z.record(z.string(), z.boolean()).optional(),
     }),

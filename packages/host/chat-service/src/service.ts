@@ -21,6 +21,7 @@ import { SessionEventStore, SessionStore, SessionError, TutorSession, utcTs, ses
 import type { ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient, reasoningEffortsForConfig } from './adapter.ts'
 import { configProblem, createCourseService, type CourseService } from './course.ts'
+import { agentSkillPrompt } from './skills.ts'
 import { loadChatConfig } from './config.ts'
 import { AGENT_PRESET_PROMPTS, discoverModels, settingsPayload, saveProvider } from './settings.ts'
 import { stateDirOf } from '@syllora/course-builder'
@@ -280,6 +281,8 @@ export interface AgentRuntimeConfig {
   readonly agentPreset: string
   /** 自定义预设提示词（空串=用预设自带默认）。快照进 agent/config 事件，便于回看当时生效的提示词。 */
   readonly agentSystemPrompt: string
+  /** 教学技能 id（空串=不启用）；正文由 agentSkillPrompt 解析后追加到系统提示词。 */
+  readonly agentSkill: string
   readonly permissionPreset: 'read-only' | 'workspace-write' | 'danger-full-access'
   readonly plugins: Record<string, boolean>
 }
@@ -288,6 +291,7 @@ function runtimeConfigOf(config: ResolvedChatConfig): AgentRuntimeConfig {
   return {
     agentPreset: config.agentPreset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: config.agentSystemPrompt ?? '',
+    agentSkill: config.agentSkill ?? '',
     permissionPreset: config.permissionPreset === 'read-only' || config.permissionPreset === 'danger-full-access' ? config.permissionPreset : 'workspace-write',
     plugins: Object.fromEntries(Object.entries(config.plugins ?? {}).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')),
   }
@@ -320,8 +324,8 @@ async function ensureAgentRuntimeConfig(events: SessionEventStore, sessionId: st
   if (existingLock !== undefined) return existingLock
   const pending = (async (): Promise<AgentRuntimeConfig> => {
     const current = (await events.project(sessionId).catch(() => null))?.agentConfig
-    // 旧会话的 agent/config 行没有 agentSystemPrompt：补齐为空串再返回。
-    if (current !== null && current !== undefined) return { agentSystemPrompt: '', ...current }
+    // 旧会话的 agent/config 行没有 agentSystemPrompt / agentSkill：补齐为空串再返回。
+    if (current !== null && current !== undefined) return { agentSystemPrompt: '', agentSkill: '', ...current }
     const snapshot = runtimeConfigOf(config)
     await events.append(sessionId, { ts: utcTs(), type: 'agent/config', payload: { ...snapshot } })
     return snapshot
@@ -372,10 +376,15 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
   // 用户在「Agent 管理」里写的自定义提示词优先；留空则回退到预设自带的默认提示词。
   const presetId = options.runtimeConfig?.agentPreset === 'general' ? 'general' : 'syllora-learning'
   const customPrompt = options.runtimeConfig?.agentSystemPrompt?.trim() ?? ''
+  // 教学技能是叠加在预设/自定义提示词之后的教学策略，不覆盖它们。
+  const skillPrompt = agentSkillPrompt(options.runtimeConfig?.agentSkill)
+  const basePrompt = customPrompt !== '' ? customPrompt : AGENT_PRESET_PROMPTS[presetId] ?? ''
   const preset: AgentPreset = {
     id: presetId,
     label: presetId === 'general' ? 'General Agent' : 'Syllora Learning Tutor',
-    systemPrompt: customPrompt !== '' ? customPrompt : AGENT_PRESET_PROMPTS[presetId] ?? '',
+    systemPrompt: skillPrompt === '' ? basePrompt : `${basePrompt}
+
+${skillPrompt}`,
   }
   return new AgentLoop({
     agentId: options.agentId ?? `study-${options.sessionId}`,

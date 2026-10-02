@@ -78,6 +78,10 @@ export interface SettingsPayload {
     systemPrompt: string;
     maxPromptChars: number;
     presets: Array<{ id: string; name: string; description: string; defaultPrompt: string }>;
+    /** 当前启用的教学技能 id；空串＝不启用。 */
+    skill: string;
+    /** 可选教学技能清单（正文在宿主侧 skills.ts）。 */
+    skills: Array<{ id: string; name: string; description: string }>;
   };
   permissions: { preset: string; presets: Array<{ id: string; name: string; sandboxMode: "read-only" | "workspace-write" | "danger-full-access"; approvalPolicy: "deny" | "ask" | "never"; description: string }> };
   plugins: { inventory: Array<{ id: string; name: string; enabled: boolean; source: "builtin" | "workspace"; reason?: string }> };

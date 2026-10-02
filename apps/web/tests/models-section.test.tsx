@@ -88,7 +88,7 @@ function makePayload(providers: SettingsPayload["providers"]): SettingsPayload {
     },
     providers,
     ui: { defaultMode: "quick" },
-    agent: { preset: "default", systemPrompt: "", maxPromptChars: 8000, presets: [] },
+    agent: { preset: "default", systemPrompt: "", maxPromptChars: 8000, presets: [], skill: "", skills: [] },
     permissions: { preset: "workspace-write", presets: [] },
     plugins: { inventory: [] },
   };

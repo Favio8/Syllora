@@ -513,7 +513,13 @@ function OutlineManagePage({course,scope,setScope,estimates,setEstimates,busy,on
   </div>;
 }
 
-/** 「Agent 管理」：复用宿主既有的 settings.get/update（agentPreset/permissionPreset/plugins/agentSystemPrompt）。 */
+/** 一级行上的技能摘要：未启用时说明白，避免看起来像"什么都没配"。 */
+function skillLabel(payload:SettingsPayload,skill:string):string{
+  if(skill==='')return '未启用 · 点击选择教学策略';
+  return payload.agent.skills.find(item=>item.id===skill)?.name??skill;
+}
+
+/** 「Agent 管理」：复用宿主既有的 settings.get/update（agentPreset/agentSkill/permissionPreset/plugins）。 */
 function AgentManageDialog({onClose}:{onClose:()=>void}) {
   const [payload,setPayload]=useState<SettingsPayload|null>(null);
   const [preset,setPreset]=useState('syllora-learning');
@@ -521,13 +527,15 @@ function AgentManageDialog({onClose}:{onClose:()=>void}) {
   // 三项各占一行，细节进二级面板：预设用下拉框就地选，插件/技能点进去看
   // （不再把全部设置内容平铺在一个弹窗里）。
   const [pane,setPane]=useState<'root'|'plugins'|'skills'>('root');
-  const [skills,setSkills]=useState<ToolInventoryEntry[]|null>(null);
+  const [skill,setSkill]=useState('');
+  const [tools,setTools]=useState<ToolInventoryEntry[]|null>(null);
   const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState('');
-  useEffect(()=>{let disposed=false;void api.settings().then(data=>{if(disposed)return;setPayload(data);setPreset(data.agent.preset);setPlugins(Object.fromEntries(data.plugins.inventory.map(item=>[item.id,item.enabled])))}).catch(reason=>{if(!disposed)setError(reason instanceof Error?reason.message:'无法读取 Agent 配置')});return()=>{disposed=true}},[]);
-  // 技能清单只读：宿主按插件与运行能力给出当前可调用的工具，进面板时才拉取。
-  useEffect(()=>{if(pane!=='skills'||skills!==null)return;let disposed=false;void api.tools().then(result=>{if(!disposed)setSkills(result.tools)}).catch(reason=>{if(!disposed){setSkills([]);setError(reason instanceof Error?reason.message:'无法读取技能清单')}});return()=>{disposed=true}},[pane,skills]);
+  useEffect(()=>{let disposed=false;void api.settings().then(data=>{if(disposed)return;setPayload(data);setPreset(data.agent.preset);setSkill(data.agent.skill);setPlugins(Object.fromEntries(data.plugins.inventory.map(item=>[item.id,item.enabled])))}).catch(reason=>{if(!disposed)setError(reason instanceof Error?reason.message:'无法读取 Agent 配置')});return()=>{disposed=true}},[]);
+  // 工具清单只读：宿主按插件与运行能力给出当前可调用的工具；折叠在技能面板里，展开时才拉取。
+  const [toolsOpen,setToolsOpen]=useState(false);
+  useEffect(()=>{if(!toolsOpen||tools!==null)return;let disposed=false;void api.tools().then(result=>{if(!disposed)setTools(result.tools)}).catch(reason=>{if(!disposed){setTools([]);setError(reason instanceof Error?reason.message:'无法读取工具清单')}});return()=>{disposed=true}},[toolsOpen,tools]);
   const enabledPlugins=payload?payload.plugins.inventory.filter(item=>plugins[item.id]??item.enabled).length:0;
-  const save=async()=>{setBusy(true);setError('');setNotice('');try{const next=await api.updateSettings({agentPreset:preset,plugins});setPayload(next);setNotice('已保存。新的对话回合生效；进行中的回合不变。')}catch(reason){setError(reason instanceof Error?reason.message:'保存失败')}finally{setBusy(false)}};
+  const save=async()=>{setBusy(true);setError('');setNotice('');try{const next=await api.updateSettings({agentPreset:preset,agentSkill:skill,plugins});setPayload(next);setNotice('已保存。新的对话回合生效；进行中的回合不变。')}catch(reason){setError(reason instanceof Error?reason.message:'保存失败')}finally{setBusy(false)}};
   const policyGroups:[string,string][]=[['read','读取'],['action','操作'],['write','写入'],['interactive','交互']];
   return <div className="sy-overlay" onClick={onClose}><section className="sy-modal sy-agent-manage" role="dialog" aria-modal="true" aria-label="Agent 管理" onClick={event=>event.stopPropagation()}>
     <header><h2>Agent 管理</h2><button aria-label="关闭 Agent 管理" onClick={onClose}><X size={19}/></button></header>
@@ -538,16 +546,20 @@ function AgentManageDialog({onClose}:{onClose:()=>void}) {
       {error&&<p role="alert" className="sy-agent-error">{error}</p>}
       <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save().then(()=>setPane('root'))}>{busy?'保存中…':'保存并返回'}</button><button disabled={busy} onClick={()=>setPane('root')}>返回</button></div>
     </>:pane==='skills'?<>
-      <button className="sy-agent-back" onClick={()=>setPane('root')}><ArrowLeft size={15}/>技能</button>
-      <p className="sy-muted">技能是 Agent 当前可调用的工具，由插件与运行能力提供；这里是只读清单。</p>
-      {skills===null?<p className="sy-muted">正在读取技能清单…</p>:skills.length===0?<p className="sy-muted">当前没有可用技能。</p>:<div className="sy-agent-skills">{policyGroups.map(([policy,label])=>{const items=skills.filter(item=>item.policy===policy);if(!items.length)return null;return <section key={policy}><h3>{label}<small>{items.length}</small></h3>{items.map(item=><div className="sy-agent-skill" key={item.name}><strong>{item.description}</strong><small>{item.name}{item.requiresApproval?' · 需要审批':''}{item.providerStatus&&!item.providerStatus.available?` · ${item.providerStatus.reason??'运行能力未启用'}`:''}</small></div>)}</section>})}</div>}
+      <button className="sy-agent-back" onClick={()=>setPane('root')}><ArrowLeft size={15}/>教学技能</button>
+      <p className="sy-muted">技能是一套教学策略，选中后追加到 Agent 的系统提示词（不改写预设与自定义提示词）。一次只启用一个。</p>
+      <div className="sy-agent-radios">{payload.agent.skills.length===0?<p className="sy-muted">宿主没有提供可选技能。</p>:[{id:'',name:'不启用',description:'只用预设提示词'} as const,...payload.agent.skills].map(item=><label key={item.id||'none'} className={"sy-agent-radio"+(skill===item.id?" is-selected":"")}><input type="radio" name="agent-skill" checked={skill===item.id} onChange={()=>setSkill(item.id)}/><span><strong>{item.name}</strong><small>{item.description}</small></span></label>)}</div>
+      <details className="sy-agent-tools" onToggle={event=>{if((event.target as HTMLDetailsElement).open)setToolsOpen(true)}}>
+        <summary>查看当前可调用的工具（只读）</summary>
+        {tools===null?<p className="sy-muted">正在读取工具清单…</p>:tools.length===0?<p className="sy-muted">当前没有可用工具。</p>:<div className="sy-agent-skills">{policyGroups.map(([policy,label])=>{const items=tools.filter(item=>item.policy===policy);if(!items.length)return null;return <section key={policy}><h3>{label}<small>{items.length}</small></h3>{items.map(item=><div className="sy-agent-skill" key={item.name}><strong>{item.description}</strong><small>{item.name}{item.requiresApproval?' · 需要审批':''}{item.providerStatus&&!item.providerStatus.available?` · ${item.providerStatus.reason??'运行能力未启用'}`:''}</small></div>)}</section>})}</div>}
+      </details>
       {error&&<p role="alert" className="sy-agent-error">{error}</p>}
-      <div className="sy-row"><button onClick={()=>setPane('root')}>返回</button></div>
+      <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save().then(()=>setPane('root'))}>{busy?'保存中…':'保存并返回'}</button><button disabled={busy} onClick={()=>setPane('root')}>返回</button></div>
     </>:<>
       <p className="sy-muted">配置对话所用的 Agent 预设、插件与技能。保存后对新的回合生效；权限在输入框下方的「权限」里即时切换。</p>
       <label className="sy-agent-field"><span>Agent 预设</span><Dropdown label="Agent 预设" value={preset} onChange={setPreset} options={payload.agent.presets.map(item=>({value:item.id,label:`${item.name} · ${item.description}`}))}/></label>
       <div className="sy-agent-field"><span>插件</span><button className="sy-agent-entry" onClick={()=>setPane('plugins')}><span><strong>插件</strong><small>已启用 {enabledPlugins} / {payload.plugins.inventory.length}</small></span><ChevronRight size={16}/></button></div>
-      <div className="sy-agent-field"><span>技能</span><button className="sy-agent-entry" onClick={()=>setPane('skills')}><span><strong>技能</strong><small>查看 Agent 当前可调用的工具</small></span><ChevronRight size={16}/></button></div>
+      <div className="sy-agent-field"><span>技能</span><button className="sy-agent-entry" onClick={()=>setPane('skills')}><span><strong>教学技能</strong><small>{skillLabel(payload,skill)}</small></span><ChevronRight size={16}/></button></div>
       {notice&&<p role="status" className="sy-muted">{notice}</p>}
       {error&&<p role="alert" className="sy-agent-error">{error}</p>}
       <div className="sy-row"><button className="sy-primary" disabled={busy} onClick={()=>void save()}>{busy?'保存中…':'保存'}</button><button disabled={busy} onClick={onClose}>取消</button></div>

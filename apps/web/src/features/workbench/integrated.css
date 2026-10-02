@@ -365,6 +365,19 @@
 .sy-modal .sy-agent-plugin input{margin-top:3px;flex-shrink:0}
 .sy-modal .sy-agent-plugin strong{display:block;font-size:12.5px}
 .sy-modal .sy-agent-plugin small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+/* 技能面板：单选行（教学技能）+ 折叠的工具清单。 */
+.sy-modal .sy-agent-radios{display:grid;gap:8px}
+.sy-modal .sy-agent-radio{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer}
+.sy-modal .sy-agent-radio.is-selected{border-color:var(--blue);background:var(--blue-light)}
+.sy-modal.sy-agent-manage .sy-agent-radio input[type=radio]{width:auto;height:auto;margin-top:3px;flex-shrink:0;padding:0;border:0;background:transparent}
+/* syllora.css 的 .sy-app input:not([type=checkbox]):not([type=file]) 是 (0,3,1)（:not 各计一个属性选择器），
+   会把这个单选按钮撑成 width:100%；上面的选择器 (0,4,1) 才压得住。 */
+.sy-modal .sy-agent-radio strong{display:block;font-size:12.5px}
+.sy-modal .sy-agent-radio small{display:block;color:var(--muted);font-size:11px;margin-top:2px;line-height:1.6}
+.sy-agent-tools{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.sy-agent-tools>summary{cursor:pointer;width:fit-content;font-size:12px;color:var(--muted)}
+.sy-agent-tools>summary:hover{color:var(--blue)}
+.sy-agent-tools .sy-agent-skills{margin-top:12px;max-height:40dvh}
 /* 技能：只读清单，按策略分组。 */
 .sy-agent-skills{display:grid;gap:14px;max-height:52dvh;overflow:auto;padding-right:4px}
 .sy-agent-skills h3{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin-bottom:7px}

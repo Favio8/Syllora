@@ -4,7 +4,8 @@
  * 规则来自对真实题池的体检结论：
  * - 正确项恒最长（承载全部限定词，干扰项 30~60 字）→ 长度失衡卡直接丢弃；
  * - MCQ 缺/越界 answer_index → 无法客观判分，丢弃；
- * - 同概念内题干近似重复 → 丢弃后到者。
+ * - 同概念内题干近似重复 → 丢弃后到者；
+ * - 跨题答案泄漏（一题的题干/解析里出现另一题的正确选项文本）→ 丢弃泄漏卡（见下）。
  * @module @syllora/course-builder/src/quality
  */
 
@@ -53,6 +54,28 @@ export function checkTaskQuality(task: HarnessTask, seenQuestions: string[]): st
   return null
 }
 
+/** 归一化任意文本（题干、解析、选项）：用于跨题答案泄漏比对。 */
+function normalizeText(value: string): string {
+  return value.toLowerCase().replace(/[\s，。；：、！？"'"（）()【】\[\]—\-·…]/g, '')
+}
+
+/** 跨题泄漏的最短判定长度：短选项（"3"、"加"）会在任何文本里误命中。 */
+const LEAK_MIN_CHARS = 4
+
+/**
+ * 跨题答案泄漏：本题的**题干或解析**里，不得出现**另一题正确选项**的文本。
+ * 逐字包含才算（归一化后），因为这是"答案被别的题面说破"的确凿形态；
+ * 相似但不相同的表述交给人看，不做模糊判定。
+ */
+export function checkCrossQuestionLeak(task: HarnessTask, otherAnswers: string[]): string | null {
+  const own = normalizeText(`${task.question}${task.answer_rationale ?? ''}`)
+  for (const answer of otherAnswers) {
+    if (answer.length < LEAK_MIN_CHARS) continue
+    if (own.includes(answer)) return `题干或解析中含另一题的正确选项文本（"${answer.slice(0, 12)}…"），会泄漏答案`
+  }
+  return null
+}
+
 /** 对一批新卡执行质量闸：按序保留合格卡、记录丢弃原因与答案位置分布。 */
 export function enforceTaskQuality(tasks: readonly HarnessTask[]): QualityGateResult {
   const kept: HarnessTask[] = []
@@ -69,12 +92,30 @@ export function enforceTaskQuality(tasks: readonly HarnessTask[]): QualityGateRe
     const scopeSeen = seenByScope.get(scope) ?? []
     scopeSeen.push(normalizeQuestion(task.question))
     seenByScope.set(scope, scopeSeen)
-    if (Array.isArray(task.options) && task.options.length > 0 && task.answer_index !== null && task.answer_index !== undefined) {
-      answerPositionHistogram[task.answer_index] = (answerPositionHistogram[task.answer_index] ?? 0) + 1
-    }
     kept.push(task)
   }
-  return { kept, dropped, answerPositionHistogram }
+  // 第二遍：跨题泄漏。先收集全部合格卡的正确选项，再逐卡比对"别人的答案"
+  // ——同一批里题目是连着做的，任何一题的答案被另一题的题面说破都算泄漏。
+  const answers = kept.map(task => {
+    const index = task.answer_index
+    if (!Array.isArray(task.options) || index === null || index === undefined || index < 0 || index >= task.options.length) return ''
+    return normalizeText(task.options[index] ?? '')
+  })
+  const finalKept: HarnessTask[] = []
+  for (const [position, task] of kept.entries()) {
+    const others = answers.filter((_, index) => index !== position && answers[index] !== '')
+    const leak = checkCrossQuestionLeak(task, others)
+    if (leak !== null) {
+      dropped.push({ taskId: task.task_id, reason: leak })
+      continue
+    }
+    const index = task.answer_index
+    if (Array.isArray(task.options) && task.options.length > 0 && index !== null && index !== undefined) {
+      answerPositionHistogram[index] = (answerPositionHistogram[index] ?? 0) + 1
+    }
+    finalKept.push(task)
+  }
+  return { kept: finalKept, dropped, answerPositionHistogram }
 }
 
 /** 答案位置偏斜告警：单一位置占比超阈值时提示（不丢弃，仅提示出题方）。 */

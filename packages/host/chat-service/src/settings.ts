@@ -15,6 +15,7 @@ import { workspaceStateDirOf } from '@syllora/tools'
 import { ANTHROPIC_VERSION, anthropicEndpoint } from '@syllora/llm-anthropic'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
 import { MAX_AGENT_PROMPT_CHARS } from './config.ts'
+import { AGENT_SKILLS, AGENT_SKILL_IDS } from './skills.ts'
 import { sharedConfigRootOf } from './shared-root.ts'
 
 export interface ProviderModelPayload {
@@ -76,7 +77,16 @@ export interface SettingsPayload {
   }
   readonly providers: ProviderPayload[]
   readonly ui: { readonly defaultMode: string }
-  readonly agent: { readonly preset: string; readonly systemPrompt: string; readonly maxPromptChars: number; readonly presets: AgentPresetPayload[] }
+  readonly agent: {
+    readonly preset: string
+    readonly systemPrompt: string
+    readonly maxPromptChars: number
+    readonly presets: AgentPresetPayload[]
+    /** 当前启用的教学技能 id；空串=不启用。 */
+    readonly skill: string
+    /** 可选教学技能清单（正文在 skills.ts，这里只给展示用的名称与描述）。 */
+    readonly skills: Array<{ readonly id: string; readonly name: string; readonly description: string }>
+  }
   readonly permissions: { readonly preset: string; readonly presets: PermissionPresetPayload[] }
   readonly plugins: { readonly inventory: PluginInventoryPayload[] }
 }
@@ -106,7 +116,7 @@ interface ConfigYaml {
   providers?: Record<string, ProviderConfigYaml>
   active_provider?: string
   ui?: { default_mode?: string }
-  agent?: { preset?: string; system_prompt?: string }
+  agent?: { preset?: string; system_prompt?: string; skill?: string }
   permissions?: { preset?: string }
   plugins?: Record<string, unknown>
 }
@@ -315,7 +325,14 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
     },
     providers,
     ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'quick' },
-    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning', systemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim() : '', maxPromptChars: MAX_AGENT_PROMPT_CHARS, presets: AGENT_PRESETS },
+    agent: {
+      preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning',
+      systemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim() : '',
+      maxPromptChars: MAX_AGENT_PROMPT_CHARS,
+      presets: AGENT_PRESETS,
+      skill: AGENT_SKILL_IDS.includes(config.agent?.skill ?? '') ? config.agent!.skill! : '',
+      skills: AGENT_SKILLS.map(item => ({ id: item.id, name: item.name, description: item.description })),
+    },
     permissions: { preset: PERMISSION_PRESETS.some(item => item.id === config.permissions?.preset) ? config.permissions!.preset! : 'workspace-write', presets: PERMISSION_PRESETS },
     plugins: { inventory: pluginInventory(config) },
   }
@@ -694,6 +711,8 @@ export async function updateSettings(workspaceRoot: string, partial: {
   agentPreset?: string
   /** 自定义预设提示词；空串表示清除（回到预设自带默认）。 */
   agentSystemPrompt?: string
+  /** 教学技能 id；空串表示不启用。 */
+  agentSkill?: string
   permissionPreset?: string
   plugins?: Record<string, boolean>
 }): Promise<SettingsPayload> {
@@ -724,7 +743,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
       }
       nextUi.default_mode = partial.defaultMode
     }
-    const nextAgent: { preset?: string; system_prompt?: string } = { ...(config.agent ?? {}) }
+    const nextAgent: { preset?: string; system_prompt?: string; skill?: string } = { ...(config.agent ?? {}) }
     if (partial.agentPreset !== undefined) {
       if (!AGENT_PRESETS.some(item => item.id === partial.agentPreset)) throw new Error('Agent preset 无效')
       nextAgent.preset = partial.agentPreset
@@ -735,6 +754,13 @@ export async function updateSettings(workspaceRoot: string, partial: {
       // 空串=清除：写 undefined 让 yaml 不留空字段，读取时自然回退到预设默认。
       if (value === '') delete nextAgent.system_prompt
       else nextAgent.system_prompt = value
+    }
+    if (partial.agentSkill !== undefined) {
+      const value = partial.agentSkill.trim()
+      if (value !== '' && !AGENT_SKILL_IDS.includes(value)) throw new Error(`教学技能不存在: ${value}`)
+      // 空串=清除：不启用技能时不往 yaml 里写空字段。
+      if (value === '') delete nextAgent.skill
+      else nextAgent.skill = value
     }
     const nextPermissions = { ...(config.permissions ?? {}) }
     if (partial.permissionPreset !== undefined) {

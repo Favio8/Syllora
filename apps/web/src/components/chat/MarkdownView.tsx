@@ -16,6 +16,8 @@
 import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import InteractiveViz from "./InteractiveViz";
+import ChartViz from "./ChartViz";
+import DiagramViz from "./DiagramViz";
 import { splitVizSegments } from "@/src/lib/vizSegments";
 import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from "@/src/lib/markdownPlugins";
 
@@ -180,6 +182,10 @@ export default function MarkdownView({
             key={seg.key}
             code={seg.code}
           />
+        ) : seg.kind === "chart" ? (
+          <ChartViz key={seg.key} code={seg.code} closed={seg.closed} streaming={streaming} />
+        ) : seg.kind === "diagram" ? (
+          <DiagramViz key={seg.key} code={seg.code} closed={seg.closed} streaming={streaming} />
         ) : (
           <InteractiveViz
             key={seg.key}
