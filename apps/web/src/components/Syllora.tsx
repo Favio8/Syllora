@@ -35,6 +35,15 @@ import '../features/workbench/restored.css';
 import { useModalFocus } from '../features/workbench/useModalFocus';
 const uuid = () => crypto.randomUUID();
 const formatTime = (at:number,zone:string) => new Intl.DateTimeFormat('zh-CN',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(at);
+/** 需求六：进度条上的预计剩余时间与并发提示（数据来自后端进度事件）。 */
+const formatDuration = (ms:number) => {const total=Math.max(0,Math.round(ms/1000));const minutes=Math.floor(total/60);return minutes>0?`约 ${minutes} 分 ${total%60} 秒`:`约 ${total} 秒`};
+function jobEtaNote(job:{progress?:{etaMs?:number;concurrency?:number;stage?:string}}):string {
+  const progress=job.progress;if(!progress)return '';
+  const parts:string[]=[]
+  if(typeof progress.etaMs==='number'&&progress.etaMs>0)parts.push(`预计剩余 ${formatDuration(progress.etaMs)}`)
+  if(progress.concurrency!==undefined&&progress.stage==='organizing')parts.push(`并发 ${progress.concurrency}`)
+  return parts.length>0?` · ${parts.join(' · ')}`:'';
+}
 
 /** 桌面壳经 contextBridge 暴露的桥。浏览器里整块不存在（undefined），
  *  所以所有调用点都必须先判空——「本机与诊断」在浏览器下退化为只显示提示。 */
@@ -329,7 +338,7 @@ export default function Syllora() {
         </DiscussionShell>}
       </div>
       </AgentChat>
-      {running?<div className="sy-job" role="status"><LoaderCircle size={16} className="sy-spin"/><span>{running.message}{running.createdAt&&Date.now()-running.createdAt>=60000?' · 已等待超过 60 秒，仍在查询原任务；可取消，不会自动重复生成。':''}</span><button onClick={()=>void run('cancel',{jobId:running.id})}>取消</button></div>:lastJob?.state==='failed'?<div className="sy-job sy-error" role="alert">{lastJob.message}{lastJob.errorCode?`（${lastJob.errorCode}）`:''}</div>:coverageNote?<div className="sy-job" role="status">{coverageNote}</div>:null}
+      {running?<div className="sy-job" role="status"><LoaderCircle size={16} className="sy-spin"/><span>{running.message}{jobEtaNote(running)}{running.createdAt&&Date.now()-running.createdAt>=60000?' · 已等待超过 60 秒，仍在查询原任务；可取消，不会自动重复生成。':''}</span><button onClick={()=>void run('cancel',{jobId:running.id})}>取消</button></div>:lastJob?.state==='failed'?<div className="sy-job sy-error" role="alert">{lastJob.message}{lastJob.errorCode?`（${lastJob.errorCode}）`:''}</div>:coverageNote?<div className="sy-job" role="status">{coverageNote}</div>:null}
       {!course.folder&&<form className="sy-composer" onSubmit={async e=>{e.preventDefault();const courseId=selected,submitted=cacheRef.current[courseId]?.revision??0;const accepted=await generate('answer',{prompt,...(task&&!(course.blockedPointIds??[]).includes(task.pointId)?{taskId:task.id}:{})}) as {draftVersion?:number}|null;if(accepted){const local=cacheRef.current[courseId];if(local&&accepted.draftVersion!==undefined)cacheRef.current={...cacheRef.current,[courseId]:{...local,baseVersion:accepted.draftVersion}};if((cacheRef.current[courseId]?.revision??0)===submitted){const revision=submitted+1;cacheRef.current={...cacheRef.current,[courseId]:{prompt:'',answers:cacheRef.current[courseId]?.answers??{},revision,savedRevision:revision,savedAt:Date.now(),baseVersion:accepted.draftVersion??cacheRef.current[courseId]?.baseVersion??0}};if(selectedRef.current===courseId){promptRef.current='';setPrompt('')}}saveDraftRecovery(cacheRef.current);}}}><input aria-label="向课程资料提问" placeholder={course.materials.some(m=>m.status!=='deleted')?'向课程资料提问，追问会带上本课程最近对话…':'先在右侧导入学习资料'} value={prompt} onChange={e=>rememberPrompt(e.target.value)} disabled={course.archived} maxLength={4000}/><button className="sy-primary" title="发送问题" aria-label="发送问题" disabled={!prompt.trim()||busy||!!running||course.archived}><Send size={18}/></button><small>未发送的问题按课程保存 · 依据只来自所选课程资料 · 模型生成内容需要核验</small></form>}
       </>}</>}
     </main>

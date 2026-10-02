@@ -59,7 +59,25 @@ export class SylloraService {
     fileName?: string;
     courseRoot?: string;
     isConsented?: () => Promise<boolean>;
+    /**
+     * 需求六：整理阶段的有界并发（默认 3，可配）。1 = 串行（旧行为）。
+     * 大小资料初始化按此并发调用模型；遇限流自动退避并临时下调。
+     */
+    initializeConcurrency?: number;
+    /** 需求六：解析阶段的有界并发（默认 2）。 */
+    parseConcurrency?: number;
   } = {}) {}
+  /**
+   * 需求六：整理并发度的默认值（建议值 3，可配）。优先取显式构造选项，其次
+   * `SYLLORA_INIT_CONCURRENCY`（本机部署可调），最后默认 3。始终有界 1..8：
+   * 无上限的并发会直接把供应商打成 429。
+   */
+  private async initializeConcurrency(): Promise<number> {
+    const explicit = this.options.initializeConcurrency
+    const raw = explicit ?? Number(process.env.SYLLORA_INIT_CONCURRENCY ?? '')
+    const value = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 3
+    return Math.max(1, Math.min(8, value))
+  }
   async settleJobs() { await Promise.allSettled([...this.workers.values()]) }
   async prepareDeletion() {
     this.deleting = true
@@ -652,7 +670,8 @@ export class SylloraService {
     },false)
     try {
       const delegate=this.options.client?.(config)??createDeepSeekToolClient(config)
-      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),...(this.options.document?{document:this.options.document}:{}),check,
+      const concurrency=await this.initializeConcurrency()
+      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,concurrency,...(this.options.parseConcurrency===undefined?{}:{parseConcurrency:this.options.parseConcurrency}),modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),...(this.options.document?{document:this.options.document}:{}),check,
         progress:async progress=>{await check();await this.transaction(db=>{const current=db.jobs.find(j=>j.id===job.id)!;current.progress=progress;current.message=progress.message})},
         call:async (sources,prompt)=>{
           await check()
