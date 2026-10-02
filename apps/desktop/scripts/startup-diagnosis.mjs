@@ -1,3 +1,6 @@
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 /**
  * Desktop smoke launch options and failure text.
  *
@@ -64,4 +67,26 @@ export function describeMissingHost({ desktopLog, spawnCode, exit, windowsHide, 
   }
   if (desktopLog) lines.push(redactSecrets(desktopLog))
   return lines.join('\n')
+}
+
+/** Read only bounded, redacted logs from the smoke's fresh synthetic userData. */
+export function collectHostStartupEvidence(userData) {
+  const home = join(userData, 'host-home')
+  const logDir = join(home, 'logs')
+  const evidence = {
+    homeCreated: existsSync(home),
+    instanceLockCreated: existsSync(join(home, 'host.lock')),
+    discoveryCreated: existsSync(join(home, 'host.json')),
+    logs: [],
+  }
+  try {
+    for (const name of readdirSync(logDir).filter(name => /^host-\d{4}-\d{2}-\d{2}\.log$/.test(name)).sort().slice(-2)) {
+      const path = join(logDir, name)
+      const info = lstatSync(path)
+      if (!info.isFile()) continue
+      const text = info.size <= 1024 * 1024 ? redactSecrets(readFileSync(path, 'utf8')).slice(-16000) : '[omitted: log exceeds 1 MiB]'
+      evidence.logs.push({ name, text })
+    }
+  } catch { /* The host may have failed before creating its log directory. */ }
+  return evidence
 }

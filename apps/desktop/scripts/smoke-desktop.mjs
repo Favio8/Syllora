@@ -18,7 +18,7 @@ import { existsSync, readFileSync, rmSync, mkdtempSync, mkdirSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, redactSecrets } from './startup-diagnosis.mjs'
+import { collectHostStartupEvidence, describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, redactSecrets } from './startup-diagnosis.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const desktop = resolve(here, '..')
@@ -173,13 +173,15 @@ pass = fatalErrors.length === 0 && ui.ok && html.includes('__SYLLORA__')
 console.log(pass ? '[smoke] RESULT: PASS' : '[smoke] RESULT: FAIL')
 } catch (error) {
   console.error('[smoke] FAIL:', error.message)
+  console.error('[smoke] host startup evidence:', JSON.stringify(collectHostStartupEvidence(userData)))
 } finally {
   // Keep only startup diagnostics, never host.json (which contains a token).
   const artifacts = process.env.SYLLORA_SMOKE_ARTIFACTS
   if (artifacts) {
     mkdirSync(artifacts, { recursive: true })
     writeFileSync(join(artifacts, 'desktop-startup.log'), diagnostics())
-    writeFileSync(join(artifacts, 'smoke-summary.json'), JSON.stringify({ pass, platform: process.platform, spawnError: spawnError?.code ?? null, exit }, null, 2))
+    writeFileSync(join(artifacts, 'smoke-summary.json'), JSON.stringify({ pass, platform: process.platform, spawnError: spawnError?.code ?? null, exit, host: collectHostStartupEvidence(userData) }, null, 2))
+    writeFileSync(join(artifacts, 'process-output.log'), redactSecrets(out))
   }
   killTree(child.pid)
   if (cfg?.pid && pidAlive(cfg.pid)) killTree(cfg.pid)

@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, startupStage } from '../apps/desktop/scripts/startup-diagnosis.mjs'
+import { tmpdir } from 'node:os'
+import { join, resolve, sep } from 'node:path'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { afterEach, describe, expect, it } from 'vitest'
+import { collectHostStartupEvidence, describeMissingHost, diagnosticEntries, electronLaunchOptions, formatStage, startupStage } from '../apps/desktop/scripts/startup-diagnosis.mjs'
 
 describe('desktop startup diagnosis', () => {
   it('keeps the Windows GUI child hidden when stdio is piped', () => {
@@ -71,4 +73,37 @@ describe('desktop startup diagnosis', () => {
     expect(smokeEnvAt).toBeLessThan(dialogAt)
     expect(smoke).toContain("SYLLORA_DESKTOP_SMOKE: '1'")
   })
+})
+
+const owned: string[] = []
+function fixture() { const root = mkdtempSync(join(tmpdir(), 'syllora-startup-test-')); owned.push(root); return root }
+afterEach(() => { for (const root of owned.splice(0)) { if (!resolve(root).startsWith(resolve(tmpdir()) + sep)) throw new Error('Fixture escaped temporary directory'); rmSync(root, { recursive: true, force: true }) } })
+
+it('identifies a failure before the host creates any files', () => {
+  expect(collectHostStartupEvidence(fixture())).toEqual({ homeCreated: false, instanceLockCreated: false, discoveryCreated: false, logs: [] })
+})
+it('reports startup milestones and redacts logs without reading credential files', () => {
+  const root = fixture(), home = join(root, 'host-home'), logs = join(home, 'logs')
+  mkdirSync(logs, { recursive: true })
+  writeFileSync(join(home, 'host.lock'), '{}')
+  writeFileSync(join(home, 'host.json'), '{"token":"never-read-discovery-token"}')
+  writeFileSync(join(logs, 'credentials.json'), 'never-read-provider-secret')
+  writeFileSync(join(logs, 'host-2026-10-02.log'), 'startup failed Bearer synthetic-secret\n{"apiKey":"synthetic-api-key"}')
+  const result = collectHostStartupEvidence(root)
+  expect(result.instanceLockCreated).toBe(true)
+  expect(result.discoveryCreated).toBe(true)
+  expect(result.logs).toHaveLength(1)
+  const serialized = JSON.stringify(result)
+  for (const secret of ['never-read-discovery-token', 'never-read-provider-secret', 'synthetic-secret', 'synthetic-api-key']) expect(serialized).not.toContain(secret)
+  expect(serialized).toContain('[redacted]')
+})
+it('bounds diagnostic output before a failed process produces excessive logs', () => {
+  const root = fixture(), logs = join(root, 'host-home', 'logs')
+  mkdirSync(logs, { recursive: true })
+  writeFileSync(join(logs, 'host-2026-10-01.log'), 'a'.repeat(32000) + ' startup failure')
+  writeFileSync(join(logs, 'host-2026-10-02.log'), 'a'.repeat(1024 * 1024 + 1))
+  const result = collectHostStartupEvidence(root)
+  expect(result.logs[0].text).toHaveLength(16000)
+  expect(result.logs[0].text).toContain('startup failure')
+  expect(result.logs[1].text).toBe('[omitted: log exceeds 1 MiB]')
 })
