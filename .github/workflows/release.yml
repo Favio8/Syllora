@@ -209,7 +209,11 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
       - name: Combine macOS architecture update metadata
-        run: node apps/desktop/scripts/gen-update-info.mjs --target mac --dist "$GITHUB_WORKSPACE/artifacts"
+        run: |
+          mkdir mac-update-info
+          cp artifacts/Syllora-*-arm64.zip artifacts/Syllora-*-x64.zip mac-update-info/
+          node apps/desktop/scripts/gen-update-info.mjs --target mac --dist "$GITHUB_WORKSPACE/mac-update-info"
+          cp mac-update-info/latest-mac.yml artifacts/
       - name: Record artifact checksums
         run: |
           cd artifacts
