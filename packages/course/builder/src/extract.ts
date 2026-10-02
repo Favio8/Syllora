@@ -10,6 +10,7 @@
 
 import { readFile } from 'node:fs/promises'
 import * as nodeFs from 'node:fs'
+import { Worker } from 'node:worker_threads'
 import mammoth from 'mammoth'
 import { PDFParse } from 'pdf-parse'
 import TurndownService from 'turndown'
@@ -34,13 +35,42 @@ export const EXTRACTED_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.html', '.htm'] 
 let turndown: TurndownService | null = null
 /** Page-preserving extraction for Syllora citations; no generated page numbers. */
 export async function extractPdfPages(data: Uint8Array): Promise<{ pages: Array<{ text: string; num: number }>; total: number }> {
-  const parser = new PDFParse({ data })
-  try {
-    const info = await parser.getInfo()
-    if (info.total > 50) throw new ExtractionError('单份 PDF 不能超过 50 页')
-    const result = await parser.getText()
-    return { pages: result.pages.map(p => ({ text: p.text, num: p.num })), total: result.total }
-  } finally { await parser.destroy().catch(() => undefined) }
+  // 使用内联 JS worker，源码、CLI bundle 与桌面 sidecar 共用同一入口；
+  // pdf-parse 仍由包管理器安装，解析它的绝对入口后交给 worker，无额外资产复制。
+  const worker = new Worker(`
+    const { parentPort, workerData } = require('node:worker_threads');
+    (async () => {
+      let parser;
+      let result;
+      try {
+        const { PDFParse } = await import(workerData.moduleUrl);
+        parser = new PDFParse({ data: workerData.data });
+        const info = await parser.getInfo();
+        if (info.total > 50) throw new Error('单份 PDF 不能超过 50 页');
+        const text = await parser.getText();
+        result = { pages: text.pages.map(p => ({ text: p.text, num: p.num })), total: text.total };
+      } finally { if (parser) await parser.destroy().catch(() => {}); }
+      parentPort.postMessage({ result });
+    })().catch(error => parentPort.postMessage({ error: error instanceof Error ? error.message : String(error) }));
+  `, { eval: true, execArgv: [], workerData: { moduleUrl: import.meta.resolve('pdf-parse'), data: new Uint8Array(data) } })
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (error?: Error, result?: { pages: Array<{ text: string; num: number }>; total: number }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      void worker.terminate().catch(() => undefined)
+      if (error) reject(error)
+      else resolve(result!)
+    }
+    const timer = setTimeout(() => finish(new ExtractionError('PDF 解析超过 60 秒，请拆分资料后重试')), 60_000)
+    worker.once('message', (message: { error?: string; result?: { pages: Array<{ text: string; num: number }>; total: number } }) => {
+      if (message.error || !message.result) finish(new ExtractionError(message.error ?? 'PDF worker 未返回解析结果'))
+      else finish(undefined, message.result)
+    })
+    worker.once('error', error => finish(new ExtractionError(error.message)))
+    worker.once('exit', code => { if (!settled) finish(new ExtractionError(`PDF worker 提前退出 (${code})`)) })
+  })
 }
 function turndownInstance(): TurndownService {
   turndown ??= new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })

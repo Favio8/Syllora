@@ -34,7 +34,7 @@ async function courseFixture(chapters: number): Promise<{ root: string; course: 
   const { createHash } = await import('node:crypto')
   for (let index = 1; index <= chapters; index += 1) {
     const name = `第${index}章.md`
-    const body = `# 第${index}章\n\n第${index}章的主题在这里说明，包含足够的正文长度用于整理。\n`
+    const body = `# 第${index}章\n\n本章主题${index}在这里说明，包含足够的正文长度用于整理。\n`
     await writeFile(join(root, name), body, 'utf8')
     paths.push(name)
     fingerprints[name] = createHash('sha256').update(body).digest('hex')
@@ -94,6 +94,7 @@ describe('PRD 需求六：整理阶段有界并发', () => {
     const parallel = await courseFixture(chapters)
     const parallelCounter = { calls: 0, concurrent: 0, peak: 0, rateLimited: 0 }
     const parallelRun = await run(parallel.root, parallel.course, parallel.paths, parallel.fingerprints, 3, fakeCall({ delayMs, counter: parallelCounter }))
+    process.stdout.write('60-chapter controlled benchmark '+JSON.stringify({ serialMs: serialRun.ms, concurrency3Ms: parallelRun.ms, ratio: parallelRun.ms / serialRun.ms, peak: parallelCounter.peak, model: 'synthetic 60ms delay' })+'\n')
 
     // 验收标准 1：并发 3 的总耗时不高于串行的 1/2。
     expect(parallelRun.ms).toBeLessThanOrEqual(serialRun.ms / 2)
@@ -115,6 +116,32 @@ describe('PRD 需求六：整理阶段有界并发', () => {
 })
 
 describe('PRD 需求六：限流退避', () => {
+  it('applies the reduced limit to real model calls after a 429', async () => {
+    const fixture = await courseFixture(6)
+    let limited = false, active = 0, peakAfterLimit = 0
+    const generate = fakeCall({ delayMs: 15 })
+    const progress: InitProgress[] = []
+    await initializeFolder({ root: fixture.root, course: fixture.course, paths: fixture.paths, expected: fixture.fingerprints, acceptPartial: false, jobId: randomUUID(), modelKey: 'fixture', concurrency: 3,
+      call: async (sources, prompt) => {
+        if (!limited) { limited = true; throw Object.assign(new Error('HTTP 429'), { code: 'RATE_LIMITED' }) }
+        active++; peakAfterLimit = Math.max(peakAfterLimit, active)
+        try { return await generate(sources) } finally { active-- }
+      }, progress: async item => { progress.push(item) }, check: async () => {},
+    })
+    expect(peakAfterLimit).toBe(1)
+    expect(progress.filter(item => item.stage === 'organizing').at(-1)?.concurrency).toBe(1)
+  })
+
+  it('publishes chapters and points in source order even when later chapters finish first', async () => {
+    const fixture = await courseFixture(6)
+    const generate = fakeCall({ delayMs: 0 })
+    const result = await initializeFolder({ root: fixture.root, course: fixture.course, paths: fixture.paths, expected: fixture.fingerprints, acceptPartial: false, jobId: randomUUID(), modelKey: 'fixture', concurrency: 3,
+      call: async sources => { await new Promise(resolve => setTimeout(resolve, sources[0]!.section.includes('第1章') ? 100 : 1)); return generate(sources) }, progress: async () => {}, check: async () => {},
+    })
+    expect(result.lectures.map(lecture => lecture.chapter)).toEqual(Array.from({ length: 6 }, (_, index) => `第${index + 1}章`))
+    expect(result.points.map(point => point.chapter)).toEqual(result.lectures.flatMap(lecture => lecture.concepts.map(() => lecture.chapter)))
+  })
+
   it('retries through 429s without failing and lowers the reported concurrency', async () => {
     const fixture = await courseFixture(6)
     const counter = { calls: 0, concurrent: 0, peak: 0, rateLimited: 0 }
@@ -202,16 +229,19 @@ describe('PRD 需求六：解析并行', () => {
       fingerprints[name] = createHash('sha256').update(body).digest('hex')
     }
     const course = { ...fixture.course } as Course
+    const parsingProgress: number[] = []
     const result = await initializeFolder({
       root, course, paths, expected: fingerprints, acceptPartial: false, jobId: randomUUID(), modelKey: 'fixture',
       concurrency: 1, parseConcurrency: 3, pdf, call: fakeCall({ delayMs: 5 }),
-      progress: async () => undefined, check: async () => undefined,
+      progress: async item => { if (item.stage === 'parsing') parsingProgress.push(item.done) }, check: async () => undefined,
     })
     // 解析确实并行（峰值 > 1），且有界（不超过 3）。
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(3)
     // 合并顺序保持传入顺序（材料列表与路径一一对应）。
     expect(result.materials.map(material => material.path)).toEqual(paths)
+    expect(parsingProgress).toEqual([...parsingProgress].sort((a, b) => a - b))
+    expect(parsingProgress.at(-1)).toBe(6)
   })
 })
 
