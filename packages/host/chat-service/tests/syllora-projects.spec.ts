@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -6,6 +6,7 @@ import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects, migrateSharedSettings } from '../src/syllora-projects.ts'
 import { SylloraService } from '../src/syllora.ts'
 import { selectContext, structuredSources, within } from '../src/syllora-files.ts'
+import * as files from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
 import { validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
@@ -16,12 +17,12 @@ const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'h
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
 }
-async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf']) {
+async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1) {
   await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder)
   let calls=0
   const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
-  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>config,client:()=>client,...(pdf?{pdf}:{})})
+  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency}),client:()=>client,...(pdf?{pdf}:{})})
   await projects.handle('preferences',{consent:true})
   const course=await projects.handle('openCourse',{path:folder}) as {id:string}
   return {root,folder,app,projects,id:course.id,calls:()=>calls,client}
@@ -135,6 +136,26 @@ describe('course folder initialization',()=>{
     await s.projects.handle('delete',{courseId:s.id,confirmed:true})
     expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC);expect(await readFile(join(s.folder,'.syllora','history','legacy.txt'),'utf8')).toBe('history');expect(await stat(join(s.folder,'.syllora','course.json')).catch(()=>null)).toBeNull()
   })
+  it('a repeated delete of the same material does not run the destructive cleanup twice',async()=>{
+    // 多标签页/陈旧快照会用同一 materialId 重发删除。首次请求已把资料置为
+    // deleted 并清掉 revision；重复请求不得再执行一次破坏性清理
+    // （`delete course.revision` + syllora-projects 的 removeProducts('revisions')）。
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded')
+    const materialId=first.state.courses[0].materials[0].id
+    const spy=vi.spyOn(files,'removeProducts')
+    try {
+      const one=await s.projects.handle('deleteMaterial',{courseId:s.id,materialId,confirmed:true}) as any
+      expect(one).toEqual({saved:true})
+      expect(spy).toHaveBeenCalledTimes(1)
+      const two=await s.projects.handle('deleteMaterial',{courseId:s.id,materialId,confirmed:true}) as any
+      expect(two).toEqual({saved:true})
+      // 守卫在这里生效：不再执行第二次 removeProducts
+      expect(spy).toHaveBeenCalledTimes(1)
+      const after=await s.projects.handle('state',{}) as any
+      expect(after.courses[0].materials.find((m:any)=>m.id===materialId).status).toBe('deleted')
+    } finally { spy.mockRestore() }
+  })
   it('does not follow a .syllora directory junction outside the chosen folder',async()=>{
     const s=await setup(),target=join(s.root,'outside'),folder=join(s.root,'linked');await mkdir(target);await mkdir(folder);await symlink(target,join(folder,'.syllora'),'junction')
     await expect(s.projects.handle('openCourse',{path:folder})).rejects.toThrow('目录链接');expect(await stat(join(target,'course.json')).catch(()=>null)).toBeNull()
@@ -164,6 +185,66 @@ describe('structured sources and migration',()=>{
     const sources=structuredSources('m','v',[{text:'资料提供准确的概念定义。',anchor:'a'},{text:'另一片段说明适用条件。',anchor:'b'}]),value=lecture(sources)
     value.concepts[0]!.quote='编造的依据';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
     const incomplete=lecture([sources[0]]);expect(()=>validateLecture(incomplete,sources)).toThrow('没有完整关联')
+  })
+  it('keeps one document as one chapter even though every PDF page has its own anchor',()=>{
+    // 页锚点必须只做定位：一旦它同时充当章节回退键，每一页都会变成独立批次，
+    // 初始化就退化成"每页一次模型调用"。
+    const pages=[{text:'第一页的正文依据。',anchor:'第 1 页',name:'讲义.pdf'},{text:'第二页的正文依据。',anchor:'第 2 页',name:'讲义.pdf'}]
+    const sources=structuredSources('m','v',pages)
+    expect(sources.map(s=>s.anchor)).toEqual(['第 1 页 · 行 1–1 · 字符 1–9','第 2 页 · 行 1–1 · 字符 1–9'])
+    // 同一文档的多页无标题正文必须落进同一批次键，否则页数直接等于模型调用数。
+    expect(new Set(sources.map(s=>s.section))).toEqual(new Set(['讲义.pdf']))
+    const fourPages=['第一页依据。','第二页依据。','第三页依据。','第四页依据。'].map((text,i)=>({text,anchor:`第 ${i+1} 页`,name:'讲义.pdf'}))
+    expect(new Set(structuredSources('m','v',fourPages).map(s=>s.section)).size).toBe(1)
+  })
+  it('reuses stored fingerprints for files whose size and modification time are unchanged',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const first=await files.scanFiles(s.folder,[])
+    expect(first[0]!.status).toBe('ready');expect(first[0]!.fingerprint).toMatch(/^[0-9a-f]{64}$/)
+    const material={id:'m',name:'lecture.md',fingerprint:first[0]!.fingerprint!,status:'ready' as const,accepted:true,pages:0,sources:[],path:'lecture.md',size:first[0]!.size,mtimeMs:first[0]!.mtimeMs}
+    // 未变化的资料必须复用已存指纹（不再整读文件），并且与首次扫描结果一致。
+    const again=await files.scanFiles(s.folder,[material])
+    expect(again[0]!.fingerprint).toBe(material.fingerprint);expect(again[0]!.change).toBe('unchanged')
+    // 大小与记录不符时必须重算，不能盲信已存指纹。
+    const wrongSize=await files.scanFiles(s.folder,[{...material,size:1}])
+    expect(wrongSize[0]!.fingerprint).toBe(material.fingerprint);expect(wrongSize[0]!.change).toBe('unchanged')
+    // 内容真的变了：指纹与 change 都要跟着变。
+    await writeFile(join(s.folder,'lecture.md'),DOC+'\n补充依据。')
+    const modified=await files.scanFiles(s.folder,[material])
+    expect(modified[0]!.fingerprint).not.toBe(material.fingerprint);expect(modified[0]!.change).toBe('changed')
+    // 缺文件属性的老课程记录不得被当成"未变化"而跳过：必须重算并按真实内容判定。
+    const legacy=await files.scanFiles(s.folder,[{...material,fingerprint:'stale-legacy-hash',size:undefined,mtimeMs:undefined}])
+    expect(legacy[0]!.fingerprint).toBe(modified[0]!.fingerprint);expect(legacy[0]!.change).toBe('changed')
+  })
+  it('organizes chapters concurrently up to the configured limit and still publishes every chapter',async()=>{
+    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const s=await setup(undefined,undefined,3)
+    await writeFile(join(s.folder,'lecture.md'),FOUR)
+    let inFlight=0,peak=0,calls=0
+    // 每个调用都停住 60ms 再返回：串行时 peak 恒为 1，并发时才会大于 1。
+    const client:StructuredCallClient={async *stream(options){
+      const message=(options.messages.at(-1) as any).content[0].text
+      const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length))
+      calls++;inFlight++;peak=Math.max(peak,inFlight)
+      await new Promise(r=>setTimeout(r,60))
+      inFlight--
+      yield {type:'text-delta',text:JSON.stringify(lecture(sources))}
+    }}
+    const app=join(s.root,'concurrent-app')
+    const projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency:3}),client:()=>client})
+    await projects.handle('preferences',{consent:true})
+    const id=(await projects.handle('openCourse',{path:s.folder}) as any).id
+    const scan=await projects.handle('scan',{courseId:id}) as any
+    const files=scan.files.filter((f:any)=>f.status==='ready')
+    const job=await projects.handle('initialize',{courseId:id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint]))}) as any
+    const settled=await settle(projects,job.jobId)
+    expect(settled.job.state).toBe('succeeded')
+    const state=await projects.handle('state',{}) as any
+    const chapters=state.courses[0].points.map((p:any)=>p.chapter)
+    expect(new Set(chapters)).toEqual(new Set(['第一章','第二章','第三章','第四章']))
+    expect(calls).toBe(4)
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(3)
   })
   it('migrates old courses with their identifiers and evidence, refuses existing destinations and keeps the original snapshot',async()=>{
     const s=await setup(),id=randomUUID(),pointId=randomUUID(),materialId=randomUUID(),sourceId=randomUUID(),questionId=randomUUID()

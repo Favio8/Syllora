@@ -234,8 +234,14 @@ export class SylloraProjects {
     if(action==='rename')await this.serialize(async()=>{const project=this.projects.find(v=>v.id===p.courseId)!;project.name=String(p['name']);await atomicJson(join(this.root,'.syllora','projects.json'),this.projects)})
     if(action==='deleteMaterial') {
       await service.settleJobs()
-      const project=this.projects.find(v=>v.id===p.courseId)!
-      await removeProducts(project.path,['revisions','.staging'])
+      // 幂等：只有本次真的把一份活跃资料置为删除时才清理产物。重复/陈旧请求
+      // （多标签页用旧快照重发）在 SylloraService 里已被守卫挡住、不会再次
+      // 删除资料，这里若继续 removeProducts('revisions') 就会把期间重新初始化
+      // 产生的已发布 revision 整目录删掉——不可逆产物丢失。
+      if(service.takeMaterialDeletion()) {
+        const project=this.projects.find(v=>v.id===p.courseId)!
+        await removeProducts(project.path,['revisions','.staging'])
+      }
     }
     return result
   }

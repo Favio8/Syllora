@@ -25,7 +25,7 @@ import { fixturePdf } from "../../../scripts/syllora-fixture.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -268,6 +268,53 @@ describe("serve HTTP 边界（集成）", () => {
       expect((await fetch(url,{headers:previewAuth()})).status).toBe(404);expect(existsSync(join(folder,uploaded.path))).toBe(true)
     } finally {stop(previewHost);await new Promise<void>((resolve,reject)=>mock.close(e=>e?reject(e):resolve()))}
   },30000)
+  it("courses.* 按 courseId 解析课程根，而不是 lastOpenedPath", async () => {
+    // 回归：`syllora/openCourse` 会把 lastOpenedPath 设成刚打开的那门课
+    // （bin.ts registerProject），而工作台切课只改前端 state、不再 openCourse。
+    // 若 courses.* 用 lastOpenedPath 当课程根，courseDirOf 的
+    // `courseId === basename(workspaceRoot)` 等值校验就会让另一门课的每个请求
+    // 都失败——表现为面板进度/掌握度报错、@ 引用资料为空、/sync /build 失败。
+    const coursesHost = await startHost();
+    const coursesRpc = async (method: string, payload: unknown): Promise<any> => {
+      const response = await fetch(`http://127.0.0.1:${coursesHost.port}/api/${method}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${coursesHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      return { status: response.status, body: (await response.json()) as any };
+    };
+    try {
+      const first = join(coursesHost.home, "course-alpha");
+      const second = join(coursesHost.home, "course-beta");
+      mkdirSync(first);
+      mkdirSync(second);
+      const alpha = (await coursesRpc("syllora/openCourse", { path: first })).body.result;
+      const beta = (await coursesRpc("syllora/openCourse", { path: second })).body.result;
+      expect(alpha.id).not.toBe(beta.id);
+      // 打开第二门课后 lastOpenedPath 已指向它；此时两门课都要能用。
+      const alphaId = basename(first);
+      const betaId = basename(second);
+      expect(alphaId).not.toBe(betaId);
+      // 打开第二门课后 lastOpenedPath 已指向它；此时第一门课的每个课程作用域端点
+      // 都必须仍按自己的文件夹名解析课程根，而不是落到 beta 上。
+      for (const method of ["courses.progress", "courses.mastery", "courses.files", "courses.syllabus"]) {
+        const result = await coursesRpc(method, { courseId: alphaId });
+        expect(result.body.error?.message ?? "", `${method} 不该失败`).toBe("");
+        expect(result.status, `${method} 应返回 200`).toBe(200);
+      }
+      // 第二门课本身也要能用（口径对称，避免只修一侧）
+      const betaProgress = await coursesRpc("courses.progress", { courseId: betaId });
+      expect(betaProgress.body.error?.message ?? "").toBe("");
+      expect(betaProgress.status).toBe(200);
+      // ensure 是 AgentChat 的骨架自愈路径（api.ensureCourse → courses.ensure），
+      // 切课后不能静默失效
+      const ensured = await coursesRpc("courses.ensure", { courseId: alphaId });
+      expect(ensured.body.error?.message ?? "").toBe("");
+      expect(ensured.body.result).toEqual({ ensured: true });
+    } finally { stop(coursesHost); }
+  }, 60_000);
+
   it("health 免 token 可达", async () => {
     const res = await fetch(`${base()}/api/health`, { signal: AbortSignal.timeout(8_000) });
     expect(res.status).toBe(200);

@@ -50,6 +50,9 @@ export class SylloraService {
   private deleting = false
   private controllers = new Map<string, AbortController>()
   private workers = new Map<string, Promise<void>>()
+  /** 最近一次 `deleteMaterial` 是否真的把一份活跃资料置为删除（幂等守卫命中时为 false）。
+   *  上层据此决定要不要清理 revisions／.staging 产物，避免陈旧请求重复整目录删除。 */
+  private lastMaterialDeletion = false
   constructor(private readonly root: string, private readonly options: {
     now?: () => number;
     config?: () => Promise<ResolvedChatConfig>;
@@ -60,6 +63,8 @@ export class SylloraService {
     isConsented?: () => Promise<boolean>;
   } = {}) {}
   async settleJobs() { await Promise.allSettled([...this.workers.values()]) }
+  /** 读取并复位「最近一次 deleteMaterial 是否真的删了」——只供紧邻的上层清理判断用量。 */
+  takeMaterialDeletion(): boolean { const value = this.lastMaterialDeletion; this.lastMaterialDeletion = false; return value }
   async prepareDeletion() {
     this.deleting = true
     await this.transaction(db => { for (const course of db.courses) this.cancelJobs(db, course.id) }, true, true)
@@ -252,6 +257,12 @@ export class SylloraService {
         case 'deleteMaterial': {
           if (base['confirmed'] !== true) fail('CONFIRMATION_REQUIRED','请确认删除来源并重算证据')
           const m = course.materials.find(m => m.id === base['materialId']) ?? fail('NOT_FOUND','资料不存在')
+          // 幂等守卫：重复/陈旧请求（多标签页用旧快照重发）不得再执行一次破坏性清理。
+          // 已删除资料时 sources/history 为空，级联清理本就是空操作，但下方
+          // `delete course.revision` 与 syllora-projects 的 removeProducts('revisions')
+          // 会照旧执行——那会删掉期间重新初始化产生的已发布 revision，属不可逆产物丢失。
+          // 返回 deleted:false 让上层据此跳过产物清理。
+          if (m.status === 'deleted') { this.lastMaterialDeletion = false; break }
           const removed = new Set([...m.sources,...(m.history??[])].map(s => s.id))
           m.status = 'deleted'; m.sources = []; m.history = []
           delete course.revision
@@ -262,6 +273,7 @@ export class SylloraService {
           course.drafts.answers = course.drafts.answers.filter(answer => course.questions.some(q => q.id === answer.questionId && q.status === 'valid'))
           this.cancelJobs(db,course.id)
           recordNext(course, this.now(), id, 'material')
+          this.lastMaterialDeletion = true
           break
         }
         case 'reorderPoints': {
@@ -447,12 +459,13 @@ export class SylloraService {
     const data = p.base64 ? Buffer.from(p.base64,'base64') : Buffer.from(p.text ?? '', 'utf8')
     if (data.length > 20 * 1024 * 1024) fail('LIMIT_EXCEEDED','单文件不能超过 20 MiB')
     const fingerprint = digest(data)
+    const materialName = p.name.split(/[\\/]/).at(-1) ?? p.name
     const previous = await this.transaction(db => this.course(db,p.courseId).materials.find(m => m.fingerprint === fingerprint && m.status !== 'deleted'),false)
     if (previous) return { id: previous.id, duplicate: true,version:previous.revisionNumber??previous.version??1,previewAvailable:!!previous.file }
     let pages = 0
     let partial = false
     let pageIssues:PageIssue[]=[]
-    let parts: Array<{ text: string; anchor: string }>
+    let parts: Array<{ text: string; anchor: string; name: string }>
     if (ext === 'pdf') {
       if (!this.options.pdf) fail('UNSUPPORTED_INPUT','PDF 解析器不可用')
       let parsed:Awaited<ReturnType<NonNullable<typeof this.options.pdf>>>
@@ -460,11 +473,12 @@ export class SylloraService {
       pages = parsed.total
       if (pages > 50) fail('LIMIT_EXCEEDED','单份 PDF 不能超过 50 页')
       pageIssues=pdfPageIssues(parsed);partial=pageIssues.length>0
-      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, anchor: `第 ${p.num} 页` }))
+      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, anchor: `第 ${p.num} 页`, name: materialName }))
     } else {
       let text: string
       try { text = new TextDecoder('utf-8',{ fatal: true }).decode(data) } catch { fail('UNSUPPORTED_INPUT','请将文本转换为 UTF-8 编码') }
-      parts = text.trim() ? [{ text: text.replaceAll('\r\n','\n'), anchor: p.name }] : []
+      // 与 PDF 分支同一口径：anchor 负责定位，name 是结构化取章节回退键时用的文档身份
+      parts = text.trim() ? [{ text: text.replaceAll('\r\n','\n'), anchor: materialName, name: materialName }] : []
     }
     if (!parts.length) fail('NO_USABLE_SOURCE','未提取到正文，扫描 PDF 请先转换为文本型 PDF')
     const chars = parts.reduce((n,p) => n + [...p.text].length,0)
@@ -651,7 +665,7 @@ export class SylloraService {
     },false)
     try {
       const delegate=this.options.client?.(config)??createDeepSeekToolClient(config)
-      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),check,
+      const result=await initializeFolder({root,course:snapshot,paths:input.paths,expected:input.fingerprints,acceptPartial:input.acceptPartial,jobId:job.id,concurrency:config.maxConcurrency,modelKey:`${config.providerId}:${config.model}:${digest(JSON.stringify({baseUrl:config.baseUrl,protocol:config.protocol??'openai',temperature:config.temperature}))}`,...(this.options.pdf?{pdf:this.options.pdf}:{}),check,
         progress:async progress=>{await check();await this.transaction(db=>{const current=db.jobs.find(j=>j.id===job.id)!;current.progress=progress;current.message=progress.message})},
         call:async (sources,prompt)=>{
           await check()

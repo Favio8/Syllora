@@ -6,12 +6,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 
-const { ensureCourseMock } = vi.hoisted(() => ({
+const { ensureCourseMock, abortActiveChatMock } = vi.hoisted(() => ({
   ensureCourseMock: vi.fn(async () => ({ ensured: true })),
+  abortActiveChatMock: vi.fn(),
 }));
 
 vi.mock("@/src/lib/api", () => ({
   api: { ensureCourse: ensureCourseMock },
+}));
+
+vi.mock("@/src/lib/chatStream", () => ({
+  abortActiveChat: abortActiveChatMock,
 }));
 
 vi.mock("@/src/components/chat/WorkbenchChat", () => ({
@@ -31,6 +36,7 @@ beforeEach(() => {
   useAppStore.setState(initialState, true);
   useAppStore.setState({ activeCourseId: null, workspacePath: null, courses: [], settingsOpen: false, paletteOpen: false });
   ensureCourseMock.mockClear();
+  abortActiveChatMock.mockClear();
 });
 
 describe("chatCourseIdOf", () => {
@@ -76,6 +82,49 @@ describe("AgentChat", () => {
 
     act(() => useAppStore.getState().setSettingsOpen(true));
     await waitFor(() => expect(onOpenSettings).toHaveBeenCalledTimes(2));
+  });
+
+  it("aborts the previous chat stream before switching courses", async () => {
+    const { rerender } = render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe("高数"));
+    // 首次挂载只是接手课程，没有旧流可中止
+    const initialAborts = abortActiveChatMock.mock.calls.length;
+
+    // chatStream.ts 的约定：对话切换前必须先 abortActiveChat()，否则旧流的 meta/done
+    // 帧会按新的 activeCourseId 落地，把上一门课的 sessionId 写进新课。
+    act(() => useAppStore.getState().setStreaming(true));
+    rerender(<AgentChat folder={"D:\\courses\\线性代数"} courseName="线性代数" />);
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe("线性代数"));
+    expect(abortActiveChatMock.mock.calls.length).toBe(initialAborts + 1);
+    expect(useAppStore.getState().streaming).toBe(false);
+  });
+
+  it("does not abort the stream when re-rendering for the same course", async () => {
+    render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe("高数"));
+    const before = abortActiveChatMock.mock.calls.length;
+
+    act(() => useAppStore.getState().setStreaming(true));
+    const { rerender } = render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    rerender(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    // 1.5s 轮询引起的常规重渲染不得打断正在进行的回答
+    expect(abortActiveChatMock.mock.calls.length).toBe(before);
+    expect(useAppStore.getState().streaming).toBe(true);
+  });
+
+  it("wires global shortcuts so Ctrl+K opens the command palette", async () => {
+    // 此前 useKeyboardShortcuts 只挂在 Console 外壳上，而 app 渲染的是工作台、
+    // Console 已无入口：ChatArea 写着 Ctrl+K，按下去却没有任何反应。
+    render(<AgentChat folder={"D:\\courses\\高数"} courseName="高等数学" />);
+    await waitFor(() => expect(useAppStore.getState().activeCourseId).toBe("高数"));
+    expect(useAppStore.getState().paletteOpen).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }));
+    });
+
+    expect(useAppStore.getState().paletteOpen).toBe(true);
+    expect(await screen.findByTestId("command-palette")).toBeInTheDocument();
   });
 
   it("mounts the command palette only while it is open", async () => {

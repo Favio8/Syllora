@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { filterItems, PALETTE_ITEMS } from "@/src/lib/palette";
 import { createNewSession } from "@/src/lib/sessionActions";
+import { abortActiveChat } from "@/src/lib/chatStream";
 import { useChatStream } from "@/src/hooks/useChatStream";
 import { api } from "@/src/lib/api";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -102,7 +103,14 @@ export default function CommandPalette() {
     if (pickCourse) {
       const course = courses.find((c) => c.id === id);
       if (course) {
-        setActiveCourse(course.id);
+        // setActiveCourse 会清空消息与会话且没有恢复入口，所以只在课程真的变化时
+        // 调用（commands.ts 与 LeftNav 的同类切换都有这个守卫）。切换前按
+        // chatStream.ts 的约定先中止旧流，与 sessionActions.createNewSession 同序。
+        if (course.id !== useAppStore.getState().activeCourseId) {
+          abortActiveChat();
+          useAppStore.getState().setStreaming(false);
+          setActiveCourse(course.id);
+        }
         flashStatusBanner(`switch → ${course.title}`);
         closePalette();
       }

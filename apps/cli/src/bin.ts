@@ -601,24 +601,33 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   }
 
   function wrapCourseService(): HostServices['courseService'] {
+    // 只保留「不绑定某门课」的端点走 lastOpenedPath；课程作用域端点一律按
+    // courseId 解析课程根，理由与 sessionService/agentService 相同：工作台切课不会
+    // 重新 openCourse，lastOpenedPath 可能仍停在上一门课，而 courseDirOf 要求
+    // courseId === basename(workspaceRoot)，用错根会直接抛 CourseNotFoundError。
     const activeRoot = (): string => registry.lastOpenedPath
     const courseService = createCourseService(configFacts)
     return {
-      syllabus: async courseId => courseService.syllabus(activeRoot(), courseId),
-      setGranularity: async (courseId, granularity) => courseService.setGranularity(activeRoot(), courseId, granularity),
-      progress: async courseId => courseService.progress(activeRoot(), courseId),
-      mastery: async courseId => courseService.mastery(activeRoot(), courseId),
-      quiz: async (courseId, mode, count, conceptId, dueOnly) => courseService.quiz(activeRoot(), courseId, mode, count, conceptId, dueOnly),
-      files: async courseId => courseService.files(activeRoot(), courseId),
+      syllabus: async courseId => courseService.syllabus(await workspaceForCourse(courseId), courseId),
+      setGranularity: async (courseId, granularity) => courseService.setGranularity(await workspaceForCourse(courseId), courseId, granularity),
+      progress: async courseId => courseService.progress(await workspaceForCourse(courseId), courseId),
+      mastery: async courseId => courseService.mastery(await workspaceForCourse(courseId), courseId),
+      quiz: async (courseId, mode, count, conceptId, dueOnly) => courseService.quiz(await workspaceForCourse(courseId), courseId, mode, count, conceptId, dueOnly),
+      files: async courseId => courseService.files(await workspaceForCourse(courseId), courseId),
       workspaceFiles: async () => courseService.workspaceFiles(activeRoot()),
-      sync: async (courseId, sessionId) => courseService.sync(activeRoot(), courseId, sessionId),
-      ensureCourse: courseId => courseService.ensureCourse(activeRoot(), courseId),
-      ingestUrl: async (courseId, url, title) => courseService.ingestUrl(activeRoot(), courseId, url, title),
-      createCards: async (courseId, payload) => courseService.createCards(activeRoot(), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
-      dynamicCards: async (courseId, payload) => courseService.dynamicCards(activeRoot(), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
+      sync: async (courseId, sessionId) => courseService.sync(await workspaceForCourse(courseId), courseId, sessionId),
+      ensureCourse: async courseId => courseService.ensureCourse(await workspaceForCourse(courseId), courseId),
+      ingestUrl: async (courseId, url, title) => courseService.ingestUrl(await workspaceForCourse(courseId), courseId, url, title),
+      createCards: async (courseId, payload) => courseService.createCards(await workspaceForCourse(courseId), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
+      dynamicCards: async (courseId, payload) => courseService.dynamicCards(await workspaceForCourse(courseId), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
       // M4：evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
       // 在这里静默丢参导致磁盘幂等账本（.syllora/eval-ledger/）永不写入。
-      evalSubmit: (courseId, taskId, answer, sessionId, evalId) => courseService.evalSubmit(activeRoot(), courseId, taskId, answer, sessionId, evalId),
+      // 接口要求同步返回 AsyncGenerator，所以不能先 await 再返回：这里用 async
+      // 生成器委托，把课程根解析放进迭代体内（调用方拿到生成器即刻不阻塞）。
+      evalSubmit: (courseId, taskId, answer, sessionId, evalId) => (async function* () {
+        const root = await workspaceForCourse(courseId)
+        yield* courseService.evalSubmit(root, courseId, taskId, answer, sessionId, evalId)
+      })(),
       job: jobId => courseService.job(jobId) as Record<string, unknown> | undefined,
       tools: providerStatus => courseService.tools(providerStatus),
       heatmap: async weeks => courseService.heatmap(activeRoot(), weeks),
