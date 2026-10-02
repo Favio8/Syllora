@@ -7,6 +7,8 @@ import { normalizeCourse, type Course } from './syllora-domain.ts'
 import { atomicJson, jsonFile, managedDirectory, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
 import { loadChatConfig } from './config.ts'
 
+import { courseIconSchema, defaultUiPreferences, uiPreferencesSchema, type UiPreferences } from './syllora-ui.ts'
+
 interface Project { id:string;path:string;name:string;deletion?:'pending'|'failed' }
 interface Preferences { consent:boolean }
 interface StoredCourse { version:1;courses:Course[];jobs:unknown[];calls:number;consent:boolean }
@@ -41,6 +43,10 @@ export class SylloraProjects {
     const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json'))
     return {consent:legacy?.consent??false}
   }
+  private async uiPreferences():Promise<UiPreferences> {
+    const saved=await jsonFile<UiPreferences>(join(this.root,'.syllora','ui-preferences.json'))
+    return saved?{...uiPreferencesSchema.parse(saved),revision:z.number().int().min(0).parse(saved.revision)}:defaultUiPreferences()
+  }
   private makeService(project:Project) {
     return new SylloraService(join(project.path,'.syllora'),{...this.options,fileName:'course.json',courseRoot:project.path,config:this.options.config??(()=>loadChatConfig(this.root)),isConsented:async()=>(await this.preferences()).consent})
   }
@@ -61,7 +67,7 @@ export class SylloraProjects {
     await this.options.registerProject?.(project.path)
   }
   private async openFolder(payload:unknown) {
-    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai')}).parse(payload)
+    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional()}).parse(payload)
     return this.serialize(async()=>{
       const root=await realpath(resolve(p.path))
       if(this.projects.some(project=>project.path===root&&(project.deletion||this.deleting.has(project.id))))throw new SylloraError('DELETING','课程删除未完成，请先重试清理，不能重新打开')
@@ -77,12 +83,23 @@ export class SylloraProjects {
       const previous=this.projects.find(v=>v.id===courseId&&v.path===root)
       const service=(previous?this.services.get(courseId):undefined)??this.makeService(project)
       if(!stored)await service.handle('create',{requestId:courseId,name:project.name,timezone:p.timezone})
+      if(p.icon)await service.handle('coursePresentation',{courseId,icon:p.icon})
       this.services.set(courseId,service);await this.remember(project)
       return {id:courseId,path:root,created:!stored}
     })
   }
   async handle(action:string,payload:unknown):Promise<unknown> {
     await this.load()
+    if(action==='uiPreferences')return this.serialize(async()=>{
+      const current=await this.uiPreferences()
+      if(!payload||typeof payload!=='object'||!('baseVersion' in payload)){z.object({}).strict().parse(payload??{});return current}
+      const p=uiPreferencesSchema.extend({baseVersion:z.number().int().min(0)}).parse(payload)
+      if(p.baseVersion!==current.revision)throw new SylloraError('VERSION_CONFLICT','界面偏好已在另一页面更新；输入已保留，请加载最新设置后重试')
+      const saved:UiPreferences={name:p.name,theme:p.theme,dailyMinutes:p.dailyMinutes,revision:current.revision+1}
+      await atomicJson(join(this.root,'.syllora','ui-preferences.json'),saved)
+      return saved
+    })
+    if(action==='activity') {const state=await this.handle('state',{}) as {courses:Course[]};return {activity:state.courses.flatMap(course=>course.activity??[])}}
     if(action==='openCourse')return this.openFolder(payload)
     if(action==='preferences') {
       const p=z.object({consent:z.boolean()}).parse(payload)
@@ -104,7 +121,7 @@ export class SylloraProjects {
         } catch(error) { projects.push({...project,error:error instanceof Error?error.message:'课程无法读取'}) }
       }
       const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json'))
-      return {courses,jobs,projects,legacyCourses:(legacy?.courses??[]).filter(c=>!this.projects.some(p=>p.id===c.id)).map(c=>({id:c.id,name:c.name,points:c.points.length})),settings:{...(await this.preferences()),calls:calls+(legacy?.calls??0)}}
+      return {courses,jobs,uiPreferences:await this.uiPreferences(),activity:courses.flatMap(course=>(course as Course).activity??[]),projects,legacyCourses:(legacy?.courses??[]).filter(c=>!this.projects.some(p=>p.id===c.id)).map(c=>({id:c.id,name:c.name,points:c.points.length})),settings:{...(await this.preferences()),calls:calls+(legacy?.calls??0)}}
     }
     // Compatibility for existing automation clients; the UI opens user-selected folders.
     if(action==='create') {

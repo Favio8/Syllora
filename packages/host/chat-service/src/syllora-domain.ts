@@ -1,6 +1,8 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
 import { DEFAULT_REVIEW_HOURS, learningSettings, validReviewHours, type EvidenceRuleSnapshot, type LearningSettings } from './syllora-policy.js'
 import { currentSession, sessionMetrics, type LearningEvent, type LearningSession, type SessionJob, type SourceVersion } from './syllora-sessions.js'
+export interface ReadingContext {materialId:string;revision:string;selection:string;sourceIds:string[];mode:'explain'|'search'}
+export interface LearningActivity {id:string;courseId:string;at:number;kind:'task'|'chat'|'reading';minutes:number;taskId?:string;planVersion:number}
 export const RULE_VERSION = 'syllora-v1'
 export function ruleSnapshot(course:Course):EvidenceRuleSnapshot { const settings=learningSettings(course);return {version:RULE_VERSION,settingsRevision:settings.revision,reviewHours:[...settings.reviewHours]} }
 export const HOUR = 3_600_000
@@ -18,9 +20,9 @@ export interface Task { id: string; pointId: string; kind: 'learn' | 'review'; d
 export interface OverflowEntry { pointId: string; reason: 'window-full' | 'task-too-large' }
 export interface PlanInput { scope: string[]; dailyMinutes: number; days: number; restDays: number[]; deadline?: string | null; estimates?: Record<string, number> }
 export interface Plan { id: string; version: number; baseVersion: number; scope: string[]; tasks: Task[]; overflow: OverflowEntry[]; dailyMinutes: number; feasible: boolean; days: number; deadline: string | null; restDays: number[]; estimates: Record<string, number> }
-export interface Message { id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number; report?:{reason:string;at:number} }
+export interface Message { reading?:ReadingContext;jobId?:string; id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number; report?:{reason:string;at:number} }
 export interface AnswerDraft { questionId: string; option: number }
-export interface Drafts { prompt: string; answers: AnswerDraft[] }
+export interface Drafts { prompt: string; answers: AnswerDraft[]; version?:number }
 export interface PlanDiff {
   scopeAdded: string[]
   scopeRemoved: string[]
@@ -46,10 +48,11 @@ export interface NextAction {
   trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
   practice: { pointId: string; text: string } | null
 }
-export interface Course { id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
+export interface Course { icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
 export function normalizeCourse(course: Course) {
+  if (!Array.isArray(course.activity)) course.activity = []
   if (!Array.isArray(course.actions)) course.actions = []
   if (!Array.isArray(course.sessions)) course.sessions = []
   if (!Array.isArray(course.learningEvents)) course.learningEvents = []
