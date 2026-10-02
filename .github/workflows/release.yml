@@ -55,7 +55,7 @@ jobs:
 
   desktop:
     name: Desktop packages (${{ matrix.os }})
-    needs: gate
+    needs: [gate, npm]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -107,8 +107,23 @@ jobs:
           node-version: 22.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-web
+          path: release-common/web
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-npm-tgz
+          path: release-common/cli
+      - name: Restore the shared Web and CLI builds
+        shell: bash
+        run: |
+          mkdir -p apps/web/out apps/cli/lib
+          tar -xzf release-common/cli/syllora-cli-*.tgz -C release-common/cli
+          cp release-common/cli/package/lib/*.js apps/cli/lib/
+          unzip -q release-common/web/Syllora-web-*.zip -d apps/web/out
       - name: Assemble host sidecar
-        run: node scripts/assemble-host.mjs --build
+        run: node scripts/assemble-host.mjs
         working-directory: apps/desktop
       - name: Verify native runtime modules on the target runner
         run: node -e "const {createRequire}=require('node:module');const r=createRequire(require('node:path').resolve('resources/host/package.json'));r('koffi');r('@napi-rs/canvas');console.log('Native runtime ready:',process.platform,process.arch)"
@@ -124,6 +139,31 @@ jobs:
       - name: electron-builder (--${{ matrix.target }})
         run: node node_modules/electron-builder/cli.js --${{ matrix.target }} --${{ matrix.arch }} --publish never
         working-directory: apps/desktop
+      - name: Verify packaged Web and Host match the shared builds
+        working-directory: apps/desktop
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readdirSync, readFileSync } from 'node:fs'
+          import { join } from 'node:path'
+          import { createHash } from 'node:crypto'
+          const target = process.env.PACKAGE_TARGET, arch = process.env.PACKAGE_ARCH
+          const folder = target === 'win' ? 'win-unpacked' : target === 'linux' ? 'linux-unpacked' : arch === 'arm64' ? 'mac-arm64' : 'mac'
+          const resources = join('dist', folder, target === 'mac' ? 'Syllora.app/Contents/Resources' : 'resources')
+          const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex')
+          function files(root, prefix = '') {
+            return readdirSync(root, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(root, entry.name), prefix + entry.name + '/') : [prefix + entry.name]).sort()
+          }
+          const source = '../../web/out', names = files(source)
+          if (JSON.stringify(names) !== JSON.stringify(files(join(resources, 'web')))) throw new Error('Packaged Web file list differs')
+          for (const name of names) if (hash(join(source, name)) !== hash(join(resources, 'web', name))) throw new Error(`Packaged Web differs: ${name}`)
+          const host = '../../cli/lib'
+          for (const name of readdirSync(host).filter(name => name.endsWith('.js'))) if (hash(join(host, name)) !== hash(join(resources, 'host', name))) throw new Error(`Packaged Host differs: ${name}`)
+          const fingerprint = createHash('sha256').update(names.map(name => name + '\0' + hash(join(source, name)) + '\n').join('')).digest('hex')
+          console.log(`Shared Web verified: ${names.length} files, SHA256 ${fingerprint}`)
+          NODE
       # CI 上（tag 存在）electron-builder 不落盘 latest*.yml——按相同格式自生成。
       - name: Generate update info
         run: node scripts/gen-update-info.mjs --target ${{ matrix.target }}
