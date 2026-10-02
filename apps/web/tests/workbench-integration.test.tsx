@@ -9,6 +9,7 @@ import { projectWorkspace } from '../src/features/workbench/projection'
 import { publicCourse, type Course } from '../../../packages/host/chat-service/src/syllora-domain'
 import { editDraft } from '../src/components/syllora-drafts'
 import { recoverDrafts, saveDraftRecovery } from '../src/features/workbench/draftRecovery'
+import Syllora from '../src/components/Syllora'
 const response=(result:unknown,ok=true)=>({ok,status:ok?200:409,json:async()=>result})
 beforeEach(()=>{sessionStorage.clear();vi.stubGlobal('crypto',webcrypto);(window as any).__SYLLORA__={token:'fixture-token'}})
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();delete (window as any).__SYLLORA__})
@@ -57,5 +58,29 @@ describe('unified workbench service and preferences',()=>{
   })
   it('cancels the accepted reading job when a selection is invalidated while awaiting acceptance',async()=>{
     const controller=new AbortController(),calls:string[]=[];let accept!:(value:unknown)=>void;vi.stubGlobal('fetch',vi.fn(async(url:string)=>{calls.push(url);if(url.endsWith('/generate'))return new Promise(resolve=>{accept=resolve});return response({result:{saved:true}})}));const pending=readingService.assist({id:'m',courseId:'c',revision:'v',name:'notes',title:'notes',content:'真实正文',source:'published',sources:[{id:'s',anchor:'段落1',text:'真实正文'}]},'真实','explain',controller.signal);await waitFor(()=>expect(accept).toBeDefined());controller.abort();accept(response({result:{jobId:'accepted'}}));await expect(pending).rejects.toThrow('取消');expect(calls).toContain('/api/syllora/cancel')
+  })
+})
+
+describe('PRD 需求二：左栏导航精简', () => {
+  it('shows exactly three nav entries and no workspace shortcut', async () => {
+    const course = { id:'c', name:'合成 UI 课程', timezone:'Asia/Shanghai', archived:false, createdAt:Date.now(),
+      materials:[{id:'m',name:'fixture.txt',fingerprint:'fixture',status:'ready' as const,accepted:true,pages:0,sources:[{id:'s',materialId:'m',anchor:'段落 1',text:'合成来源'}]}],
+      points:[{id:'p',name:'旧知识点',chapter:'章',sourceIds:['s']}], scope:['p'], plan:null, draft:null, questions:[], attempts:[], messages:[], actions:[], drafts:{prompt:'',answers:[]}, changes:[], notice:null }
+    const state = { courses:[publicCourse(course,Date.now())], jobs:[], settings:{consent:false,calls:0} }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({result:state})))
+    Element.prototype.scrollIntoView = vi.fn()
+    render(<Syllora />)
+    const railNav = await waitFor(() => {
+      const found = document.querySelector('.rail-nav')
+      if (found === null) throw new Error('nav not rendered yet')
+      return found as HTMLElement
+    })
+    const labels = Array.from(railNav.querySelectorAll('button')).map(b => b.getAttribute('aria-label'))
+    expect(labels).toEqual(['我的课程','资料库','复习与巩固'])
+    // 课程图标仍在，且点它进入 workspace 视图（三条路径之一）。
+    const courseButton = document.querySelector('.rail-course') as HTMLButtonElement
+    expect(courseButton).not.toBeNull()
+    fireEvent.click(courseButton)
+    await waitFor(() => expect(screen.getByRole('heading', { name: '合成 UI 课程' })).toBeInTheDocument())
   })
 })

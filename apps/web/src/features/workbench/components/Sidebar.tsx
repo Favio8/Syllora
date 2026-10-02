@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BookOpen, Plus, PanelsTopLeft, GraduationCap, FolderOpen, BrainCircuit, UserRound, Settings, CircleHelp, LogOut, ChevronRight, ShieldCheck, X } from 'lucide-react';
+import { BookOpen, Plus, GraduationCap, FolderOpen, BrainCircuit, UserRound, Settings, CircleHelp, LogOut, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import type { Course, View } from '@/src/features/workbench/types';
 import CourseIcon from './CourseIcon';
 
@@ -16,7 +16,9 @@ export default function Sidebar({ courses, selected, view, mobileOpen, onClose, 
   const [helpOpen, setHelpOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLButtonElement>(null);
-  const nav = [{ id: 'workspace', label: '学习工作台', icon: PanelsTopLeft }, { id: 'courses', label: '我的课程', icon: GraduationCap }, { id: 'materials', label: '资料库', icon: FolderOpen }, { id: 'review', label: '复习与巩固', icon: BrainCircuit }] as const;
+  // 需求二：左栏移除「学习工作台」直达入口——它与点击课程图标、主页「继续
+  // 学习」完全重复。`view === 'workspace'` 视图本身保留（那两条路径仍进入）。
+  const nav = [{ id: 'courses', label: '我的课程', icon: GraduationCap }, { id: 'materials', label: '资料库', icon: FolderOpen }, { id: 'review', label: '复习与巩固', icon: BrainCircuit }] as const;
 
   function showLabel(e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>, label: string) {
     if (menu) return;
