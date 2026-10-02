@@ -59,12 +59,16 @@ export async function initializeFolder(options: {
     fingerprints[path]=candidate.fingerprint
     const old = course.materials.find(m=>m.path===path && m.status!=='deleted')
     const materialId = old?.id ?? stableId(course.id+':'+path), fingerprint = candidate.fingerprint, shortName = path.split(/[\\/]/).at(-1) ?? path
-    const cachePath = join(cacheDir,`${sha('parse-v3:'+path+':'+fingerprint+':'+materialId)}.json`)
+    // 缓存版本要跟着"切片口径"走：v3 之前的产物是每页一个 section，命中缓存就绕过了
+    // structuredSources，会让旧格式原样复用（性能收益对存量资料完全不生效）。口径一改就升版本。
+    const cachePath = join(cacheDir,`${sha('parse-v4:'+path+':'+fingerprint+':'+materialId)}.json`)
     let parsed = await jsonFile<{material:Material;body:string;chars:number}>(cachePath)
+    let parsedNow = false
     if (!parsed) {
       try {
         const bytes=await readFile(await within(root,path))
         if (sha(bytes)!==fingerprint) throw new Error('读取过程中资料发生变化，请重新扫描')
+        parsedNow = true
         let total=0, partial=false, pageIssues:Material['pageIssues']=[]
         let parts:Array<{text:string;anchor:string;name?:string}>
         if (extname(path).toLowerCase()==='.pdf') {
@@ -87,6 +91,12 @@ export async function initializeFolder(options: {
       } catch(error) { failures.push(`${path}：${error instanceof Error?error.message:'解析失败'}`); continue }
     }
     const material=structuredClone(parsed.material)
+    // 缓存命中时 parsed.material 还是首次解析时的 stat；文件内容没变但被 touch/重存过，
+    // 旧 mtime 会让这个文件在之后每次扫描都整读重算——复用优化对它静默失效。用本次 candidate 刷新。
+    material.size=candidate.size; material.mtimeMs=candidate.mtimeMs
+    // 解析缓存命中时该文件本轮没被读过，前面就没有字节校验：这里补一次。放在模型批次之前，
+    // 否则文件早就在扫描后变过、却要等整轮模型调用跑完才报"整理期间发生变化"。
+    if(!parsedNow && sha(await readFile(await within(root,path)))!==fingerprint) throw new Error(`${path} 在检查后发生变化，请重新扫描`)
     material.revisionNumber=old?.fingerprint===fingerprint?(old.revisionNumber??(typeof old.version==='number'?old.version:1)):(old?.revisionNumber??(typeof old?.version==='number'?old.version:0))+1
     if (material.status==='partial') { failures.push(`${path}：部分页面没有正文（${material.pageIssues?.map(p=>`第 ${p.num} 页 ${p.reason==='blank-page'?'无文本':'未提取'}`).join('、')}）`); material.accepted=options.acceptPartial }
     material.history=old ? [...(old.history??[]),...old.sources.filter(s=>!material.sources.some(n=>n.id===s.id))] : []
@@ -120,7 +130,8 @@ export async function initializeFolder(options: {
     cachedOutputs.push(output ?? null)
   }
   const pending=batches.map((group,index)=>({group,index,cachePath:lectureCachePath(group)})).filter(item=>!cachedOutputs[item.index])
-  const concurrency=Math.min(Math.max(1,options.concurrency ?? 4),8,batches.length)
+  // 上限与设置界面一致（ModelsSection 的 max=16）：界面传不出的值不在这里生效。
+  const concurrency=Math.min(Math.max(1,options.concurrency ?? 8),16,batches.length)
   let organized=batches.length-pending.length
   if(pending.length>1) await options.progress({stage:'organizing',done:organized,total:batches.length,failures:[...failures],message:`并发整理 ${pending.length} 个章节（并发 ${concurrency}）`})
   const organizedOutputs=await mapWithConcurrency(pending,concurrency,async item=>{
@@ -131,8 +142,10 @@ export async function initializeFolder(options: {
         validateLecture(output,item.group)
         await options.check()
         await atomicJson(item.cachePath,output)
+        // 只有进度真的写出去才算这一章完成：先自增再写，会让"自增后被 check 打断"的章节显示为已完成，
+        // 而它其实没有任何已落盘的产物。
+        await options.progress({stage:'organizing',done:organized+1,total:batches.length,failures:[...failures],message:`整理章节 ${organized+1}/${batches.length}：${item.group[0]!.section}`})
         organized+=1
-        await options.progress({stage:'organizing',done:organized,total:batches.length,failures:[...failures],message:`整理章节 ${organized}/${batches.length}：${item.group[0]!.section}`})
         return output
       } catch(error) {
         if(attempt===0) { await new Promise(r=>setTimeout(r,300)); continue }

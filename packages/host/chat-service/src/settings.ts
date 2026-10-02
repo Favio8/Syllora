@@ -261,7 +261,7 @@ async function providerPayload(workspaceRoot: string, id: string, provider: Prov
     apiKeyEnv: ref,
     apiKeyConfigured: await credentialConfigured(workspaceRoot, ref),
     temperature: provider.temperature ?? 0.3,
-    maxConcurrency: provider.max_concurrency ?? 4,
+    maxConcurrency: provider.max_concurrency ?? 8,
     models: toModelPayload(provider.models),
   }
 }
@@ -285,7 +285,7 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
       apiKeyEnv: llmRef,
       apiBase: activeProvider?.base_url ?? config.llm?.api_base ?? null,
       temperature: activeProvider?.temperature ?? config.llm?.temperature ?? 0.3,
-      maxConcurrency: activeProvider?.max_concurrency ?? config.llm?.max_concurrency ?? 4,
+      maxConcurrency: activeProvider?.max_concurrency ?? config.llm?.max_concurrency ?? 8,
       apiKeyConfigured: await credentialConfigured(workspaceRoot, llmRef),
     },
     providers,

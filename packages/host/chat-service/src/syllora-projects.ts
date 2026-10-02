@@ -253,8 +253,13 @@ export class SylloraProjects {
     if(!['.pdf','.md','.txt'].includes(extname(name).toLowerCase()))throw new SylloraError('UNSUPPORTED_INPUT','仅支持文本 PDF、MD/TXT')
     const bytes=p.base64?Buffer.from(p.base64,'base64'):Buffer.from(p.text??'','utf8')
     if(bytes.length>SOURCE_LIMIT)throw new SylloraError('LIMIT_EXCEEDED','单文件不能超过 20 MiB')
-    const duplicate=(await scanFiles(project.path,state.courses[0]!.materials)).find(f=>f.fingerprint===sha(bytes))
-    if(duplicate)return {path:duplicate.path,duplicate:true,pending:true}
+    // 判重会决定用户这次上传是否落盘，所以不能只信扫描得到的指纹（它可能对未变化文件复用旧值）：
+    // 命中候选要读回字节核对，否则过期指纹会把用户的上传静默丢掉。
+    const digest=sha(bytes), candidate=(await scanFiles(project.path,state.courses[0]!.materials)).find(f=>f.fingerprint===digest)
+    if(candidate) {
+      const existing=await readFile(await within(project.path,candidate.path)).then(sha).catch(()=>null)
+      if(existing===digest)return {path:candidate.path,duplicate:true,pending:true}
+    }
     for(const job of state.jobs.filter(j=>j.state==='running'))await service.handle('cancel',{courseId:p.courseId,jobId:job.id})
     const dir=await managedDirectory(project.path,'sources'), ext=extname(name), stem=name.slice(0,-ext.length)
     let chosen=name

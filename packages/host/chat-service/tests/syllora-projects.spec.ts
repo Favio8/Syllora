@@ -1,18 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, rename, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects, migrateSharedSettings } from '../src/syllora-projects.ts'
 import { SylloraService } from '../src/syllora.ts'
-import { selectContext, structuredSources, within } from '../src/syllora-files.ts'
+import { selectContext, sha, structuredSources, within } from '../src/syllora-files.ts'
 import * as files from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
 import { validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
+/** ENOTEMPTY/EBUSY：取消类用例的清理会与仍在收尾的写入竞争，重试几次即可，不掩盖真正的清理失败。 */
+async function removeCourseRoot(root:string){
+  for(let attempt=0;;attempt++){
+    try { await rm(root,{recursive:true,force:true}); return }
+    catch(error){
+      const code=(error as NodeJS.ErrnoException).code
+      if(attempt>=5||!['ENOTEMPTY','EBUSY','EPERM'].includes(code??''))throw error
+      await new Promise(r=>setTimeout(r,50*2**attempt))
+    }
+  }
+}
 const temp=resolve('..','tmp','course-folder-tests'),roots:string[]=[]
-afterEach(async()=>{for(const root of roots.splice(0)){if(!root.startsWith(temp))throw new Error('unsafe test cleanup');await rm(root,{recursive:true,force:true})}})
+afterEach(async()=>{for(const root of roots.splice(0)){if(!root.startsWith(temp))throw new Error('unsafe test cleanup');await removeCourseRoot(root)}})
 const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'http://localhost:9999/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
@@ -215,6 +226,85 @@ describe('structured sources and migration',()=>{
     // 缺文件属性的老课程记录不得被当成"未变化"而跳过：必须重算并按真实内容判定。
     const legacy=await files.scanFiles(s.folder,[{...material,fingerprint:'stale-legacy-hash',size:undefined,mtimeMs:undefined}])
     expect(legacy[0]!.fingerprint).toBe(modified[0]!.fingerprint);expect(legacy[0]!.change).toBe('changed')
+  })
+  it('refreshes stored size and mtime on a parse-cache hit so fingerprint reuse keeps working',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded')
+    // 内容不变、只改 mtime：解析缓存仍命中，但落库的 stat 必须是本次的，否则该文件以后每次扫描都整读重算。
+    const later=new Date(Date.now()+60_000)
+    await utimes(join(s.folder,'lecture.md'),later,later)
+    const touched=await stat(join(s.folder,'lecture.md'))
+    const second=await initialize(s);expect(second.job.state).toBe('succeeded')
+    const stored=second.state.courses[0].materials[0]
+    expect(stored.mtimeMs).toBe(touched.mtimeMs);expect(stored.size).toBe(touched.size)
+    const scan=await files.scanFiles(s.folder,[{...stored,id:'reuse',name:stored.name}])
+    expect(scan[0]!.change).toBe('unchanged')
+  })
+  it('verifies bytes before treating an upload as a duplicate',async()=>{
+    const s=await setup()
+    const first=await s.projects.handle('import',{courseId:s.id,name:'new.md',text:'原始正文依据。'}) as any
+    expect(first.duplicate).toBe(false)
+    // 经过 initialize 才会生成 material 记录（只 import 是落文件、不建记录）。
+    const seeded=await initialize(s);expect(seeded.job.state).toBe('succeeded')
+    const material=seeded.state.courses[0].materials.find((m:any)=>m.path===first.path)
+    const second=await s.projects.handle('import',{courseId:s.id,name:'latest.md',base64:Buffer.from('完全不同的新正文依据。').toString('base64')}) as any
+    expect(second.duplicate).toBe(false)
+    // 模拟过期指纹：记录声称"即将上传的这份内容"已存在（盘上其实没有），且 mtime 与真实文件一致，
+    // 于是扫描会直接复用这个过期指纹、判定为重复。判重必须读回字节核对，否则上传被静默丢掉。
+    const bytes=Buffer.from('盘上并不存在的新上传内容，用来检验判重是否真的读过字节。')
+    const stored=JSON.parse(await readFile(join(s.folder,'.syllora','course.json'),'utf8'))
+    const target=stored.courses[0].materials.find((m:any)=>m.id===material.id)
+    target.fingerprint=sha(bytes)
+    await writeFile(join(s.folder,'.syllora','course.json'),JSON.stringify(stored))
+    const again=await s.projects.handle('import',{courseId:s.id,name:'latest.md',base64:bytes.toString('base64')}) as any
+    expect(again.duplicate).toBe(false)
+    expect(await readFile(join(s.folder,again.path),'utf8')).toBe('盘上并不存在的新上传内容，用来检验判重是否真的读过字节。')
+  })
+  it('does not invent a chapter for a line that is a wrapped formula or a plain enumeration',()=>{
+    const raw='1.1 问题背景\n问题背景的正文依据。\n\n2 = ℎ𝑖 ⋅ (𝑧𝑖 − 𝑧𝑛𝑎)2。整体等效抗弯刚度𝐷为：\n\n12 + ℎ𝑖(𝑧𝑖 − 𝑧𝑛𝑎)2]\n\n3.2 符号说明\n符号说明的正文依据。\n\n假设1：边界条件成立。\n4. 假设各层材料均为理想线弹性材料。\n'
+    const sources=structuredSources('m','v',[{text:raw,anchor:'第 6 页',name:'讲义.pdf'}])
+    // 真正的章节标题仍然是标题。
+    expect(sources.some(s=>s.kind==='heading'&&s.text.includes('问题背景'))).toBe(true)
+    expect(sources.some(s=>s.kind==='heading'&&s.text.includes('符号说明'))).toBe(true)
+    // 折行公式不得成为标题：每个公式标题都会变成一次额外的模型调用，并把文档重新切碎。
+    expect(sources.some(s=>s.kind==='heading'&&s.text.includes('整体等效抗弯刚度'))).toBe(false)
+    expect(sources.some(s=>s.kind==='heading'&&/^\s*12\s*\+/.test(s.text))).toBe(false)
+    expect(sources.find(s=>s.text.includes('整体等效抗弯刚度'))!.section).toBe('1.1 问题背景')
+    // 没有中文标题的编号行只算正文/列表，不当章节。
+    expect(sources.some(s=>s.kind==='heading'&&s.text.includes('边界条件成立'))).toBe(false)
+    expect(sources.some(s=>s.kind==='heading'&&s.text.includes('理想线弹性材料'))).toBe(false)
+    // 整份文档的章节数应等于真实标题数（2），不是公式数。
+    expect(new Set(sources.map(s=>s.section))).toEqual(new Set(['1.1 问题背景','3.2 符号说明']))
+  })
+  it('keeps a failed concurrent run consistent: failure recorded, nothing published, progress matches what finished',async()=>{
+    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const s=await setup()
+    await writeFile(join(s.folder,'lecture.md'),FOUR)
+    // 冷缓存 + 并发 3 + 单章必败：现有回归只覆盖"全部成功"，一旦并发退化成串行也测不出来。
+    const client:StructuredCallClient={async *stream(options){
+      const message=(options.messages.at(-1) as any).content[0].text
+      const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length))
+      await new Promise(r=>setTimeout(r,40))
+      if(String(sources[0].section)==='第二章')throw new Error('合成章节失败')
+      yield {type:'text-delta',text:JSON.stringify(lecture(sources))}
+    }}
+    const app=join(s.root,'failure-app')
+    const projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency:3}),client:()=>client})
+    await projects.handle('preferences',{consent:true})
+    const id=(await projects.handle('openCourse',{path:s.folder}) as any).id
+    const scan=await projects.handle('scan',{courseId:id}) as any
+    const ready=scan.files.filter((f:any)=>f.status==='ready')
+    const job=await projects.handle('initialize',{courseId:id,requestId:randomUUID(),paths:ready.map((f:any)=>f.path),fingerprints:Object.fromEntries(ready.map((f:any)=>[f.path,f.fingerprint]))}) as any
+    const settled=await settle(projects,job.jobId)
+    expect(settled.job.state).toBe('failed')
+    expect(settled.job.progress.failures.join(' ')).toContain('第二章')
+    // 失败作业不得发布 revision，也不得留下知识点。
+    expect(settled.state.courses[0].revision).toBeUndefined();expect(settled.state.courses[0].points).toEqual([])
+    // 进度只统计真正落盘的章节：并发 3 时另外两章会完成并写入缓存，第二章不计入。
+    const rescanned=await files.scanFiles(s.folder,settled.state.courses[0].materials)
+    expect(rescanned.every(f=>f.status==='ready')).toBe(true)
+    expect(settled.job.progress.done).toBeLessThan(4)
+    expect(settled.job.progress.total).toBe(4)
   })
   it('organizes chapters concurrently up to the configured limit and still publishes every chapter',async()=>{
     const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'

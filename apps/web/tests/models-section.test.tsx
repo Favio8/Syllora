@@ -353,6 +353,22 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(profile.overwrite).toBe(true);
   });
 
+  it("存量记录缺 maxConcurrency 时按宿主默认 8 保存，而不是把运行时并发静默降回 4", async () => {
+    // 兜底值必须与 config.ts / settings.ts 的默认值一致：保存时无条件发送该字段。
+    const { maxConcurrency: _omitted, ...legacyProvider } = configuredProvider;
+    // 断言：模拟缺字段的存量记录，故意绕过该字段的类型要求。
+    render(<ModelsSection initial={makePayload([legacyProvider as SettingsPayload["providers"][number]])} />);
+    openManage();
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+    await openAdvancedFold();
+
+    expect(screen.getByLabelText(/最大并发（maxConcurrency）/)).toHaveValue(8);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(apiMocks.saveProvider).toHaveBeenCalledTimes(1));
+    expect(apiMocks.saveProvider.mock.calls[0][0].maxConcurrency).toBe(8);
+  });
+
   it("X3 恢复内置列表需二次确认：第一次只武装、确认后才覆盖手改", async () => {
     render(<ModelsSection initial={makePayload([])} />);
     await screen.findByText("选择供应商");

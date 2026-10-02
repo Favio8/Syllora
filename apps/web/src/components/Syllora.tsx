@@ -56,6 +56,16 @@ type SettingsTab = 'models'|'archive'|'diag'|'display';
 /** 一份宿主日志文件（内容已按上限截断）。 */
 type DiagFile = { name:string; bytes:number; text:string; truncated:boolean };
 
+/**
+ * 来源弹层的标题：资料名 + 精确定位。直接拼 `name · anchor` 会在两者都从文件名派生时重复，
+ * 例如 `sources/讲义.md · 讲义.md · 行 3–5 · 字符 45–120`。
+ */
+export function sourceLabel(source:{anchor:string}, materialName?:string):string {
+  if(!materialName)return source.anchor;
+  if(source.anchor===materialName||source.anchor.startsWith(`${materialName} · `))return source.anchor;
+  return `${materialName} · ${source.anchor}`;
+}
+
 export default function Syllora() {
   useModalFocus();
   const [coursePicker,setCoursePicker]=useState(false);
