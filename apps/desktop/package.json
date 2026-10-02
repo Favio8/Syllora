@@ -1,6 +1,6 @@
 {
   "name": "@syllora/desktop",
-  "version": "0.1.1-beta",
+  "version": "0.1.2-beta",
   "private": true,
   "description": "Syllora desktop shell (Electron + embedded local host sidecar)",
   "license": "MIT",
