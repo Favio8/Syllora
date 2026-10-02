@@ -55,7 +55,7 @@ export async function initializeFolder(options: {
     if (options.expected[path] && options.expected[path]!==candidate.fingerprint) throw new Error(`${path} 在检查后发生变化，请重新扫描`)
     fingerprints[path]=candidate.fingerprint
     const old = course.materials.find(m=>m.path===path && m.status!=='deleted')
-    const materialId = old?.id ?? stableId(course.id+':'+path), fingerprint = candidate.fingerprint
+    const materialId = old?.id ?? stableId(course.id+':'+path), fingerprint = candidate.fingerprint, shortName = path.split(/[\\/]/).at(-1) ?? path
     const cachePath = join(cacheDir,`${sha('parse-v3:'+path+':'+fingerprint+':'+materialId)}.json`)
     let parsed = await jsonFile<{material:Material;body:string;chars:number}>(cachePath)
     if (!parsed) {
@@ -63,7 +63,7 @@ export async function initializeFolder(options: {
         const bytes=await readFile(await within(root,path))
         if (sha(bytes)!==fingerprint) throw new Error('读取过程中资料发生变化，请重新扫描')
         let total=0, partial=false, pageIssues:Material['pageIssues']=[]
-        let parts:Array<{text:string;anchor:string}>
+        let parts:Array<{text:string;anchor:string;name?:string}>
         if (extname(path).toLowerCase()==='.pdf') {
           if (!options.pdf) throw new Error('PDF 解析器不可用')
           let result:Awaited<ReturnType<NonNullable<typeof options.pdf>>>
@@ -71,14 +71,14 @@ export async function initializeFolder(options: {
           total=result.total
           if(total>50) throw new Error('单份 PDF 不能超过 50 页')
           pageIssues=pdfPageIssues(result);partial=pageIssues.length>0
-          parts=result.pages.filter(p=>p.text.trim()).map(p=>({text:p.text.replaceAll('\r\n','\n'),anchor:`${path} · 第 ${p.num} 页`}))
+          parts=result.pages.filter(p=>p.text.trim()).map(p=>({text:p.text.replaceAll('\r\n','\n'),anchor:`第 ${p.num} 页`,name:shortName}))
         } else {
           const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes).replaceAll('\r\n','\n')
-          parts=[{text,anchor:path}]
+          parts=[{text,anchor:shortName,name:shortName}]
         }
         if (!parts.some(p=>p.text.trim())) throw new Error('未提取到正文；扫描件与 OCR 不在本轮支持范围')
         const warnings=total ? ['PDF 使用文本层提取；复杂版面、公式与图片内容需人工核对。',...(partial?['部分页面没有可提取正文。']:[])] : []
-        const material:Material={id:materialId,name:path,fingerprint,path,version:fingerprint,status:partial?'partial':'ready',accepted:!partial,pages:total,sources:structuredSources(materialId,fingerprint,parts),warnings,active:true,pageIssues,file:total?{id:materialId,ext:'pdf',bytes:bytes.length,name:path}:null}
+        const material:Material={id:materialId,name:path,fingerprint,path,version:fingerprint,status:partial?'partial':'ready',accepted:!partial,pages:total,sources:structuredSources(materialId,fingerprint,parts),warnings,active:true,pageIssues,size:candidate.size,mtimeMs:candidate.mtimeMs,file:total?{id:materialId,ext:'pdf',bytes:bytes.length,name:path}:null}
         parsed={material,body:parts.map(p=>`<!-- ${p.anchor} -->\n${p.text}`).join('\n\n'),chars:parts.reduce((sum,p)=>sum+[...p.text].length,0)}
         await options.check(); await atomicJson(cachePath,parsed)
       } catch(error) { failures.push(`${path}：${error instanceof Error?error.message:'解析失败'}`); continue }
