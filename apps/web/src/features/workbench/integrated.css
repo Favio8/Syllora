@@ -272,3 +272,38 @@
 .sy-error-dialog header h2{font-size:17px}
 .sy-error-dialog-message{margin:6px 0 2px;font-size:13px;line-height:1.85;color:var(--ink);word-break:break-word;white-space:pre-wrap}
 .sy-error-dialog .sy-row{margin-top:20px;justify-content:flex-end}
+
+/* 图谱搜索：焦点高亮贴外层圆角矩形（内层 input 不画自己的框）。
+   下面的选择器刻意堆高优先级：通用输入规则 `.integrated-shell :is(input:not(...))`
+   是 (0,4,1) 且带 !important，普通写法压不住它——那正是"高亮缩在输入框内部"的原因。 */
+.integrated-shell .sy-graph-search{background:var(--sidebar);border:1px solid var(--line);border-radius:9px;transition:border-color .15s,box-shadow .15s}
+.integrated-shell .sy-graph-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+.integrated-shell .sy-right .sy-graph-bar .sy-graph-search input:not([type=checkbox]):not([type=radio]):not([type=file]){
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  outline:none!important;
+  padding:7px 0!important;
+  width:100%!important;
+  color:var(--ink)!important;
+  caret-color:currentColor;
+}
+.integrated-shell .sy-graph-search>svg{color:var(--muted);flex-shrink:0}
+
+/* 笔记页头部与工作台顶栏同规格：为原生窗口按钮预留右侧空间，并允许拖动窗口。
+   NotesWorkspace 是整页替换渲染，外壳会给它套上 desktop-shell 类（见 Syllora.tsx）。 */
+.desktop-shell .sy-nw-top{padding-right:154px;app-region:drag;-webkit-app-region:drag}
+.desktop-shell .sy-nw-top :is(button,input,select,a){app-region:no-drag;-webkit-app-region:no-drag}
+.desktop-shell .sy-nw-top .learning-mode-switch{margin-right:10px}
+@media(max-width:1100px){.desktop-shell .sy-nw-top{padding-right:146px}}
+@media(max-width:900px){.desktop-shell .sy-nw-top{padding-right:138px;gap:8px}}
+
+/* 独立整页（课程讲义 / 课程资料管理）：主内容区里的页面，页头复用 .sy-nw-back/.sy-nw-title */
+.sy-manage-page{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--white);color:var(--ink)}
+.sy-manage-head{display:flex;align-items:center;gap:14px;padding:16px 28px;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--white)}
+.sy-manage-summary{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sy-manage-body{flex:1;min-height:0;overflow:auto;padding:26px 32px 40px}
+.sy-manage-body>h2{font-size:19px;font-weight:600;margin-bottom:10px}
+.sy-manage-body>p{margin-bottom:14px}
+@media(max-width:760px){.sy-manage-head{padding:12px 16px;gap:9px}.sy-manage-body{padding:18px 16px 30px}}

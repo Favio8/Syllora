@@ -12,17 +12,20 @@ import type { Editor } from "@tiptap/react";
 import { api } from "../lib/api";
 import type { NoteMeta } from "../types/api";
 import NotesEditor from "./NotesEditor";
+import LearningModeSwitch from "../features/workbench/components/LearningModeSwitch";
 
 interface Props {
   courseId: string;
   courseName: string;
   onClose: () => void;
   onEpoch: () => void;
+  /** 切到对话学习 / 辅助阅读：由外壳负责离开笔记页并设置学习模式。 */
+  onSwitchMode: (mode: 'chat' | 'reading') => void;
 }
 
 const formatUpdated = (at: number) => new Date(at).toLocaleString("zh-CN", { hour12: false });
 
-export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch }: Props) {
+export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch, onSwitchMode }: Props) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -87,9 +90,17 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch 
   );
 
   const dirty = editingId !== null && loadedRef.current !== null && (title !== loadedRef.current.title || content !== loadedRef.current.content);
+  /** 未保存修改的守卫；返回 true 表示可以离开。 */
+  const confirmLeave = () => !dirty || window.confirm("这篇笔记有未保存的修改，确定放弃并返回？");
   const closeWithGuard = () => {
-    if (dirty && !window.confirm("这篇笔记有未保存的修改，确定放弃并返回？")) return;
+    if (!confirmLeave()) return;
     onClose();
+  };
+  /** 切模式前走同一条守卫，避免静默丢掉未保存的修改。 */
+  const switchMode = (surface: 'chat' | 'reading' | 'notes') => {
+    if (surface === 'notes') return;
+    if (!confirmLeave()) return;
+    onSwitchMode(surface);
   };
 
   const create = async () => {
@@ -221,6 +232,8 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch 
       <header className="sy-nw-top">
         <button className="sy-nw-back" onClick={closeWithGuard}><ArrowLeft size={16} />返回工作台</button>
         <div className="sy-nw-title"><span>笔记</span><small>{courseName}</small></div>
+        {/* 与工作台顶栏同一组按键：进笔记后仍然固定可见，「笔记」为当前项。 */}
+        <LearningModeSwitch disabled={false} current="notes" onSelect={switchMode} />
         <div className="sy-nw-actions">
           {editingId !== null && (
             <button className="sy-primary" disabled={busy || title.trim() === ""} onClick={() => void save()}>

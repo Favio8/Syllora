@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil, Menu, ChevronRight, PanelRightOpen, UserRound, SlidersHorizontal, Monitor, Database, Clock } from 'lucide-react';
+import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil, Menu, ChevronRight, PanelRightOpen, UserRound, SlidersHorizontal, Monitor, Database, Clock, ArrowLeft } from 'lucide-react';
 import ModelsSection from './settings/ModelsSection';
 import NotesWorkspace from './NotesWorkspace';
 import NotesGraph from './NotesGraph';
@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import type { SylloraState, Task, CourseView } from '../types/syllora';
 import { editDraft, hydrateCourse, markSaved, rememberServer, type DraftCache } from './syllora-drafts';
 import { CenteredErrorDialog, LectureReader, MaterialInitialization, MaterialPreview, ProjectDialog } from './syllora-project-ui';
+import LearningModeSwitch from '../features/workbench/components/LearningModeSwitch';
 import { LearningJobDiagnostics, LearningMetrics, SessionControls, useLearningExposures } from './syllora-metrics';
 import './syllora.css';
 
@@ -84,7 +85,7 @@ export default function Syllora() {
   const [mobileNav,setMobileNav]=useState(false);
   const [userPage,setUserPage]=useState<'profile'|'guide'|'agreement'|null>(null);
   const [selected,setSelected] = useState('');
-  const [tab,setTab] = useState<'today'|'outline'|'materials'|'review'|'lecture'|'graph'>('today');
+  const [tab,setTab] = useState<'today'|'outline'|'materials'|'review'|'graph'>('today');
   // 笔记整页工作区 + 「图谱」刷新计数：新建/保存/删除后 +1，右栏图谱据此重拉笔记。
   const [notesMode,setNotesMode] = useState(false);
   const [notesEpoch,setNotesEpoch] = useState(0);
@@ -288,31 +289,55 @@ export default function Syllora() {
   const exposureError=useLearningExposures(course,rpc,tab);
   const uiData=data?projectWorkspace(data):null;
   const displayCourse=uiData?.courses.find(item=>item.id===selected);
-  // 原生窗口按钮区（Electron titleBarOverlay）必须与顶栏严丝合缝：底色取顶栏实际渲染的背景色、
-  // 高度取实际渲染高度。写死颜色或高度会在主题切换、响应式断点变化时露出底色或溢出。
+  // 原生窗口按钮区（Electron titleBarOverlay）必须匹配"按钮下方真实可见的颜色"：
+  //  - 顶栏容器常常是透明背景（.sy-nw-top 就没有背景声明），所以要从元素向上找第一个
+  //    真正不透明的背景色；直接读元素自己的 backgroundColor 会拿到 rgba(0,0,0,0)，
+  //    换算出来是纯黑，反而在浅色页面上糊出一块黑条。
+  //  - 弹窗打开时，按钮下方是"底色 + .sy-overlay 半透明遮罩"的合成色；只推底色会出现
+  //    一块不透明白框。这里按 alpha 合成，按钮看起来才是透明的。
+  // 高度同样取实测值：顶栏高度随响应式断点变化，写死会溢出。
   useEffect(()=>{
     const theme=data?.uiPreferences?.theme??'light';
     document.documentElement.dataset.theme=theme;
     const bridge=desktopBridge();
     if(!bridge?.setWindowTheme)return;
+    const parse=(value:string)=>{
+      const match=/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(value);
+      if(!match)return null;
+      return { r:Number(match[1]), g:Number(match[2]), b:Number(match[3]), a:match[4]===undefined?1:Number(match[4]) };
+    };
     const push=()=>{
       const header=document.querySelector<HTMLElement>('.sy-top')??document.querySelector<HTMLElement>('.sy-nw-top');
       if(!header)return;
       const height=Math.round(header.getBoundingClientRect().height);
-      const match=/^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(header).backgroundColor);
-      if(!height||!match)return;
-      const hex=(value:string)=>Number(value).toString(16).padStart(2,'0');
+      if(!height)return;
+      let surface=null as { r:number; g:number; b:number; a:number }|null;
+      for(let node:HTMLElement|null=header;node;node=node.parentElement){
+        const color=parse(getComputedStyle(node).backgroundColor);
+        if(color&&color.a>0){surface=color;break}
+      }
+      if(!surface)surface={ r:255, g:255, b:255, a:1 };
+      const veil=document.querySelector<HTMLElement>('.sy-overlay');
+      if(veil){
+        const layer=parse(getComputedStyle(veil).backgroundColor);
+        if(layer&&layer.a>0) surface={ r:Math.round(surface.r*(1-layer.a)+layer.r*layer.a), g:Math.round(surface.g*(1-layer.a)+layer.g*layer.a), b:Math.round(surface.b*(1-layer.a)+layer.b*layer.a), a:1 };
+      }
+      const hex=(value:number)=>value.toString(16).padStart(2,'0');
       void bridge.setWindowTheme?.({
         theme,
-        color:`#${hex(match[1]!)}${hex(match[2]!)}${hex(match[3]!)}`,
+        color:`#${hex(surface.r)}${hex(surface.g)}${hex(surface.b)}`,
         symbolColor:theme==='dark'?'#b9cbe4':'#617796',
         height,
       });
     };
     // 等一帧再量：view/断点切换后的样式尚未生效时量到的是旧值。
-    const frame=requestAnimationFrame(push);
-    window.addEventListener('resize',push);
-    return ()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',push)};
+    let frame=requestAnimationFrame(push);
+    const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(push)};
+    window.addEventListener('resize',schedule);
+    // 弹窗开合会改变按钮下方的合成色（遮罩出现/消失），因此要跟着 DOM 变化重推。
+    const observer=new MutationObserver(schedule);
+    observer.observe(document.body,{ childList:true });
+    return ()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);observer.disconnect()};
   },[data?.uiPreferences?.theme,view,learningMode,showRight,notesMode]);
   const openUiCourse=async(id:string,mode:LearningMode='chat')=>{setRenaming(false);if(!(await selectCourse(id)))return false;setView('workspace');setLearningMode(mode);setMobileNav(false);return true;};
   const manageUiCourse=async(item:DisplayCourse,action:CourseAction)=>{
@@ -323,8 +348,9 @@ export default function Syllora() {
   const archiveDiscussion = Boolean(course?.folder && course.messages.length > 0);
   const DiscussionShell: 'details'|'div' = archiveDiscussion ? 'details' : 'div';
   // 笔记整页工作区：接管整个应用视图（三栏），带返回。
-  if(notesMode&&course) return <NotesWorkspace courseId={course.id} courseName={course.name} onClose={()=>setNotesMode(false)} onEpoch={()=>setNotesEpoch(epoch=>epoch+1)}/>;
-  return <div onClickCapture={event=>{const target=event.target as HTMLElement;const label=target.closest('label');if(label&&!label.querySelector('input[type=checkbox],input[type=radio]')&&!target.closest('input,textarea,select,button,a'))event.preventDefault();}} className={`sy-app app-shell integrated-shell ${desktop?'desktop-shell':''} ${view==='workspace'&&learningMode==='chat'?(showRight?'':'task-collapsed'):'sy-no-right without-panel'}`}>
+  // 笔记页是整页替换；套一层 desktop-shell 让原生窗口按钮的留白与拖动区与工作台一致。
+  if(notesMode&&course) return <div className={desktop?'desktop-shell':''}><NotesWorkspace courseId={course.id} courseName={course.name} onClose={()=>setNotesMode(false)} onEpoch={()=>setNotesEpoch(epoch=>epoch+1)} onSwitchMode={mode=>{setNotesMode(false);setView('workspace');setLearningMode(mode);}}/></div>;
+  return <div onClickCapture={event=>{const target=event.target as HTMLElement;const label=target.closest('label');if(label&&!label.querySelector('input,textarea,select')&&!target.closest('input,textarea,select,button,a'))event.preventDefault();}} className={`sy-app app-shell integrated-shell ${desktop?'desktop-shell':''} ${view==='workspace'&&learningMode==='chat'?(showRight?'':'task-collapsed'):'sy-no-right without-panel'}`}>
     <input ref={fileInput} type="file" accept=".pdf,.md,.txt" aria-label="上传课程资料" style={{display:'none'}} disabled={!course||busy||course.archived} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value=''}}/>
     <Sidebar courses={uiData?.courses.filter(item=>!item.archived)??[]} selected={selected} view={view} mobileOpen={mobileNav} onClose={()=>setMobileNav(false)} onView={value=>{setView(value);setMobileNav(false);}} onCourse={id=>void openUiCourse(id)} onCreate={()=>{setMigration(null);setCreating(true)}} onUserAction={action=>{
       if(action==='settings'){setSettings(true);setSettingsTab('models');}
@@ -332,19 +358,19 @@ export default function Syllora() {
       else if(action==='logout'){void flushDraft().then(ok=>{if(ok){setSignedOut(true);setView('home');}});}
       else setUserPage(action);
     }}/>
-    <header className="sy-top topbar"><button className="icon-button mobile-only" aria-label="打开导航" onClick={()=>setMobileNav(true)}><Menu size={20}/></button><div className="breadcrumbs">{view==='home'?<span className="home-breadcrumb">主页</span>:<><button className="breadcrumb-link" onClick={()=>setView('courses')}>我的课程</button><ChevronRight size={15}/><span>{view==='workspace'?course?.name??'学习工作台':view==='courses'?'课程管理':view==='materials'?'资料库':'复习与巩固'}</span>{view==='workspace'&&displayCourse&&<CourseMenu course={displayCourse} variant="workspace" onAction={(item,action)=>void manageUiCourse(item,action)} onChangeCourse={()=>setCoursePicker(true)}/>}</>}</div><div className="sy-actions">{view==='workspace'&&!notesMode&&<div className="learning-mode-switch" role="group" aria-label="学习模式"><button disabled={!course} aria-pressed={learningMode==='chat'} onClick={()=>{setView('workspace');setLearningMode('chat')}}>对话学习</button><button disabled={!course} aria-pressed={learningMode==='reading'} onClick={()=>{setView('workspace');setLearningMode('reading')}}>辅助阅读</button><button title={course?'笔记':'请先打开一门课程'} disabled={!course} onClick={()=>{if(!course){setError('请先打开一门课程');return}setNotesMode(true)}}>笔记</button></div>}</div></header>
+    <header className="sy-top topbar"><button className="icon-button mobile-only" aria-label="打开导航" onClick={()=>setMobileNav(true)}><Menu size={20}/></button><div className="breadcrumbs">{view==='home'?<span className="home-breadcrumb">主页</span>:<><button className="breadcrumb-link" onClick={()=>setView('courses')}>我的课程</button><ChevronRight size={15}/><span>{view==='workspace'?course?.name??'学习工作台':view==='courses'?'课程管理':view==='materials'?'资料库':'复习与巩固'}</span>{view==='workspace'&&displayCourse&&<CourseMenu course={displayCourse} variant="workspace" onAction={(item,action)=>void manageUiCourse(item,action)} onChangeCourse={()=>setCoursePicker(true)}/>}</>}</div><div className="sy-actions"><LearningModeSwitch disabled={!course} current={learningMode} onSelect={surface=>{if(!course){setError('请先打开一门课程');return}if(surface==='notes'){setNotesMode(true);return}setView('workspace');setLearningMode(surface);}}/></div></header>
     <main className="sy-main main-area view-stage" key={`${view}-${learningMode}`}>
 
       {error&&<div className="sy-error" role="alert">{error}<button aria-label="关闭错误" onClick={()=>setError('')}><X size={14}/></button></div>}
     {view==='courses'&&data?.projects?.filter(project=>project.error).map(project=><div className="integrated-project-error" key={project.id}>{project.name}：{project.error}<small>{project.path}</small>{project.deletion&&<button onClick={()=>setConfirmation({title:'重试删除课程',message:`重试删除「${project.name}」的应用记录？原始资料保留。`,confirmLabel:'重试删除',danger:true,action:()=>run('delete',{courseId:project.id,confirmed:true})})}>重试删除课程</button>}</div>)}
     {view==='courses'&&data?.legacyCourses?.map(item=><button className="integrated-migration" key={item.id} onClick={()=>{setMigration(item);setCreating(true)}}>迁移旧课程：{item.name}</button>)}
       {draftConflict&&draftConflict===selected&&<div className="sy-notice" role="status">草稿版本冲突，当前输入已保留。<button onClick={async()=>{try{const latest=await rpc<SylloraState>('state'),server=latest.courses.find(item=>item.id===selected)?.drafts;if(server){delete cacheRef.current[selected];cacheRef.current=rememberServer(cacheRef.current,selected,server);const view=hydrateCourse(cacheRef.current,selected,server);promptRef.current=view.prompt;answersRef.current=view.answers;setPrompt(view.prompt);setAnswers(view.answers);setDraftConflict('');setError('');saveDraftRecovery(cacheRef.current);}}catch(error){setError(error instanceof Error?error.message:'加载草稿失败');}}}>放弃本页输入并加载最新草稿</button></div>}
-      {!data?<div className="sy-empty"><LoaderCircle className="sy-spin"/><h2>正在连接本地服务</h2><p>请确认 Syllora 服务已启动。</p></div>:view==='home'&&uiData?<Home data={{...uiData,courses:uiData.courses.filter(item=>!item.archived)}} selected={selected} onCourse={(id,mode)=>void openUiCourse(id,mode)} onCreate={()=>setCreating(true)} onCourses={()=>setView('courses')} onMaterials={()=>setView('materials')} onStudy={(item,t)=>{void openUiCourse(item.id).then(ok=>{if(!ok)return;const task=data.courses.find(course=>course.id===item.id)?.plan?.tasks.find(task=>task.id===t.id);if(task)void run('start',{courseId:item.id,taskId:task.id}).then(ok=>{if(ok){setActiveTask(task.id);setPracticeOpen(true)}})})}}/>:view!=='workspace'&&uiData?<Catalog view={view as 'courses'|'materials'|'review'} courses={uiData.courses} onCourse={id=>void openUiCourse(id)} onCreate={()=>setCreating(true)} onUpload={id=>{void openUiCourse(id).then(ok=>{if(ok){setTab('materials');setShowRight(true)}})}} onDeleteMaterial={(courseId,materialId)=>setConfirmation({title:'移除资料',message:'移除此资料的应用记录？原文件保留，关联证据将重新计算。',confirmLabel:'移除资料',danger:true,action:()=>run('deleteMaterial',{courseId,materialId,confirmed:true})})} onReview={(item,point)=>{void openUiCourse(item).then(ok=>{if(!ok)return;setTab('today');setShowRight(true);void run('review',{courseId:item,pointId:point.id})})}} onManage={(item,action)=>void manageUiCourse(item,action)}/>:!course?<div className="sy-empty"><BookOpen size={48}/><p className="sy-kicker">学习从这里开始</p><h2>把资料变成<br/>下一步行动。</h2><p>新建课程、上传资料并整理讲义，按自己的节奏学习。<br/>每一次作答，都会留下可追溯的学习证据。</p><button className="sy-primary" onClick={()=>setCreating(true)}>新建课程 <ArrowRight size={16}/></button></div>:<>
+      {!data?<div className="sy-empty"><LoaderCircle className="sy-spin"/><h2>正在连接本地服务</h2><p>请确认 Syllora 服务已启动。</p></div>:view==='home'&&uiData?<Home data={{...uiData,courses:uiData.courses.filter(item=>!item.archived)}} selected={selected} onCourse={(id,mode)=>void openUiCourse(id,mode)} onCreate={()=>setCreating(true)} onCourses={()=>setView('courses')} onMaterials={()=>setView('materials')} onStudy={(item,t)=>{void openUiCourse(item.id).then(ok=>{if(!ok)return;const task=data.courses.find(course=>course.id===item.id)?.plan?.tasks.find(task=>task.id===t.id);if(task)void run('start',{courseId:item.id,taskId:task.id}).then(ok=>{if(ok){setActiveTask(task.id);setPracticeOpen(true)}})})}}/>:view==='lecture'?(course?<LecturePage course={course} onSource={setSourceId} onBack={()=>setView('workspace')}/>:<div className="sy-empty"><h2>先打开一门课程</h2></div>):view==='outline-manage'?(course?<OutlineManagePage course={course} scope={scope} setScope={setScope} estimates={estimates} setEstimates={setEstimates} busy={busy} onRename={setPointRename} onRun={run} onBack={()=>setView('workspace')}/>:<div className="sy-empty"><h2>先打开一门课程</h2></div>):view!=='workspace'&&uiData?<Catalog view={view as 'courses'|'materials'|'review'} courses={uiData.courses} onCourse={id=>void openUiCourse(id)} onCreate={()=>setCreating(true)} onUpload={id=>{void openUiCourse(id).then(ok=>{if(ok){setTab('materials');setShowRight(true)}})}} onDeleteMaterial={(courseId,materialId)=>setConfirmation({title:'移除资料',message:'移除此资料的应用记录？原文件保留，关联证据将重新计算。',confirmLabel:'移除资料',danger:true,action:()=>run('deleteMaterial',{courseId,materialId,confirmed:true})})} onReview={(item,point)=>{void openUiCourse(item).then(ok=>{if(!ok)return;setTab('today');setShowRight(true);void run('review',{courseId:item,pointId:point.id})})}} onManage={(item,action)=>void manageUiCourse(item,action)}/>:!course?<div className="sy-empty"><BookOpen size={48}/><p className="sy-kicker">学习从这里开始</p><h2>把资料变成<br/>下一步行动。</h2><p>新建课程、上传资料并整理讲义，按自己的节奏学习。<br/>每一次作答，都会留下可追溯的学习证据。</p><button className="sy-primary" onClick={()=>setCreating(true)}>新建课程 <ArrowRight size={16}/></button></div>:<>
       {learningMode==='reading'&&displayCourse?<ReadingWorkspace course={displayCourse} assistantOpen={assistantOpen} onToggleAssistant={()=>setAssistantOpen(value=>!value)} onExpandAssistant={()=>setAssistantOpen(true)} onUpload={pickMaterialFile} onActivity={()=>void refresh()} onSource={setSourceId}/>:<>
       <ChatWorkspace folder={course.folder} courseName={course.name} onUpload={pickMaterialFile} onPractice={openPractice} disabled={course.archived} onOpenSettings={()=>{setSettingsTab('models');setSettings(true)}}>
       <div className="sy-content">
         <details className="workbench-details"><summary>学习会话与课程信息</summary>{course.folder&&<p className="sy-course-path">{course.folder}</p>}<SessionControls key={course.id} course={course} task={task} busy={busy} onRun={run}/></details>{exposureError&&<p role="status">{exposureError}</p>}
-        {tab==='lecture'&&<LectureReader key={course.id} course={course} onSource={setSourceId}/>}
+        
         {course.notice&&<div className="sy-notice" role="status"><p>{course.notice.text}</p>{course.notice.kind==='restore'&&<button disabled={busy||course.archived} onClick={()=>void run('proposeRestore').then(ok=>{if(ok)setTab('today')})}>生成恢复日程草案</button>}</div>}
         <section className="sy-next"><div><span className="sy-kicker">下一步</span><h2>{course.next.text}</h2><p>{course.next.reason}</p>{course.next.pointId&&<p>{pointName(course.next.pointId)}</p>}<p>{course.next.availableAt===null?'现在可以执行':course.next.kind==='summary'?`下次复习：${formatTime(course.next.availableAt,course.timezone)}`:`可执行时间：${formatTime(course.next.availableAt,course.timezone)}`}</p>{course.next.kind==='summary'&&<button disabled={course.archived} onClick={()=>setTab('outline')}>补充学习范围</button>}{course.next.practice&&<button className="sy-optional" disabled={busy||course.archived} onClick={()=>void proposeReview(course.next.practice!.pointId)}>{course.next.practice.text}</button>}</div><button className="sy-primary" disabled={busy||course.archived||course.next.kind==='waiting'} onClick={()=>void next()}>{course.next.kind==='blocked'?'补充资料':'继续'} <ArrowRight size={16}/></button></section>
         {practiceOpen&&task&&!(course.blockedPointIds??[]).includes(task.pointId)&&<section className="sy-task-study"><div className="sy-task-heading"><span>{task.immediate?'即时巩固':task.kind==='review'?'复习任务':'学习任务'} · {task.minutes} 分钟</span><span>{task.status==='completed'?'活动已完成':`${task.slots} 个题位`}</span></div><h2>{pointName(task.pointId)}</h2><div className="sy-row"><button disabled={busy||!!running||course.archived} onClick={()=>void generate('answer',{taskId:task.id,prompt:`请讲解「${pointName(task.pointId)}」，用资料依据和一个明确标识的教学示例帮助理解。`})}>获取资料讲解</button>{!task.explained&&<button disabled={busy||course.archived} onClick={()=>void run('explainDone',{taskId:task.id})}><Check size={15}/>我已完成讲解学习</button>}</div>
@@ -365,7 +391,7 @@ export default function Syllora() {
       </>}</>}
     </main>
     {showRight&&view==='workspace'&&learningMode==='chat'&&<aside className="sy-right"><div className="sy-right-title"><div>学习面板 <span>一步一步，扎实掌握</span></div><button className="icon-button" aria-label="收起学习看板" onClick={()=>setShowRight(false)}><X size={17}/></button></div><div className="sy-tabs" role="tablist">{([['today','计划'],['outline','大纲'],['materials','资料'],['review','复习'],['graph','图谱']] as const).map(([id,label])=><button role="tab" aria-selected={tab===id} className={tab===id?'is-selected':''} key={id} onClick={()=>setTab(id)}>{label}</button>)}</div><div className="sy-panel">
-      {!course?<p className="sy-muted">新建课程后，在这里检查资料、阅读讲义与查看学习证据。</p>:tab==='graph'?<NotesGraph courseId={course.id} refreshKey={notesEpoch}/>:tab==='lecture'?<><h2>阅读课程讲义</h2><p>在左侧阅读章节导读、概念解释与原文依据。</p><p className="sy-muted">{course.revision?'讲义已发布，学习范围与计划由你确认。':'请先在资料页检查文件并点击初始化。'}</p><button onClick={()=>setTab('materials')}>检查课程资料</button></>:tab==='materials'?<>
+      {!course?<p className="sy-muted">新建课程后，在这里检查资料、阅读讲义与查看学习证据。</p>:tab==='graph'?<NotesGraph courseId={course.id} refreshKey={notesEpoch}/>:tab==='materials'?<>
         {course.folder&&<MaterialInitialization key={course.id} course={course} epoch={fileEpoch} busy={busy} running={!!running} onRun={run}/>}
         <h2>课程资料</h2><p className="sy-muted">支持文本 PDF、MD、TXT。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p><button className="sy-upload" disabled={busy||course.archived} onClick={pickMaterialFile}><Upload size={20}/><span>选择资料文件</span></button><label>或粘贴正文<textarea rows={4} value={text} onChange={e=>setText(e.target.value)} placeholder="粘贴有使用权限的学习资料"/></label><button disabled={!text.trim()||busy||course.archived} onClick={async()=>{if(await run('import',{name:'粘贴资料.txt',text}))setText('')}}>保存正文</button>
         {course.materials.map(m=><div className="sy-material" key={m.id}><FileText size={17}/><div>
@@ -378,7 +404,7 @@ export default function Syllora() {
           {m.previewUrl&&<MaterialPreview url={m.previewUrl} name={m.name} version={m.version}/>}
           {m.sources.map(s=><button className="sy-source-link" key={s.id} onClick={()=>setSourceId(s.id)}>{s.anchor}</button>)}</div>
           {m.status!=='deleted'&&<button aria-label={`删除资料 ${m.name}`} disabled={course.archived} onClick={()=>setConfirmation({title:'移除资料',message:`移除「${m.name}」？关联题目将失效，证据重新计算，原文件仍保留在课程目录。`,confirmLabel:'移除资料',danger:true,action:()=>run('deleteMaterial',{materialId:m.id,confirmed:true})})}><Trash2 size={14}/></button>}</div>)}
-      </>:tab==='outline'?<><h2>确认学习范围</h2><button className="text-button" onClick={()=>setTab('lecture')}>阅读课程讲义</button><p className="sy-muted">大纲来自已发布的资料整理结果。勾选本轮知识点，再生成可执行计划。</p><button disabled={busy||!!running||course.archived} onClick={()=>course.folder?setTab('materials'):void generate('outline')}>{course.folder?'检查资料并更新课程':'从资料生成／补充大纲'}</button>{course.points.map((p,i)=><div className="sy-point-row" key={p.id}><label className="sy-point"><input type="checkbox" checked={scope.includes(p.id)} onChange={e=>setScope(e.target.checked?[...scope,p.id]:scope.filter(x=>x!==p.id))}/><span><small>{p.chapter} · {String(i+1).padStart(2,'0')}</small>{p.name}<em>{course.evidence[p.id]?.state}</em></span></label><div className="sy-point-actions"><button aria-label={`${p.name} 重命名`} title="重命名" disabled={busy||course.archived} onClick={()=>setPointRename({id:p.id,name:p.name})}>✏️</button><button aria-label={`${p.name} 上移`} title="上移" disabled={i===0||busy||course.archived} onClick={async()=>{const ids=course.points.map(x=>x.id);[ids[i-1],ids[i]]=[ids[i],ids[i-1]];await run('reorderPoints',{pointIds:ids})}}>↑</button><button aria-label={`${p.name} 下移`} title="下移" disabled={i===course.points.length-1||busy||course.archived} onClick={async()=>{const ids=course.points.map(x=>x.id);[ids[i],ids[i+1]]=[ids[i+1],ids[i]];await run('reorderPoints',{pointIds:ids})}}>↓</button></div><input className="sy-estimate" type="number" min={5} max={240} aria-label={`${p.name} 任务估时（分钟）`} placeholder="20" value={estimates[p.id]??''} onChange={e=>setEstimates({...estimates,[p.id]:e.target.value})} disabled={busy}/></div>)}{course.points.length>0&&<button onClick={()=>setScope(course.points.map(p=>p.id))}>选择全部知识点</button>}<div className="sy-plan-input"><label><span>每天可用分钟</span><input type="number" min={1} max={720} value={minutes} onChange={e=>{minutesEdited.current=true;setMinutes(Number(e.target.value))}}/></label><label><span>未来天数</span><input type="number" min={1} max={90} value={days} onChange={e=>setDays(Number(e.target.value))}/></label><p className="sy-plan-help">未设置目标日期时，按未来天数规划。</p><label className="sy-plan-deadline"><span>目标日期 <small>可选，含当天</small></span><input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} disabled={busy}/></label></div><div className="sy-rest"><span>休息日</span><div className="sy-weekdays">{['日','一','二','三','四','五','六'].map((d,i)=><button key={i} aria-pressed={restDays.includes(i)} onClick={()=>setRestDays(restDays.includes(i)?restDays.filter(d=>d!==i):[...restDays,i])}>{d}</button>)}</div></div><button className="sy-primary sy-plan-submit" disabled={!scope.length||busy||course.archived} onClick={async()=>{const entered=Object.entries(estimates).filter(([id,value])=>scope.includes(id)&&value.trim()!=='');if(entered.some(([,value])=>!Number.isInteger(Number(value))||Number(value)<5||Number(value)>240)){setError('任务估时请输入 5–240 的整数分钟');return}const estimateInput=Object.fromEntries(entered.map(([id,value])=>[id,Number(value)]));if(await run('plan',{scope,dailyMinutes:minutes,days,restDays,baseVersion:course.plan?.version??0,...(deadline?{deadline}:{}),...(Object.keys(estimateInput).length?{estimates:estimateInput}:{})}))setTab('today')}}>生成计划草案 <ArrowRight size={15}/></button></>:tab==='review'?<><h2>知识点与复习</h2><LearningMetrics course={course}/><LearningJobDiagnostics jobs={data?.jobs.filter(job=>job.courseId===course.id)??[]}/><LearningPolicySettings key={course.id} course={course} busy={busy} onSave={async settings=>!!(await run('learningSettings',settings))}/><p className="sy-muted">独立作答决定状态。复测至少间隔 24 小时；提前练习不会提前晋升复测。</p>{!course.scope.length&&<p>确认学习范围后展示复习状态。</p>}{course.scope.map(id=>{const e=course.evidence[id];return <div className="sy-review" key={id}><h3>{pointName(id)}</h3><span className="sy-badge">{e?.state}</span><p>{e?.reason}</p><small>{e?.dueAt?`下次复习：${formatTime(e.dueAt,course.timezone)}`:'尚未安排复习'}</small>{course.plan?.deadline&&e?.dueAt&&new Intl.DateTimeFormat('en-CA',{timeZone:course.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(e.dueAt)>course.plan.deadline&&<p role="status">目标日期外：请调整目标日期、继续学习或归档课程。</p>}<WrongAnswerHistory course={course} pointId={id} onSource={setSourceId} onDispute={questionId=>{setDisputeTarget(questionId);setDisputeReason('')}}/><button disabled={busy||course.archived||(course.blockedPointIds??[]).includes(id)} onClick={()=>void proposeReview(id)}>{e?.dueAt&&e.dueAt<=Date.now()?'生成到期复习草案':'生成即时巩固草案'}</button></div>})}</>:<>
+      </>:tab==='outline'?<><h2>确认学习范围</h2><button className="text-button" onClick={()=>setView('lecture')}>阅读课程讲义</button><p className="sy-muted">大纲来自已发布的资料整理结果。勾选本轮知识点，再生成可执行计划。</p><button disabled={busy||!!running||course.archived} onClick={()=>course.folder?setTab('materials'):void generate('outline')}>{course.folder?'检查资料并更新课程':'从资料生成／补充大纲'}</button><button onClick={()=>setView('outline-manage')}>管理课程资料 · 已选 {scope.length} / 共 {course.points.length}</button><div className="sy-plan-input"><label><span>每天可用分钟</span><input type="number" min={1} max={720} value={minutes} onChange={e=>{minutesEdited.current=true;setMinutes(Number(e.target.value))}}/></label><label><span>未来天数</span><input type="number" min={1} max={90} value={days} onChange={e=>setDays(Number(e.target.value))}/></label><p className="sy-plan-help">未设置目标日期时，按未来天数规划。</p><label className="sy-plan-deadline"><span>目标日期 <small>可选，含当天</small></span><input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} disabled={busy}/></label></div><div className="sy-rest"><span>休息日</span><div className="sy-weekdays">{['日','一','二','三','四','五','六'].map((d,i)=><button key={i} aria-pressed={restDays.includes(i)} onClick={()=>setRestDays(restDays.includes(i)?restDays.filter(d=>d!==i):[...restDays,i])}>{d}</button>)}</div></div><button className="sy-primary sy-plan-submit" disabled={!scope.length||busy||course.archived} onClick={async()=>{const entered=Object.entries(estimates).filter(([id,value])=>scope.includes(id)&&value.trim()!=='');if(entered.some(([,value])=>!Number.isInteger(Number(value))||Number(value)<5||Number(value)>240)){setError('任务估时请输入 5–240 的整数分钟');return}const estimateInput=Object.fromEntries(entered.map(([id,value])=>[id,Number(value)]));if(await run('plan',{scope,dailyMinutes:minutes,days,restDays,baseVersion:course.plan?.version??0,...(deadline?{deadline}:{}),...(Object.keys(estimateInput).length?{estimates:estimateInput}:{})}))setTab('today')}}>生成计划草案 <ArrowRight size={15}/></button></>:tab==='review'?<><h2>知识点与复习</h2><LearningMetrics course={course}/><LearningJobDiagnostics jobs={data?.jobs.filter(job=>job.courseId===course.id)??[]}/><LearningPolicySettings key={course.id} course={course} busy={busy} onSave={async settings=>!!(await run('learningSettings',settings))}/><p className="sy-muted">独立作答决定状态。复测至少间隔 24 小时；提前练习不会提前晋升复测。</p>{!course.scope.length&&<p>确认学习范围后展示复习状态。</p>}{course.scope.map(id=>{const e=course.evidence[id];return <div className="sy-review" key={id}><h3>{pointName(id)}</h3><span className="sy-badge">{e?.state}</span><p>{e?.reason}</p><small>{e?.dueAt?`下次复习：${formatTime(e.dueAt,course.timezone)}`:'尚未安排复习'}</small>{course.plan?.deadline&&e?.dueAt&&new Intl.DateTimeFormat('en-CA',{timeZone:course.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(e.dueAt)>course.plan.deadline&&<p role="status">目标日期外：请调整目标日期、继续学习或归档课程。</p>}<WrongAnswerHistory course={course} pointId={id} onSource={setSourceId} onDispute={questionId=>{setDisputeTarget(questionId);setDisputeReason('')}}/><button disabled={busy||course.archived||(course.blockedPointIds??[]).includes(id)} onClick={()=>void proposeReview(id)}>{e?.dueAt&&e.dueAt<=Date.now()?'生成到期复习草案':'生成即时巩固草案'}</button></div>})}</>:<>
         <TodayProgress course={course} dailyMinutes={data?.uiPreferences?.dailyMinutes??40}/>
         <details className="workbench-evidence-details"><summary>查看学习证据与记录</summary>
         <div className="sy-progress"><div>{course.progress.activityLabel?<strong className="sy-empty-metric">{course.progress.activityLabel}</strong>:<strong>{course.progress.completed}<span> / {course.progress.total}</span></strong>}<small>活动完成{course.progress.skipped?` · 跳过 ${course.progress.skipped}`:''}</small></div><div>{course.progress.scopeLabel?<strong className="sy-empty-metric">{course.progress.scopeLabel}</strong>:<strong>{course.progress.covered}<span> / {course.progress.scope}</span></strong>}<small>有效评估覆盖</small></div></div>
@@ -461,3 +487,55 @@ function DiffModal({course,onClose,busy,onConfirm,onReject}:{course:CourseView;o
   </>}</section></div>
 }
 
+
+/** 课程讲义整页：与课程管理、资料库同级的主内容页，不再是正文区里的一次替换。 */
+function LecturePage({course,onSource,onBack}:{course:CourseView;onSource:(id:string)=>void;onBack:()=>void}) {
+  return <div className="sy-manage-page">
+    <header className="sy-manage-head">
+      <button className="sy-nw-back" onClick={onBack}><ArrowLeft size={16}/>返回工作台</button>
+      <div className="sy-nw-title"><span>课程讲义</span><small>{course.name}</small></div>
+    </header>
+    <div className="sy-manage-body"><LectureReader key={course.id} course={course} onSource={onSource}/></div>
+  </div>;
+}
+
+/** 课程资料管理：大纲章节的勾选与排序（学习范围、顺序、任务估时）。 */
+function OutlineManagePage({course,scope,setScope,estimates,setEstimates,busy,onRename,onRun,onBack}:{
+  course:CourseView; scope:string[]; setScope:(next:string[])=>void;
+  estimates:Record<string,string>; setEstimates:(next:Record<string,string>)=>void;
+  busy:boolean; onRename:(point:{id:string;name:string})=>void; onRun:(action:string,payload:Record<string,unknown>)=>Promise<unknown>; onBack:()=>void;
+}) {
+  const toggle=(id:string,checked:boolean)=>setScope(checked?[...scope,id]:scope.filter(value=>value!==id));
+  const move=async(index:number,delta:number)=>{
+    const ids=course.points.map(point=>point.id);
+    const target=index+delta;
+    if(target<0||target>=ids.length)return;
+    [ids[index],ids[target]]=[ids[target]!,ids[index]!];
+    await onRun('reorderPoints',{pointIds:ids});
+  };
+  return <div className="sy-manage-page">
+    <header className="sy-manage-head">
+      <button className="sy-nw-back" onClick={onBack}><ArrowLeft size={16}/>返回工作台</button>
+      <div className="sy-nw-title"><span>课程资料管理</span><small>{course.name}</small></div>
+      <div className="sy-manage-summary">已选 {scope.length} / 共 {course.points.length}</div>
+    </header>
+    <div className="sy-manage-body">
+      <h2>确认学习范围</h2>
+      <p className="sy-muted">勾选本轮要学习与复习的章节，可调整顺序与任务估时。勾选与排序会用于生成学习计划。</p>
+      <div className="sy-row">
+        <button disabled={!course.points.length||busy} onClick={()=>setScope(course.points.map(point=>point.id))}>选择全部</button>
+        <button disabled={!scope.length||busy} onClick={()=>setScope([])}>全不选</button>
+      </div>
+      {course.points.map((p,i)=><div className="sy-point-row" key={p.id}>
+        <label className="sy-point"><input type="checkbox" checked={scope.includes(p.id)} onChange={e=>toggle(p.id,e.target.checked)}/><span><small>{p.chapter} · {String(i+1).padStart(2,'0')}</small>{p.name}<em>{course.evidence[p.id]?.state}</em></span></label>
+        <div className="sy-point-actions">
+          <button aria-label={`${p.name} 重命名`} title="重命名" disabled={busy||course.archived} onClick={()=>onRename({id:p.id,name:p.name})}>✏️</button>
+          <button aria-label={`${p.name} 上移`} title="上移" disabled={i===0||busy||course.archived} onClick={()=>void move(i,-1)}>↑</button>
+          <button aria-label={`${p.name} 下移`} title="下移" disabled={i===course.points.length-1||busy||course.archived} onClick={()=>void move(i,1)}>↓</button>
+        </div>
+        <input className="sy-estimate" type="number" min={5} max={240} aria-label={`${p.name} 任务估时（分钟）`} placeholder="20" value={estimates[p.id]??''} onChange={e=>setEstimates({...estimates,[p.id]:e.target.value})} disabled={busy}/>
+      </div>)}
+      {!course.points.length&&<p className="sy-muted">还没有章节。先在资料里检查资料并初始化课程讲义。</p>}
+    </div>
+  </div>;
+}

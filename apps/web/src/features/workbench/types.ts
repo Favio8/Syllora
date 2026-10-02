@@ -1,4 +1,4 @@
-export type View = 'home' | 'workspace' | 'courses' | 'materials' | 'review';
+export type View = 'home' | 'workspace' | 'courses' | 'materials' | 'review' | 'lecture' | 'outline-manage';
 export type CourseIconId = 'math' | 'statistics' | 'code' | 'science' | 'physics' | 'language' | 'literature' | 'art' | 'music' | 'geography' | 'history' | 'notebook';
 export type PanelTab = 'plan' | 'outline' | 'materials' | 'review';
 export type EvidenceState = '未评估' | '待验证' | '待加强' | '初步掌握' | '复测通过';
