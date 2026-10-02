@@ -8,9 +8,18 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag (for example v0.1.2-beta)'
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   gate:
@@ -18,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Verify release versions and notes
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, existsSync } from 'node:fs'
@@ -54,6 +63,7 @@ jobs:
         include:
           - os: windows-latest
             target: win
+            arch: x64
             artifact: release-desktop-windows
             glob: |
               dist/*.exe
@@ -61,7 +71,17 @@ jobs:
               dist/latest.yml
           - os: macos-latest
             target: mac
-            artifact: release-desktop-macos
+            arch: arm64
+            artifact: release-desktop-macos-arm64
+            glob: |
+              dist/*.dmg
+              dist/*.zip
+              dist/*.blockmap
+              dist/latest-mac.yml
+          - os: macos-15-intel
+            target: mac
+            arch: x64
+            artifact: release-desktop-macos-x64
             glob: |
               dist/*.dmg
               dist/*.zip
@@ -69,6 +89,7 @@ jobs:
               dist/latest-mac.yml
           - os: ubuntu-latest
             target: linux
+            arch: x64
             artifact: release-desktop-linux
             glob: |
               dist/*.AppImage
@@ -76,6 +97,8 @@ jobs:
               dist/latest-linux.yml
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4.4.0
         with:
           version: 11.7.0
@@ -87,10 +110,19 @@ jobs:
       - name: Assemble host sidecar
         run: node scripts/assemble-host.mjs --build
         working-directory: apps/desktop
+      - name: Verify native runtime modules on the target runner
+        run: node -e "const {createRequire}=require('node:module');const r=createRequire(require('node:path').resolve('resources/host/package.json'));r('koffi');r('@napi-rs/canvas');console.log('Native runtime ready:',process.platform,process.arch)"
+        working-directory: apps/desktop
+      - name: Smoke macOS on its native architecture
+        if: matrix.target == 'mac'
+        run: node scripts/smoke-desktop.mjs
+        working-directory: apps/desktop
+        env:
+          SMOKE_STRICT: '1'
       # --publish never：tag 触发会激活 electron-builder 隐式发布，generic
       # provider 只下载不上传；发布统一由本 workflow 的 github-release job 上传。
       - name: electron-builder (--${{ matrix.target }})
-        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} --publish never
+        run: node node_modules/electron-builder/cli.js --${{ matrix.target }} --${{ matrix.arch }} --publish never
         working-directory: apps/desktop
       # CI 上（tag 存在）electron-builder 不落盘 latest*.yml——按相同格式自生成。
       - name: Generate update info
@@ -121,6 +153,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4.4.0
         with:
           version: 11.7.0
@@ -164,6 +198,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Download all release artifacts
         uses: actions/download-artifact@v7
         with:
@@ -172,6 +208,8 @@ jobs:
           merge-multiple: true
       - name: List artifacts
         run: ls -la artifacts/
+      - name: Combine macOS architecture update metadata
+        run: node apps/desktop/scripts/gen-update-info.mjs --target mac --dist "$GITHUB_WORKSPACE/artifacts"
       - name: Record artifact checksums
         run: |
           cd artifacts
@@ -180,10 +218,11 @@ jobs:
       - name: Create GitHub Release and upload installers
         uses: softprops/action-gh-release@v3
         with:
-          body_path: docs/releases/${{ github.ref_name }}.md
+          tag_name: ${{ env.RELEASE_TAG }}
+          body_path: docs/releases/${{ env.RELEASE_TAG }}.md
           generate_release_notes: true
           fail_on_unmatched_files: true
-          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-beta') || contains(env.RELEASE_TAG, '-rc') }}
           files: |
             artifacts/*.exe
             artifacts/*.blockmap
