@@ -64,7 +64,8 @@ run(process.execPath, [pkgBinInPnpmStore('next', 'dist/bin/next'), 'build'], joi
 
 rmSync(stageDir, { recursive: true, force: true })
 mkdirSync(join(stageDir, 'lib'), { recursive: true })
-cpSync(join(cliDir, 'lib', 'bin.js'), join(stageDir, 'lib', 'bin.js'))
+// Dynamic imports can be emitted as sibling chunks; ship the complete flat JS closure.
+for(const name of readdirSync(join(cliDir,'lib')).filter(name=>name.endsWith('.js')))cpSync(join(cliDir,'lib',name),join(stageDir,'lib',name))
 for (const name of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) {
   cpSync(join(repoRoot, name), join(stageDir, name))
 }

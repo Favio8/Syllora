@@ -57,6 +57,10 @@ try {
   if (installedLib.some(name => name === 'types')) {
     fail('安装树泄漏了 lib/types/ 中间产物 —— files glob 配置错误')
   }
+  for(const name of installedLib.filter(name=>name.endsWith('.js'))) {
+    const code=readFileSync(join(installedDir,'lib',name),'utf8')
+    for(const match of code.matchAll(/import\(["']\.\/([^"']+\.js)["']\)/g))if(!existsSync(join(installedDir,'lib',match[1]!)))fail(`动态运行时模块缺失: ${match[1]}`)
+  }
 
   // 3. 装完即跑：--help 与 status 必须可用（MODULE_NOT_FOUND 在此现形）。
   for (const args of [['--help'], ['status']]) {
