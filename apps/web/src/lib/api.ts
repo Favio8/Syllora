@@ -23,6 +23,8 @@ import type {
   SyncResponse,
   SettingsPayload,
   ToolInventoryEntry,
+  NoteAiInput,
+  NoteAiAction,
   ProviderModelPayload,
   ProviderCatalogEntry,
   ProviderProtocol,
@@ -604,9 +606,9 @@ export const api = {
       sylloraRpc<{ meta: NoteMeta }>("notes/update", { courseId, noteId, ...payload }),
     delete: (courseId: string, noteId: string) =>
       sylloraRpc<{ deleted: boolean }>("notes/delete", { courseId, noteId }),
-    /** AI 续写：标题 + 光标前文 → 基于课程资料的续写正文。 */
-    suggest: (courseId: string, payload: { title: string; prefix: string }) =>
-      sylloraRpc<{ continuation: string; sourceIds: string[] }>("notes/suggest", { courseId, ...payload }),
+    /** 笔记 AI：一次一种动作（续写/总结/扩写/改写/润色/精简/自定义指令）→ 可直接粘进笔记的正文。 */
+    suggest: (courseId: string, payload: NoteAiInput) =>
+      sylloraRpc<{ text: string; sourceIds: string[]; action: NoteAiAction }>("notes/suggest", { courseId, ...payload }),
     /** 上传笔记图片（base64）。返回落盘后的文件名，写进正文的相对引用里。 */
     uploadImage: (courseId: string, payload: { ext: string; data: string }) =>
       sylloraRpc<{ name: string }>("notes/uploadImage", { courseId, ...payload }),

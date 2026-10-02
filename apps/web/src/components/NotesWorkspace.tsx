@@ -2,30 +2,68 @@
 
 /**
  * 笔记整页工作区。
- * 三栏：笔记列表（含图片树）｜ 富文本编辑器 ｜ AI 助手。
+ * 三栏：笔记列表（含图片树）｜ 富文本编辑器 + 底部 AI 输入框 ｜ 笔记图谱。
  * 正文始终是 Markdown（`[[双链]]` + `![](assets/x.png)`），图谱与后端解析不受影响。
+ *
+ * AI 输入框与主界面输入框同构：功能键在左（续写/总结/改写/扩写/润色/精简），
+ * 模型座位与发送在右，并支持"选中一段 → 输入提示词 → 以该段为对象处理"
+ * （选中的 {from,to} 在提交时冻结，结果先出卡片、再一键替换/插入，单事务一步撤销）。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Image as ImageIcon, Link2, LoaderCircle, Plus, Sparkles, Trash2, X } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { api } from "../lib/api";
-import type { NoteMeta } from "../types/api";
+import type { NoteMeta, NoteAiAction } from "../types/api";
 import NotesEditor from "./NotesEditor";
+import NotesGraph from "./NotesGraph";
+import ModelSeat from "./chat/ModelSeat";
 import LearningModeSwitch from "../features/workbench/components/LearningModeSwitch";
 
 interface Props {
   courseId: string;
   courseName: string;
   onClose: () => void;
-  onEpoch: () => void;
   /** 切到对话学习 / 辅助阅读：由外壳负责离开笔记页并设置学习模式。 */
   onSwitchMode: (mode: 'chat' | 'reading') => void;
 }
 
+/** 输入框左侧的功能键：点一下就用当前上下文执行。 */
+const AI_ACTIONS: Array<{ id: NoteAiAction; label: string; tip: string }> = [
+  { id: "continue", label: "AI 续写", tip: "接着光标处往下写" },
+  { id: "summarize", label: "AI 总结", tip: "把笔记总结成要点" },
+  { id: "rewrite", label: "改写", tip: "换一种表达，意思不变（需选中）" },
+  { id: "expand", label: "扩写", tip: "补足因果、步骤或例子（需选中）" },
+  { id: "polish", label: "润色", tip: "修病句、标点与术语（需选中）" },
+  { id: "shorten", label: "精简", tip: "删冗余、保留关键信息（需选中）" },
+];
+
+/** 把纯文本产物转成块级节点：空行分段，连续 `- ` 行成项目符号列表。
+ *  直接插入字符串会被当成一个文本节点，多段内容会塌成一段。 */
+function textToContent(text: string): Array<Record<string, unknown>> {
+  const nodes: Array<Record<string, unknown>> = [];
+  const paragraph = (line: string) => ({ type: "paragraph", content: line === "" ? [] : [{ type: "text", text: line }] });
+  for (const block of text.split(/\n{2,}/).map((item) => item.trim()).filter((item) => item !== "")) {
+    let bullets: string[] = [];
+    const flush = () => {
+      if (bullets.length === 0) return;
+      nodes.push({ type: "bulletList", content: bullets.map((item) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: item }] }] })) });
+      bullets = [];
+    };
+    for (const line of block.split("\n")) {
+      const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+      if (bullet) { bullets.push(bullet[1]!.trim()); continue }
+      flush();
+      nodes.push(paragraph(line));
+    }
+    flush();
+  }
+  return nodes.length > 0 ? nodes : [paragraph(text)];
+}
+
 const formatUpdated = (at: number) => new Date(at).toLocaleString("zh-CN", { hour12: false });
 
-export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch, onSwitchMode }: Props) {
+export default function NotesWorkspace({ courseId, courseName, onClose, onSwitchMode }: Props) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -39,11 +77,16 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
   const [linking, setLinking] = useState(false);
   // 关联插入所用的选区快照（点「关联」时记下，避免按钮失焦后选区丢失）
   const [pendingLink, setPendingLink] = useState<{ from: number; to: number; text: string } | null>(null);
-  // AI 续写
-  const [suggestText, setSuggestText] = useState("");
-  const [suggestSources, setSuggestSources] = useState<string[]>([]);
-  const [suggesting, setSuggesting] = useState(false);
+  // AI 输入框：选区胶囊 + 提示词 + 结果卡（应用前不碰文档）
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<{ text: string; sourceIds: string[]; action: NoteAiAction; target: { from: number; to: number; text: string } | null } | null>(null);
+  const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  // 图谱刷新用：保存/新建/删除后自增
+  const [graphEpoch, setGraphEpoch] = useState(0);
 
+  const aiInputRef = useRef<HTMLTextAreaElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
   const loadedRef = useRef<{ title: string; content: string } | null>(null);
@@ -68,6 +111,14 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
 
   useEffect(() => { if (creating) newTitleRef.current?.focus(); }, [creating]);
 
+  // 输入框自动增高：下边界固定（在编辑器列底部），内容多只向上长。
+  useEffect(() => {
+    const el = aiInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+  }, [aiPrompt]);
+
   const open = useCallback(
     async (noteId: string) => {
       setError("");
@@ -77,8 +128,9 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
         setTitle(result.meta.title);
         setContent(result.content);
         setSavedLinks(result.meta.wikilinks);
-        setSuggestText("");
-        setSuggestSources([]);
+        setAiResult(null);
+        setAiPrompt("");
+        setSelection(null);
         setLinking(false);
         setPendingLink(null);
         loadedRef.current = { title: result.meta.title, content: result.content };
@@ -114,7 +166,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
       setNewTitle("");
       await open(result.meta.id);
       await load();
-      onEpoch();
+      setGraphEpoch((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "新建笔记失败");
     } finally {
@@ -132,7 +184,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
       setSavedLinks(result.meta.wikilinks);
       loadedRef.current = { title: result.meta.title, content };
       await load();
-      onEpoch();
+      setGraphEpoch((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "保存笔记失败");
     } finally {
@@ -151,7 +203,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
         setEditingId(null); setTitle(""); setContent(""); setSavedLinks([]); loadedRef.current = null;
       }
       await load();
-      onEpoch();
+      setGraphEpoch((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "删除笔记失败");
     } finally {
@@ -184,32 +236,75 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
     setPendingLink(null);
   };
 
-  /** AI 续写：把「标题 + 光标前文」发给宿主。 */
-  const handleSuggest = async () => {
+  /** 选区跟踪：选中就出现胶囊；失焦也保留（提交时再冻结一次）。 */
+  useEffect(() => {
+    if (!editor) return;
+    const sync = () => {
+      const { from, to, empty } = editor.state.selection;
+      setSelection(empty ? null : { from, to, text: editor.state.doc.textBetween(from, to, " ").trim() });
+    };
+    sync();
+    editor.on("selectionUpdate", sync);
+    return () => { editor.off("selectionUpdate", sync); };
+  }, [editor]);
+
+  /** 执行一次 AI 动作：选段类动作用当前选区，其余用整篇 / 光标前文。 */
+  const runAi = async (action: NoteAiAction, instruction = ""): Promise<boolean> => {
     const ed = editorRef.current;
-    if (!ed || suggesting) return;
-    const prefix = ed.state.doc.textBetween(0, ed.state.selection.from, "\n");
-    setSuggesting(true);
+    if (!ed || aiBusy) return false;
+    const needsSelection = action === "expand" || action === "rewrite" || action === "polish" || action === "shorten";
+    const picked = needsSelection || instruction !== "" ? selection : null;
+    if (needsSelection && picked === null) {
+      setError("请先在正文中选中要处理的内容");
+      return false;
+    }
+    setAiBusy(true);
     setError("");
-    setSuggestText("");
-    setSuggestSources([]);
+    setAiResult(null);
     try {
-      const res = await api.notes.suggest(courseId, { title: title.trim(), prefix });
-      setSuggestText(res.continuation);
-      setSuggestSources(res.sourceIds);
+      const res = await api.notes.suggest(courseId, {
+        title: title.trim(),
+        action,
+        prefix: action === "continue" ? ed.state.doc.textBetween(0, ed.state.selection.from, "\n") : "",
+        selection: picked?.text ?? "",
+        body: ed.state.doc.textBetween(0, ed.state.doc.content.size, "\n"),
+        instruction,
+      });
+      // 目标在提交时冻结：之后用户改动文档也不会把结果贴错地方。
+      setAiResult({ text: res.text, sourceIds: res.sourceIds, action, target: picked });
+      return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "AI 续写失败");
+      setError(cause instanceof Error ? cause.message : "AI 处理失败");
+      return false;
     } finally {
-      setSuggesting(false);
+      setAiBusy(false);
     }
   };
 
-  const insertSuggestion = () => {
+  /** 应用结果：替换冻结的选区，或插到当前光标处；应用前核对原文未被改动。 */
+  const applyResult = (mode: "replace" | "insert") => {
     const ed = editorRef.current;
-    if (!ed || !suggestText) return;
-    ed.chain().focus().insertContent(suggestText).run();
-    setSuggestText("");
-    setSuggestSources([]);
+    if (!ed || aiResult === null) return;
+    const target = aiResult.target;
+    if (mode === "replace" && target !== null) {
+      const current = ed.state.doc.textBetween(target.from, target.to, " ");
+      if (current.trim() !== target.text.trim()) {
+        setError("原文已变化，请重新选中后再试");
+        return;
+      }
+      ed.chain().focus().insertContentAt({ from: target.from, to: target.to }, textToContent(aiResult.text)).run();
+    } else {
+      ed.chain().focus().insertContent(textToContent(aiResult.text)).run();
+    }
+    setAiResult(null);
+  };
+
+  /** 提交提示词：自定义指令走 custom，选区在提交时作为处理对象。 */
+  const submitPrompt = async () => {
+    const text = aiPrompt.trim();
+    if (text === "") return;
+    const ok = await runAi("custom", text);
+    if (ok) setAiPrompt("");
   };
 
   /** 点左栏缩略图：定位到正文里那张图。 */
@@ -266,7 +361,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
             return (
               <div className="sy-nw-group" key={note.id}>
                 <div className={`sy-nw-item ${isSelected ? "is-selected" : ""}`}>
-                  <button type="button" className="sy-nw-item-btn" onClick={() => { if (dirty && !window.confirm("有未保存的修改，切换将放弃，确定？")) return; void open(note.id); }}>
+                  <button type="button" className="sy-nw-item-btn" aria-label={`打开笔记 ${note.title}`} onClick={() => { if (dirty && !window.confirm("有未保存的修改，切换将放弃，确定？")) return; void open(note.id); }}>
                     <strong>{note.title}</strong>
                     <small>{formatUpdated(note.updatedAt)}{hasImages ? ` · ${note.images.length} 图` : ""}</small>
                   </button>
@@ -302,7 +397,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
                 value={content}
                 noteId={editingId}
                 onChange={setContent}
-                onEditor={(ed) => { editorRef.current = ed; }}
+                onEditor={(ed) => { editorRef.current = ed; setEditor(ed); }}
                 onError={setError}
                 extraToolbar={
                   <button type="button" className="sy-nw-link-btn" title="选中文字后点此关联到其他笔记" onClick={openLinkPicker}>
@@ -318,36 +413,61 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onEpoch,
                   </div>
                 )}
               </div>
+
+              {aiResult !== null && (
+                <div className="sy-nw-ai-card" data-testid="notes-ai-result">
+                  <div className="sy-nw-ai-card-head">
+                    <span>{AI_ACTIONS.find((item) => item.id === aiResult.action)?.label ?? "AI 处理"}{aiResult.target !== null ? " · 针对选中内容" : ""}</span>
+                    {aiResult.sourceIds.length > 0 && <small>依据 {aiResult.sourceIds.length} 个资料片段</small>}
+                  </div>
+                  <textarea className="sy-nw-ai-result" aria-label="AI 结果（可先编辑再应用）" value={aiResult.text} onChange={(event) => setAiResult({ ...aiResult, text: event.target.value })} />
+                  <div className="sy-nw-ai-btns">
+                    {aiResult.target !== null && <button className="sy-primary" onClick={() => applyResult("replace")}>替换选中</button>}
+                    <button className={aiResult.target === null ? "sy-primary" : ""} onClick={() => applyResult("insert")}>插入到光标处</button>
+                    <button onClick={() => setAiResult(null)}>丢弃</button>
+                  </div>
+                </div>
+              )}
+
+              {/* 底部 AI 输入框：与主界面输入框同构——功能键在左，模型与发送在右 */}
+              <form className="sy-nw-composer" onSubmit={(event) => { event.preventDefault(); void submitPrompt(); }}>
+                {selection !== null && (
+                  <div className="sy-nw-selchip" data-testid="notes-selection-chip">
+                    <span>已选：{selection.text.length > 42 ? `${selection.text.slice(0, 42)}…` : selection.text}</span>
+                    <button type="button" aria-label="清除选区" onClick={() => setSelection(null)}><X size={12} /></button>
+                  </div>
+                )}
+                <textarea
+                  ref={aiInputRef}
+                  aria-label="笔记 AI 指令"
+                  value={aiPrompt}
+                  disabled={editingId === null}
+                  placeholder={selection !== null ? "对选中的内容做什么？例如：以这句话为主题拓展" : "输入提示词，对整篇笔记做什么；也可以先在正文里选中一段"}
+                  onChange={(event) => setAiPrompt(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submitPrompt(); } }}
+                />
+                <div className="sy-nw-composer-toolbar">
+                  <div className="sy-nw-composer-tools">
+                    {AI_ACTIONS.map((action) => (
+                      <button type="button" key={action.id} className="button small" data-tip={action.tip} disabled={aiBusy || editingId === null} onClick={() => void runAi(action.id)}>{action.label}</button>
+                    ))}
+                  </div>
+                  <div className="sy-nw-composer-submit">
+                    <span className="sy-nw-model-slot" data-tip="选择模型与推理等级"><ModelSeat /></span>
+                    <button className="icon-button sy-nw-send" type="submit" aria-label="发送给 AI" data-tip="发送" disabled={aiBusy || aiPrompt.trim() === "" || editingId === null}>
+                      {aiBusy ? <LoaderCircle size={17} className="sy-spin" /> : <Sparkles size={17} />}
+                    </button>
+                  </div>
+                </div>
+              </form>
             </>
           )}
           {error !== "" ? <p className="sy-nw-error" role="alert">{error}</p> : null}
         </section>
 
-        {/* 右：AI 助手 */}
-        <aside className="sy-nw-ai">
-          <div className="sy-nw-ai-head"><Sparkles size={14} /><span>AI 助手</span></div>
-          {editingId === null ? (
-            <p className="sy-muted">选择一篇笔记后，可让 AI 依据课程资料续写。</p>
-          ) : (
-            <>
-              <button className="sy-nw-ai-run" disabled={suggesting} onClick={() => void handleSuggest()}>
-                {suggesting ? <><LoaderCircle size={14} className="sy-spin" />生成中…</> : <><Sparkles size={14} />续写</>}
-              </button>
-              {suggestText && (
-                <div className="sy-nw-ai-card" data-testid="notes-suggestion">
-                  <p className="sy-nw-ai-text">{suggestText}</p>
-                  {suggestSources.length > 0 && <p className="sy-nw-ai-src"><ImageIcon size={11} />依据 {suggestSources.length} 个资料片段</p>}
-                  <div className="sy-nw-ai-btns">
-                    <button className="sy-primary" onClick={insertSuggestion}>插入<small>Tab</small></button>
-                    <button onClick={() => { setSuggestText(""); setSuggestSources([]); }}>丢弃</button>
-                  </div>
-                </div>
-              )}
-              {!suggestText && !suggesting && (
-                <p className="sy-nw-ai-hint">把光标放在要续写的位置，点「续写」；出现建议后点「插入」采纳，内容插到光标处。</p>
-              )}
-            </>
-          )}
+        {/* 右：笔记图谱（默认展示当前课程全部笔记的关联；双击画布或点放大看大图） */}
+        <aside className="sy-nw-graph" aria-label="笔记图谱">
+          <NotesGraph courseId={courseId} refreshKey={graphEpoch} fill />
         </aside>
       </div>
 

@@ -133,7 +133,10 @@ export default function ModelSeat({ onOpenSettings }: { onOpenSettings?: () => v
       {current?.effort ? <span className="shrink-0 rounded bg-bg-panel px-1 text-[10px] font-normal leading-4 text-text-faint">{effortName}</span> : null}
       <ChevronDown size={12} className="shrink-0 text-text-faint" aria-hidden />
     </button>
-    {open ? <div role="menu" aria-label="选择模型" className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-80 rounded-xl border border-border-line bg-bg-panel p-1 shadow-lv3">
+    {/* 锚点右对齐：座位在输入框右下角，弹窗 280px 从左锚定会被 .sy-main 的
+        overflow:hidden 裁掉（旧实现 left-0）。right-0 与 LeftNav 会话菜单、
+        MessageCard 片段操作同一约定。 */}
+    {open ? <div role="menu" aria-label="选择模型" className="absolute bottom-[calc(100%+8px)] right-0 z-20 w-80 rounded-xl border border-border-line bg-bg-panel p-1 shadow-lv3">
       {pane === "root" ? <>
         <button type="button" role="menuitem" aria-label="模型" className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-text-primary hover:bg-bg-card" onClick={() => setPane("models")}><span className="flex-1">模型</span><span aria-hidden className="max-w-[150px] truncate text-[11px] text-text-faint">{caption}</span><ChevronRight size={14} className="text-text-faint" aria-hidden /></button>
         <button type="button" role="menuitem" aria-label="思考强度" className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-text-primary hover:bg-bg-card" onClick={() => setPane("effort")}><span className="flex-1">思考强度</span><span aria-hidden className="max-w-[150px] truncate text-[11px] text-text-faint">{effortName}</span><ChevronRight size={14} className="text-text-faint" aria-hidden /></button>

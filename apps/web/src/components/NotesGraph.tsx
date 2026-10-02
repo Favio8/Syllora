@@ -63,7 +63,7 @@ interface GraphLink {
   target: string;
 }
 
-export default function NotesGraph({ courseId, refreshKey }: { courseId: string; refreshKey: number }) {
+export default function NotesGraph({ courseId, refreshKey, fill = false }: { courseId: string; refreshKey: number; fill?: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -286,7 +286,8 @@ export default function NotesGraph({ courseId, refreshKey }: { courseId: string;
   const h = dims.h || (fullscreen ? 600 : 360);
 
   const graphEl = (
-    <div className="sy-graph-canvas-wrap" ref={containerRef} style={{ flex: fullscreen ? 1 : "0 1 auto", height: fullscreen ? "100%" : 360, minHeight: 200 }}>
+    <div className="sy-graph-canvas-wrap" ref={containerRef} onDoubleClick={() => setFullscreen(true)} title="双击放大图谱"
+      style={fullscreen || fill ? { flex: 1, height: "100%", minHeight: 200 } : { flex: "0 1 auto", height: 360, minHeight: 200 }}>
       {graph.nodes.length > 0 && (
         <ForceGraph2D
           ref={fgRef}
@@ -338,14 +339,14 @@ export default function NotesGraph({ courseId, refreshKey }: { courseId: string;
         {query && <button type="button" className="sy-graph-clear" aria-label="清除搜索" onClick={() => setQuery("")}><X size={12} /></button>}
       </label>
       <button type="button" aria-label="重置视图" title="重置视图" onClick={() => fgRef.current?.zoomToFit(400, 60)}><RotateCcw size={12} /></button>
-      <button type="button" aria-label={fullscreen ? "退出全屏" : "全屏"} title={fullscreen ? "退出全屏" : "全屏"} onClick={() => setFullscreen(!fullscreen)}>
+      <button type="button" aria-label={fullscreen ? "退出放大" : "放大图谱"} title={fullscreen ? "退出放大" : "放大图谱（双击画布同样可以）"} onClick={() => setFullscreen(!fullscreen)}>
         {fullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
       </button>
     </div>
   );
 
   const body = (
-    <div className="sy-graph" style={fullscreen ? { flex: 1, display: "flex", flexDirection: "column", gap: 9, minHeight: 0 } : {}}>
+    <div className="sy-graph" style={fullscreen || fill ? { flex: 1, display: "flex", flexDirection: "column", gap: 9, minHeight: 0 } : {}}>
       {toolbar}
       {error && <p className="sy-muted" role="alert">{error}</p>}
       {loading && notes.length === 0 && <p className="sy-muted">正在读取笔记…</p>}
@@ -365,16 +366,15 @@ export default function NotesGraph({ courseId, refreshKey }: { courseId: string;
 
   if (!courseId) return <p className="sy-muted">请先打开一门课程</p>;
 
-  if (fullscreen) {
-    return (
+  // 放大：弹窗叠在面板之上（面板里的图谱保持原样，关掉弹窗即回到原视图）。
+  const enlarged = (
       <div className="sy-overlay" onClick={() => setFullscreen(false)}>
         <div className="sy-modal" style={{ width: "90vw", height: "85vh", maxWidth: 1100, display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-          <header><h2>笔记知识图谱</h2><button type="button" aria-label="退出全屏" onClick={() => setFullscreen(false)}><Minimize2 size={19} /></button></header>
+          <header><h2>笔记知识图谱</h2><button type="button" aria-label="退出放大" onClick={() => setFullscreen(false)}><Minimize2 size={19} /></button></header>
           <div style={{ flex: 1, minHeight: 0, padding: "0 24px 24px" }}>{body}</div>
         </div>
       </div>
-    );
-  }
+  );
 
-  return body;
+  return <>{body}{fullscreen ? enlarged : null}</>;
 }
