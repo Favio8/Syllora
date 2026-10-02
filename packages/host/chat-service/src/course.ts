@@ -278,8 +278,8 @@ export class JobManager {
       const generator = requireGenerator(ctx)
       const builder = projectBuilder(courseDir, generator, inferrerOf(ctx))
       // PERF-1：config.yaml 的 max_concurrency 终于被真正消费——旧链路解析
-      // 后无任何并行消费点，builder 双层串行。上限与设置 schema 一致（1..32）。
-      const concurrency = Math.max(1, Math.min(32, ctx.config?.maxConcurrency ?? 8))
+      // 后无任何并行消费点，builder 双层串行。上限与设置界面一致（ModelsSection 的 max=16）。
+      const concurrency = Math.max(1, Math.min(16, ctx.config?.maxConcurrency ?? 8))
       const report = await builder.build(2, (finished, total, currentFile) => {
         job.progress = { total, finished, currentFile: currentFile || null }
       }, undefined, concurrency)

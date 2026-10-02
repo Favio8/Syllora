@@ -142,7 +142,9 @@ function ProviderEditorCard({
   );
   // 高级字段：编辑态从既有 provider 初始化真实值，创建态用默认（X2）。
   const [temperature, setTemperature] = useState(draft?.temperature ?? provider?.temperature ?? 0.3);
-  const [maxConcurrency, setMaxConcurrency] = useState(draft?.maxConcurrency ?? provider?.maxConcurrency ?? 4);
+  // 兜底必须与宿主默认值一致（config.ts / settings.ts 的 8）：这里是新建卡片的初值，
+  // 保存时无条件发送，若用 4 会把运行时并发静默降回 4。
+  const [maxConcurrency, setMaxConcurrency] = useState(draft?.maxConcurrency ?? provider?.maxConcurrency ?? 8);
   // 协议决定请求路径与鉴权头（openai: /chat/completions + Bearer；
   // anthropic: /v1/messages + x-api-key）。目录条目自带默认，编辑态以已存值为准。
   const [protocol, setProtocol] = useState<ProviderProtocol>(
@@ -469,7 +471,7 @@ function ProviderEditorCard({
                 min={1}
                 max={16}
                 step={1}
-                value={Number.isFinite(maxConcurrency) ? maxConcurrency : 4}
+                value={Number.isFinite(maxConcurrency) ? maxConcurrency : 8}
                 onChange={(e) => setMaxConcurrency(Number(e.target.value))}
                 className={inputClass}
                 name={`${uid}_concurrency_value`}

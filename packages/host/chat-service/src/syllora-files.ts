@@ -85,7 +85,8 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
   const known = new Map<string, Material>()
   for (const material of materials) {
     const path = material.path
-    if (!path || material.status === 'deleted' || typeof material.fingerprint !== 'string' || !material.fingerprint || !material.size || !material.mtimeMs) continue
+    // typeof 而不是 falsy：mtimeMs 恰为 0（1970-01-01）是合法文件，不能被排除在复用之外。
+    if (!path || material.status === 'deleted' || typeof material.fingerprint !== 'string' || !material.fingerprint || typeof material.size !== 'number' || typeof material.mtimeMs !== 'number') continue
     if (!known.has(path)) known.set(path, material)
   }
   async function walk(dir: string) {
@@ -112,6 +113,18 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
 
 interface Block { text: string; start: number; end: number; section: string; context: string; kind: string; anchor: string }
 /**
+ * A numbered line is only a chapter when it reads like one. PDF extraction wraps long formulas onto their own
+ * lines, and those wrapped fragments start with a number too (`2 = ℎ𝑖 ⋅ (𝑧𝑖 − 𝑧𝑛𝑎)2。…`, `12 + ℎ𝑖(𝑧𝑖 − 𝑧𝑛𝑎)2]`).
+ * Treating them as chapters invents a section per formula, and since chapters are the model-call boundary that
+ * costs one extra call each. CJK text after the number is the cheap discriminator: real headings carry a title,
+ * the wrapped formulas carry an operator, a digit, or a unit instead.
+ */
+const CHAPTER_TITLE = /[\u3400-\u9fff\uf900-\ufaff]/
+function looksLikeChapter(numbered: RegExpExecArray): boolean {
+  const title = numbered[2]!.trim()
+  return CHAPTER_TITLE.test(title) && !/^[=+\-−–—×÷*/^_<>≤≥≈%‰°]/.test(title)
+}
+/**
  * Structure-first scanner: fenced code and tables survive blank lines; raw offsets never include added context.
  * `fallback` groups fragments that belong to one document: a PDF page anchor differs per page, so using it as
  * the section fallback would make every page its own chapter and turn one chapter per model call into one call
@@ -126,7 +139,8 @@ function blocks(text: string, label: string, fallback: string): Block[] {
     const line = lines[i]!, start = offset, startLine=i+1
     if (!line.trim()) { offset += line.length; i++; continue }
     const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line.trim())
-    const chapter = /^\s*\d+[.)]\s/.test(line) ? null : /^(第[一二三四五六七八九十百\d]+[章节]|\d+(?:\.\d+)*[、.\s])\s*(.{1,70})$/.exec(line.trim())
+    const numbered = /^\s*\d+[.)]\s/.test(line) ? null : /^(第[一二三四五六七八九十百\d]+[章节]|\d+(?:\.\d+)*[、.\s])\s*(.{1,70})$/.exec(line.trim())
+    const chapter = numbered && looksLikeChapter(numbered) ? numbered : null
     if (heading || chapter) {
       const level = heading ? heading[1]!.length : 1
       headings.splice(level - 1); headings[level - 1] = heading ? heading[2]! : line.trim()
@@ -175,7 +189,9 @@ export function structuredSources(materialId: string, version: string, parts: Ar
     const fallback = part.name ?? part.anchor
     for (const block of blocks(part.text, part.anchor, fallback).flatMap(pieces)) {
       const prev = groups.at(-1)
-      if (prev && prev.section === block.section && prev.anchor.startsWith(part.anchor) && prev.kind === 'paragraph' && block.kind === 'paragraph' && [...part.text.slice(prev.start,block.end)].length <= 1800) {
+      // 合并只在同一份文档的同一 part 内进行：不能只靠 anchor 前缀判断，否则两份同 basename、同页号的
+      // 资料（part.anchor 都是「第 1 页」）会被并成一条，`part.text.slice` 会用后一份的正文覆盖前一份。
+      if (prev && prev.section === block.section && prev.anchor.startsWith(`${part.anchor} · `) && prev.kind === 'paragraph' && block.kind === 'paragraph' && [...part.text.slice(prev.start,block.end)].length <= 1800) {
         // Only merge contiguous raw ranges; skipped blank lines remain in the original text.
         prev.text = part.text.slice(prev.start, block.end); prev.end = block.end
         const lastLine=part.text.slice(0,block.end).split('\n').length-(part.text[block.end-1]==='\n'?1:0)

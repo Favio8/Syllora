@@ -48,6 +48,16 @@ type SettingsTab = 'models'|'archive'|'diag'|'prefs';
 /** 一份宿主日志文件（内容已按上限截断）。 */
 type DiagFile = { name:string; bytes:number; text:string; truncated:boolean };
 
+/**
+ * 来源弹层的标题：资料名 + 精确定位。直接拼 `name · anchor` 会在两者都从文件名派生时重复，
+ * 例如 `sources/讲义.md · 讲义.md · 行 3–5 · 字符 45–120`。
+ */
+export function sourceLabel(source:{anchor:string}, materialName?:string):string {
+  if(!materialName)return source.anchor;
+  if(source.anchor===materialName||source.anchor.startsWith(`${materialName} · `))return source.anchor;
+  return `${materialName} · ${source.anchor}`;
+}
+
 export default function Syllora() {
   useModalFocus();
   const [data,setData] = useState<SylloraState|null>(null);
@@ -330,7 +340,7 @@ export default function Syllora() {
     {userPage&&<UserDialogs page={userPage} name={data?.uiPreferences?.name??'学习者'} error={error} onClose={()=>setUserPage(null)} onSave={async()=>false}/>}
     {lastJob?.progress?.failures.length? <div className="sy-init-failures" role="status">{lastJob.progress.failures.map((f,i)=><p key={i}>{f}</p>)}</div>:null}
     {creating&&<ProjectDialog onClose={()=>{setCreating(false);setMigration(null)}} {...(migration?{migrationName:migration.name}:{})} onOpen={async (path,name,icon)=>{if(!(await flushDraft()))throw new Error('请先保存当前课程草稿');const result=await rpc<{id:string}>(migration?'migrateCourse':'openCourse',migration?{courseId:migration.id,path}:{path,...(name?{name}:{}),...(icon?{icon}:{}),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone});await refresh();selectedRef.current=result.id;setSelected(result.id);setCreating(false);setMigration(null);setView('workspace');setTab('materials');setShowRight(true)}}/>}
-    {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{course?.materials.find(m=>m.id===source.materialId)?.name} · {source.anchor}</p><pre className="sy-source-text">{source.text}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
+    {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{sourceLabel(source, course?.materials.find(m=>m.id===source.materialId)?.name)}</p><pre className="sy-source-text">{source.text}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
     {diffCourse?.draft&&<DiffModal course={diffCourse} onClose={()=>setDiffCourse(null)} busy={busy} onConfirm={async()=>{if(await run('confirmPlan',{courseId:diffCourse.id,baseVersion:diffCourse.draft!.baseVersion,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}} onReject={async()=>{if(await run('rejectPlan',{courseId:diffCourse.id,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}}/>}
     {settings&&<div className="sy-overlay"><section className="sy-modal sy-settings" role="dialog" aria-modal="true" aria-label="模型与设置"><header><h2>模型与设置</h2><button aria-label="关闭设置" onClick={()=>setSettings(false)}><X size={19}/></button></header><div className="sy-settings-cols"><nav className="sy-settings-nav" aria-label="设置分区">{([['prefs','用户偏好'],['models','模型配置'],['archive','归档管理'],['diag','诊断日志']] as const).map(([id,label])=><button key={id} className={settingsTab===id?'is-selected':''} aria-current={settingsTab===id} onClick={()=>setSettingsTab(id)}>{label}</button>)}</nav><div className="sy-settings-body">
       {settingsTab==='prefs'?<PreferencesEditor initial={data?.uiPreferences??{name:'学习者',theme:'light',dailyMinutes:40,revision:0}} onSaved={refresh}/>:settingsTab==='models'?<><ModelsSection initial={null}/><hr/><h3>外部调用授权</h3><p>生成大纲、回答和题目时，将向所选模型服务发送相关资料片段、问题和题目。供应商的数据留存规则以其实际政策为准。</p><label className="sy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>允许向已配置模型发送以上内容</label><p className="sy-muted">已调用 {data?.settings.calls??0} 次。供应商账户费用与额度由你自行管理。</p><button className="sy-primary" disabled={busy} onClick={async()=>{if(await run('preferences',{consent}))setSettings(false)}}>保存授权</button></>
