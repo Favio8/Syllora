@@ -54,7 +54,7 @@ export function MaterialInitialization({course,epoch,busy,running,onRun}:{course
 }
 
 /** 居中错误弹窗：遮罩点击 / 右上角按钮 / 底部按钮 / Esc 四条路都能关闭。 */
-function CenteredErrorDialog({title,message,onClose}:{title:string;message:string;onClose:()=>void}) {
+export function CenteredErrorDialog({title,message,onClose}:{title:string;message:string;onClose:()=>void}) {
   const closeRef=useRef<HTMLButtonElement>(null);
   useEffect(()=>{closeRef.current?.focus();const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose()};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[onClose]);
   return <div className="sy-overlay" onClick={onClose}><section className="sy-modal sy-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sy-error-dialog-title" aria-describedby="sy-error-dialog-message" onClick={event=>event.stopPropagation()}>
