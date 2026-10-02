@@ -5,6 +5,9 @@ lib/
 # 源码目录 src/lib 不是构建产物，必须重新包含（lib/ 规则会吞掉任意深度的 lib/）
 !**/src/lib/
 !**/src/lib/**
+# Workbench source helpers are nested below src/features, not build output.
+!apps/web/src/features/workbench/lib/
+!apps/web/src/features/workbench/lib/**
 dist/
 *.tsbuildinfo
 *.log
