@@ -90,6 +90,7 @@ try {
   const info=JSON.parse(await readFile(join(home,'host.json'),'utf8'))
   const origin=`http://127.0.0.1:${info.port}`
   await page.goto(origin)
+  await page.getByRole('button',{name:/issue4 验证课程.*1 个知识点/}).click()
   await page.getByRole('heading',{name:'issue4 验证课程',exact:true}).waitFor()
   const promptBox=()=>page.getByRole('textbox',{name:'向课程资料提问'})
 
@@ -178,7 +179,7 @@ try {
   // Scenario 2: a failed draft save must keep the user on the current course.
   await page.route('**/api/syllora/saveDraft',route=>route.abort())
   await promptBox().fill('这条草稿保存会失败')
-  await page.locator('.sy-error').filter({hasText:'未提交草稿未能保存，已停留在当前课程'}).waitFor()
+  await page.locator('.sy-error').filter({hasText:'未提交输入已保留'}).waitFor()
   await page.getByRole('button',{name:/issue4 第二门课程.*0 个知识点/}).click()
   await sleep(800)
   assert.equal(await page.getByRole('heading',{name:'issue4 验证课程',exact:true}).isVisible(),true)
@@ -212,7 +213,8 @@ try {
   await page.getByRole('button',{name:'归档课程'}).click()
   await page.getByRole('heading',{name:'课程已归档，恢复后可继续学习'}).waitFor()
   assert.equal(await page.getByRole('button',{name:/^继续/}).isDisabled(),true)
-  await page.locator('.sy-section-title').filter({hasText:'已归档'}).waitFor()
+  assert.equal((await rpcState()).courses.find((course:{id:string})=>course.id===courseId.id).archived,true)
+  assert.equal(await page.locator('.rail-courses').getByRole('button',{name:/issue4 验证课程/}).count(),0)
   await assert.rejects(rpc('plan',{courseId:courseId.id,scope:[pointId],dailyMinutes:40,days:7,restDays:[],baseVersion:2}),/请先恢复归档课程/)
   await shot(page,'05a-archive-protection.png')
   const planBeforeRestore=JSON.stringify(loaded.plan)

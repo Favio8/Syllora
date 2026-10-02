@@ -4,6 +4,7 @@ export interface LocalDraft {
   revision: number
   savedRevision: number
   savedAt: number
+  baseVersion?:number
 }
 
 export type DraftCache = Record<string, LocalDraft>
@@ -11,6 +12,7 @@ export type DraftCache = Record<string, LocalDraft>
 export interface ServerDraft {
   prompt: string
   answers: Array<{ questionId: string; option: number }>
+  version?:number
 }
 
 const answersOf = (answers: ServerDraft['answers']): Record<string, number> => {
@@ -31,19 +33,19 @@ export function rememberServer(cache: DraftCache, courseId: string, server: Serv
   if (local && local.savedAt > polledAt) return cache
   const prompt = server.prompt
   const answers = answersOf(server.answers)
-  if (local && local.prompt === prompt && sameAnswers(local.answers, answers)) return cache
-  return { ...cache, [courseId]: { prompt, answers, revision: 0, savedRevision: 0, savedAt: 0 } }
+  if (local && local.prompt === prompt && sameAnswers(local.answers, answers)) return {...cache,[courseId]:{...local,baseVersion:server.version??0}}
+  return { ...cache, [courseId]: { prompt, answers, revision: 0, savedRevision: 0, savedAt: 0,baseVersion:server.version??0 } }
 }
 
 export function editDraft(cache: DraftCache, courseId: string, prompt: string, answers: Record<string, number>): DraftCache {
   const current = cache[courseId] ?? { prompt: '', answers: {}, revision: 0, savedRevision: 0, savedAt: 0 }
-  return { ...cache, [courseId]: { prompt, answers, revision: current.revision + 1, savedRevision: current.savedRevision, savedAt: current.savedAt } }
+  return { ...cache, [courseId]: { ...current,prompt, answers, revision: current.revision + 1, savedRevision: current.savedRevision, savedAt: current.savedAt } }
 }
 
-export function markSaved(cache: DraftCache, courseId: string, revision: number, savedAt = Date.now()): DraftCache {
+export function markSaved(cache: DraftCache, courseId: string, revision: number, savedAt = Date.now(),baseVersion?:number): DraftCache {
   const current = cache[courseId]
-  if (!current || current.revision !== revision) return cache
-  return { ...cache, [courseId]: { ...current, savedRevision: revision, savedAt } }
+  if (!current) return cache
+  return { ...cache, [courseId]: { ...current, savedRevision: Math.max(current.savedRevision,revision), savedAt,...(baseVersion===undefined?{}:{baseVersion}) } }
 }
 
 export function hydrateCourse(cache: DraftCache, courseId: string, server: ServerDraft): { prompt: string; answers: Record<string, number>; shouldSave: false } {

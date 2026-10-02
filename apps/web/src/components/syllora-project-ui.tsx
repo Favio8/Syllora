@@ -7,11 +7,8 @@ import { api } from '../lib/api';
 import type { CourseView } from '../types/syllora';
 import type { FileCandidate, Lecture } from '../../../../packages/host/chat-service/src/syllora-project-types';
 
-export async function projectRpc<T=unknown>(action:string,payload:unknown={}):Promise<T> {
-  const token=(window as unknown as {__SYLLORA__?:{token?:string}}).__SYLLORA__?.token;
-  const response=await fetch(`/api/syllora/${action}`,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({payload})});
-  const body=await response.json();if(body.error)throw new Error(body.error.message);if(!response.ok)throw new Error(`请求失败 (${response.status})`);return body.result as T;
-}
+export { workbenchRpc as projectRpc } from '../features/workbench/services';
+import { workbenchRpc as projectRpc } from '../features/workbench/services';
 /** Fetch the protected original with a header; preview URLs never contain credentials. */
 export function MaterialPreview({url,name,version}:{url:string;name:string;version:string|number|undefined}) {
   const [blob,setBlob]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -29,18 +26,20 @@ export function MaterialPreview({url,name,version}:{url:string;name:string;versi
     } catch(e){if(!current.signal.aborted)setError(e instanceof Error?e.message:'预览失败')}finally{if(!current.signal.aborted)setBusy(false)}
   }}>{busy?'正在读取原文件…':'预览原文件'}</button>{error&&<p role="alert" className="sy-muted">{error}</p>}{blob&&<div className="sy-overlay"><section className="sy-modal sy-pdf-preview" role="dialog" aria-modal="true" aria-label="原文件预览"><header><h2>{name}</h2><button aria-label="关闭原文件预览" onClick={close}><X size={19}/></button></header><p className="sy-muted">若浏览器无法显示，可<a href={blob} download={name}>下载原文件</a>查看。</p><iframe src={blob} title="PDF 原文件"/></section></div>}</>;
 }
-export function ProjectDialog({onClose,onOpen,migrationName}:{onClose:()=>void;onOpen:(path:string)=>Promise<void>;migrationName?:string}) {
+export function ProjectDialog({onClose,onOpen,migrationName}:{onClose:()=>void;onOpen:(path:string,name?:string,icon?:string)=>Promise<void>;migrationName?:string}) {
+  const [name,setName]=useState(''),[icon,setIcon]=useState('');
   const [path,setPath]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [browse,setBrowse]=useState<{path:string;parent:string|null;entries:Array<{name:string;path:string}>}|null>(null);
   const browseAt=async(value:string|null)=>{setBusy(true);setError('');try{const result=await api.browseDirectory(value);setBrowse(result);setPath(result.path)}catch(e){setError(e instanceof Error?e.message:'无法浏览文件夹')}finally{setBusy(false)}};
   return <div className="sy-overlay"><section className="sy-modal sy-project-dialog" role="dialog" aria-modal="true" aria-label={migrationName?'迁移旧课程':'打开课程文件夹'}><header><h2>{migrationName?`迁移「${migrationName}」`:'打开课程文件夹'}</h2><button aria-label="关闭文件夹选择" onClick={onClose}><X size={19}/></button></header>
     <p>一门课程对应一个文件夹。课程信息、整理讲义和学习记录保存在其中的 .syllora 中。</p>
     {migrationName&&<p>迁移保留已有学习记录。旧资料只有提取片段，补充原文件后才能进行完整整理。</p>}
+    {!migrationName&&<><label>课程名称（留空使用文件夹名称）<input aria-label="课程名称" maxLength={60} value={name} onChange={event=>setName(event.target.value)}/></label><label>课程图标<select aria-label="课程图标" value={icon} onChange={event=>setIcon(event.target.value)}><option value="">选择课程图标</option>{[['math','数学'],['statistics','统计'],['code','编程'],['science','科学'],['physics','物理'],['language','语言'],['literature','文学'],['art','艺术'],['music','音乐'],['geography','地理'],['history','历史'],['notebook','笔记']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label></>}
     <label>课程文件夹路径<input autoFocus value={path} onChange={e=>setPath(e.target.value)} placeholder="选择已有的课程资料文件夹"/></label>
-    <div className="sy-row"><button disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const result=await api.pickWorkspaceDirectory();if(result.path)setPath(result.path);else await browseAt(path||null)}catch{await browseAt(path||null)}finally{setBusy(false)}}}><FolderOpen size={15}/>选择文件夹</button><button disabled={busy} onClick={()=>void browseAt(path||null)}>浏览目录</button></div>
+    <div className="sy-row"><button disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const desktop=(window as unknown as {sylloraDesktop?:{pickDirectory?:()=>Promise<{path:string|null}>}}).sylloraDesktop;const result=await (desktop?.pickDirectory?desktop.pickDirectory():api.pickWorkspaceDirectory());if(result.path)setPath(result.path);else if(!desktop?.pickDirectory)await browseAt(path||null)}catch{await browseAt(path||null)}finally{setBusy(false)}}}><FolderOpen size={15}/>选择文件夹</button><button disabled={busy} onClick={()=>void browseAt(path||null)}>浏览目录</button></div>
     {browse&&<div className="sy-folder-browser"><p>{browse.path}</p>{browse.parent&&<button onClick={()=>void browseAt(browse.parent)}>上一级</button>}{browse.entries.map(e=><button key={e.path} onClick={()=>void browseAt(e.path)}><FolderOpen size={14}/>{e.name}</button>)}</div>}
     {error&&<p role="alert" className="sy-project-error">{error}</p>}
-    <div className="sy-row"><button className="sy-primary" disabled={busy||!path.trim()} onClick={async()=>{setBusy(true);setError('');try{await onOpen(path.trim())}catch(e){setError(e instanceof Error?e.message:'打开失败')}finally{setBusy(false)}}}>{busy?<LoaderCircle size={15} className="sy-spin"/>:null}{migrationName?'迁移到此文件夹':'打开此课程'}</button></div>
+    <div className="sy-row"><button className="sy-primary" disabled={busy||!path.trim()||(!migrationName&&!icon)} onClick={async()=>{setBusy(true);setError('');try{await onOpen(path.trim(),name.trim()||undefined,icon||undefined)}catch(e){setError(e instanceof Error?e.message:'打开失败')}finally{setBusy(false)}}}>{busy?<LoaderCircle size={15} className="sy-spin"/>:null}{migrationName?'迁移到此文件夹':'打开此课程'}</button></div>
   </section></div>;
 }
 export function MaterialInitialization({course,epoch,busy,running,onRun}:{course:CourseView;epoch:number;busy:boolean;running:boolean;onRun:(action:string,payload:Record<string,unknown>)=>Promise<unknown>}) {
@@ -52,7 +51,7 @@ export function MaterialInitialization({course,epoch,busy,running,onRun}:{course
     {files.map(f=><label className="sy-file-candidate" key={f.path}><input type="checkbox" disabled={f.status!=='ready'||running||course.archived} checked={selected.includes(f.path)} onChange={e=>setSelected(e.target.checked?[...selected,f.path]:selected.filter(p=>p!==f.path))}/><span><strong>{f.path}</strong><small>{(f.size/1024).toFixed(1)} KiB · {f.status==='ready'?({added:'新增',changed:'内容已变化',unchanged:'未变化'}[f.change]):f.reason}</small></span></label>)}
     {missing.length>0&&<p className="sy-muted">原文件已缺失：{missing.join('、')}。已有学习记录仍保留。</p>}
     <label className="sy-consent"><input type="checkbox" checked={partial} onChange={e=>setPartial(e.target.checked)}/>解析部分失败时，接受明确列出的可用部分</label>
-    <button className="sy-primary" disabled={!selected.length||busy||running||course.archived} onClick={()=>void onRun('initialize',{requestId:crypto.randomUUID(),paths:selected,fingerprints:Object.fromEntries(files.filter(f=>selected.includes(f.path)).map(f=>[f.path,f.fingerprint])),acceptPartial:partial})}>{course.revision?'更新课程讲义':'初始化课程'} · {selected.length} 份资料</button>
+    <button className="sy-primary" disabled={!selected.length||busy||running||course.archived} onClick={()=>void onRun('initialize',{paths:selected,fingerprints:Object.fromEntries(files.filter(f=>selected.includes(f.path)).map(f=>[f.path,f.fingerprint])),acceptPartial:partial})}>{course.revision?'更新课程讲义':'初始化课程'} · {selected.length} 份资料</button>
   </section>;
 }
 const Markdown=({text}:{text:string})=><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{img:({alt})=><span>{alt?`[图片：${alt}]`:'[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{text}</ReactMarkdown>;

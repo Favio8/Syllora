@@ -10,6 +10,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('sylloraDesktop', {
   hostInfo: () => ipcRenderer.invoke('syllora:host-info'),
   openPath: (path) => ipcRenderer.invoke('syllora:open-path', path),
+  pickDirectory: () => ipcRenderer.invoke('syllora:pick-directory'),
   isDesktop: true,
   platform: process.platform,
 })

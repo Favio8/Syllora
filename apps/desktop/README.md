@@ -1,6 +1,6 @@
 # @syllora/desktop — Syllora 桌面壳
 
-Electron 桌面壳：把现有「本地 HTTP Host + 静态 Web UI」原样装进桌面应用，
+Electron 桌面壳：把统一新版工作台的「本地 HTTP Host + apps/web/out」装进桌面应用，
 用户**免装 Node.js**。数据兼容与命名变化见
 [运行目录与命名迁移](../../docs/RUNTIME_MIGRATION.md)。
 

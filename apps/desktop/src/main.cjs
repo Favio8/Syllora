@@ -360,3 +360,12 @@ ipcMain.handle('syllora:open-path', (_event, target) => {
     return shell.openPath(directory).then(error => error === '' ? { ok: true } : { ok: false, error })
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) } }
 })
+
+// The chooser belongs to the desktop window; Web keeps the Host browse fallback.
+ipcMain.handle('syllora:pick-directory', async event => {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Invalid directory chooser caller')
+  const currentUrl=win.webContents.getURL()
+  if (!currentUrl || new URL(event.senderFrame.url).origin !== new URL(currentUrl).origin) throw new Error('Invalid directory chooser origin')
+  const result=await dialog.showOpenDialog(win,{title:'选择课程文件夹',properties:['openDirectory']})
+  return {path:result.canceled?null:result.filePaths[0]??null}
+})

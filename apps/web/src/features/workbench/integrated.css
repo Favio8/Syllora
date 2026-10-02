@@ -1,0 +1,77 @@
+/* The PR #43 shell and the existing learning contracts share one production UI. */
+.integrated-shell.sy-app{grid-template-columns:76px minmax(0,1fr) 370px;grid-template-rows:minmax(0,1fr);font-family:var(--body-font);background:var(--white);color:var(--ink);--sy-blue:var(--blue);--sy-line:var(--line);height:100dvh;overflow:hidden}
+.integrated-shell>.sidebar{grid-column:1;grid-row:1;min-height:0}
+.integrated-shell>.sy-main{grid-column:2;grid-row:1}
+.integrated-shell>.sy-right{grid-column:3;grid-row:1;position:static}
+.integrated-shell.sy-no-right{grid-template-columns:76px minmax(0,1fr)}
+.integrated-shell .sy-main{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--white);overflow:hidden}
+.integrated-shell .sy-top{height:76px;min-height:76px;padding:12px 28px;background:var(--white);border-color:var(--line)}
+.integrated-shell .sy-top h1{font-size:16px;line-height:1.4;margin:2px 0 0;color:var(--ink)}
+.integrated-shell .sy-top>div>span{font-size:10px;color:var(--muted)}
+.integrated-shell .sy-actions{align-items:center;gap:5px}
+.integrated-shell .sy-actions>button{border:0;background:transparent;color:var(--muted);padding:8px}
+.learning-mode-switch{display:flex;gap:4px;padding:4px;background:var(--sidebar);border-radius:8px;margin-right:10px}
+.learning-mode-switch button{display:flex;align-items:center;gap:6px;border:0!important;border-radius:6px!important;font-size:12px!important;padding:7px 10px!important;color:var(--muted);background:transparent}
+.learning-mode-switch button[aria-pressed=true]{color:var(--blue);background:var(--white)}
+.integrated-shell .sy-content{padding:28px 34px;overflow:auto;flex:1;min-height:0;background:var(--white)}
+.integrated-shell .sy-next{border:1px solid var(--line);background:var(--blue-light);border-radius:12px;padding:22px;gap:18px;margin-top:10px}
+.integrated-shell .sy-next h2{font-size:21px;font-weight:600;color:var(--ink)}
+.integrated-shell .sy-next p{color:var(--muted);font-size:12px}
+.integrated-shell .sy-primary{border-color:var(--blue);background:var(--blue);color:white;border-radius:7px;font-size:12px;padding:9px 13px}
+.integrated-shell .sy-task-study,.integrated-shell .sy-question{border:1px solid var(--line);border-radius:10px;background:var(--white);padding:18px;margin-top:20px}
+.integrated-shell .sy-option{border-color:var(--line);border-radius:7px;background:var(--white);color:var(--ink)}
+.integrated-shell .sy-option input{accent-color:var(--blue)}
+.integrated-shell .sy-discussion{margin-top:24px}
+.integrated-shell .sy-message{padding:18px 20px;border:1px solid var(--line);border-radius:10px;line-height:1.9;background:var(--white);color:var(--ink)}
+.integrated-shell .sy-message.user{background:var(--sidebar)}
+.integrated-shell .sy-composer{border:0;border-top:1px solid var(--line);margin:0;padding:18px 28px;background:var(--white)}
+.integrated-shell .sy-composer input{border:1px solid var(--line);background:var(--sidebar);border-radius:9px;color:var(--ink);padding:14px}
+.integrated-shell .sy-right{width:auto;min-width:0;min-height:0;background:var(--white);border-color:var(--line);overflow:hidden;display:flex;flex-direction:column}
+.integrated-shell .sy-panel-content{overflow:auto;min-height:0;flex:1}
+.integrated-shell .sy-tabs{overflow-x:auto;flex-shrink:0;padding:0 10px;border-color:var(--line)}
+.integrated-shell .sy-tabs button{font-size:11px;border-radius:0;flex-shrink:0;background:transparent;color:var(--muted)}
+.integrated-shell .sy-tabs button.is-selected{color:var(--blue)}
+.integrated-shell .sy-right-title{font-size:12px;padding:18px 20px}
+.integrated-shell .sy-right-title span{font-size:9px;color:var(--muted)}
+.integrated-shell .sy-draft,.integrated-shell .sy-notice{background:var(--blue-light);border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+.integrated-shell .sy-right :is(input,textarea,select){background:var(--white);color:var(--ink);border-color:var(--line);border-radius:6px}
+.integrated-shell .sy-task{background:var(--white);color:var(--ink);border-color:var(--line)}
+.integrated-shell .sy-task-dot{background:var(--blue-light);color:var(--blue)}
+.integrated-shell .sy-muted,.integrated-shell .sy-message-name small{color:var(--muted)}
+.integrated-shell .sy-modal{background:var(--white);color:var(--ink);border-color:var(--line);border-radius:14px;max-height:88dvh;overflow:auto}
+.integrated-shell .sy-modal :is(input,textarea,select){background:var(--sidebar);color:var(--ink);border-color:var(--line);border-radius:6px}
+.integrated-shell .sy-modal button{color:var(--ink);border-color:var(--line)}
+.integrated-shell .sy-modal .sy-primary{color:white}
+.integrated-shell .sy-settings{width:min(860px,calc(100vw - 40px));height:620px;display:flex;flex-direction:column}
+.integrated-shell .sy-settings-cols{display:grid;grid-template-columns:170px minmax(0,1fr);min-height:0;flex:1}
+.integrated-shell .sy-settings-nav{background:var(--sidebar)}
+.integrated-shell .sy-settings-body{overflow:auto;min-height:0;padding:24px}
+.integrated-preferences{display:grid;gap:16px}
+.integrated-preferences label{display:grid;gap:6px}
+.integrated-preferences input{width:100%;padding:10px}
+.integrated-preferences p{font-size:12px;color:var(--muted)}
+.appearance-preview-grid{display:flex;gap:12px}
+.appearance-preview{width:160px;height:92px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#242630!important}
+.appearance-preview.dark{background:#171f2e;color:#dce5f3!important}
+.appearance-preview.selected{outline:2px solid var(--blue);outline-offset:3px}
+.integrated-shell .reader-layout{flex:1;min-height:0;height:auto;overflow:hidden}
+.integrated-shell .reading-search-results article{cursor:pointer}
+.integrated-shell .reading-source{padding:8px 0;line-height:2.15;overflow-wrap:anywhere}
+.integrated-shell .reading-source.highlighted{background:var(--blue-light);outline:2px solid var(--blue);outline-offset:4px;border-radius:4px}
+.integrated-shell .reading-source p{margin:8px 0}
+.integrated-shell .reading-search-results>p,.integrated-shell .reading-explanation p{margin:12px 0;line-height:1.9}
+.integrated-shell .sy-panel{flex:1;min-height:0;overflow:auto}
+.integrated-shell .integrated-project-error,.integrated-shell .integrated-migration{position:static;margin:10px 24px;max-width:none}
+.integrated-shell .integrated-project-error small{display:block;color:var(--muted);overflow-wrap:anywhere}
+.integrated-shell .sy-options button,.integrated-shell .sy-question,.integrated-shell .sy-feedback,.integrated-shell .sy-explanation,.integrated-shell .sy-lecture-reader{background:var(--white);color:var(--ink);border-color:var(--line)}
+.integrated-shell .sy-options button.is-selected{background:var(--blue-light);border-color:var(--blue)}
+.integrated-shell label{color:var(--muted)}
+.integrated-project-error,.integrated-migration{position:fixed;bottom:24px;left:100px;max-width:650px;z-index:20;background:var(--white);padding:12px;border:1px solid var(--line)}
+.integrated-shell .sy-lecture-reader pre,.integrated-shell .sy-source-text{color:var(--ink);background:var(--sidebar)}
+.integrated-shell .sy-course-path{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.integrated-shell .sy-error{flex-shrink:0}
+.integrated-shell .home-scroll,.integrated-shell .catalog-scroll{min-height:0;flex:1}
+@media(max-width:1100px){.integrated-shell.sy-app{grid-template-columns:64px minmax(0,1fr) 310px}.integrated-shell.sy-no-right{grid-template-columns:64px minmax(0,1fr)}.integrated-shell .sy-content{padding:22px}.learning-mode-switch button{font-size:10px!important;padding:6px!important}.integrated-shell .sy-top{padding:12px 18px}}
+@media(max-width:760px){.integrated-shell.sy-app,.integrated-shell.sy-no-right{grid-template-columns:minmax(0,1fr)}.integrated-shell .sidebar.icon-rail{position:fixed;z-index:100;transform:translateX(-100%);width:76px;height:100dvh;left:0;top:0}.integrated-shell .sidebar.mobile-open{transform:translateX(0)}.integrated-shell .sy-right{position:fixed;right:0;top:76px;bottom:0;width:min(360px,88vw);z-index:35;box-shadow:-12px 0 40px #0002}.integrated-shell .sy-top{height:76px;gap:8px;padding:10px 12px}.integrated-shell .sy-top h1{max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.integrated-shell .sy-actions>button{padding:5px}.learning-mode-switch{margin:0}.learning-mode-switch button{font-size:9px!important;gap:3px}.learning-mode-switch svg{width:12px}.integrated-shell .sy-content{padding:16px}.integrated-shell .sy-next{padding:16px;flex-wrap:wrap}.integrated-shell .sy-next h2{font-size:18px}.integrated-shell .sy-settings-cols{grid-template-columns:105px minmax(0,1fr)}.integrated-shell .sy-settings-body{padding:15px}.integrated-shell .sy-composer{padding:12px}.appearance-preview{width:95px;height:72px}.integrated-shell .sy-main .mobile-only{display:flex}}
+@media(prefers-reduced-motion:reduce){.integrated-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+@media(max-width:760px){.integrated-shell>.sy-main{grid-column:1}.integrated-shell>.sy-right{position:fixed}}
