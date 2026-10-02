@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('sylloraDesktop', {
   hostInfo: () => ipcRenderer.invoke('syllora:host-info'),
   openPath: (path) => ipcRenderer.invoke('syllora:open-path', path),
   pickDirectory: () => ipcRenderer.invoke('syllora:pick-directory'),
+  setWindowTheme: (theme) => ipcRenderer.invoke('syllora:window-theme', theme),
   isDesktop: true,
   platform: process.platform,
 })

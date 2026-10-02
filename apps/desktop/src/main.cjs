@@ -6,7 +6,7 @@
 const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron')
 const { spawn } = require('node:child_process')
 const { existsSync, readFileSync, mkdirSync, rmSync, appendFileSync } = require('node:fs')
-const { join } = require('node:path')
+const { dirname, join, resolve } = require('node:path')
 const { migrateLegacyData, managedDirectory } = require('./local-data.cjs')
 
 // 开发联调模式：设置 SYLLORA_DESKTOP_DEV_URL 后不拉起 sidecar，
@@ -100,6 +100,8 @@ function startHost() {
     ELECTRON_RUN_AS_NODE: '1',
     SYLLORA_HOME: hostHome,
     SYLLORA_DATA_DIR: sylloraDataDir,
+    // All course directories belong to the executable folder; test harnesses may isolate this root.
+    SYLLORA_COURSES_DIR: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(app.isPackaged ? dirname(process.execPath) : resolve(__dirname, '..'), '.syllora'),
     SYLLORA_WEB_DIST: webDist,
     NODE_ENV: 'production',
   }
@@ -226,6 +228,8 @@ async function createMainWindow() {
     minHeight: 680,
     backgroundColor: '#F4F3EE',
     title: 'Syllora',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#ffffff', symbolColor: '#617796', height: 70 },
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -368,4 +372,14 @@ ipcMain.handle('syllora:pick-directory', async event => {
   if (!currentUrl || new URL(event.senderFrame.url).origin !== new URL(currentUrl).origin) throw new Error('Invalid directory chooser origin')
   const result=await dialog.showOpenDialog(win,{title:'选择课程文件夹',properties:['openDirectory']})
   return {path:result.canceled?null:result.filePaths[0]??null}
+})
+
+// Only the trusted main renderer may update the native caption buttons.
+ipcMain.handle('syllora:window-theme', (event, theme) => {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Invalid window theme caller')
+  const currentUrl = win.webContents.getURL()
+  if (!currentUrl || new URL(event.senderFrame.url).origin !== new URL(currentUrl).origin) throw new Error('Invalid window theme origin')
+  if (theme !== 'light' && theme !== 'dark') throw new Error('Invalid window theme')
+  win.setTitleBarOverlay({ color: theme === 'dark' ? '#171f2e' : '#ffffff', symbolColor: theme === 'dark' ? '#b9cbe4' : '#617796', height: 70 })
+  return { ok: true }
 })

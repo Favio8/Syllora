@@ -30,6 +30,7 @@ win:
       arch: [x64]
   artifactName: ${productName}-${version}-setup.${ext}
 nsis:
+  include: scripts/preserve-courses.nsh
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

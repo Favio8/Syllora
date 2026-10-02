@@ -14,34 +14,34 @@
  */
 .sy-agent-chat {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
-  height: clamp(320px, 52vh, 720px);
+  height: auto;
   min-height: 0;
   border-top: 1px solid var(--sy-line, #e5e6ea);
   background: var(--color-bg-panel, #fff);
   color: var(--color-text-primary, #1f2024);
 }
 
-.sy-app .sy-agent-chat button,
-.sy-app .sy-agent-chat button:hover,
-.sy-app .sy-agent-chat button:disabled,
-.sy-app .sy-agent-chat input:not([type="checkbox"]):not([type="file"]),
-.sy-app .sy-agent-chat textarea,
-.sy-app .sy-agent-chat label,
-.sy-app .sy-agent-chat small,
-.sy-app .sy-agent-chat h1,
-.sy-app .sy-agent-chat h2,
-.sy-app .sy-agent-chat h3,
-.sy-app .sy-agent-chat h4,
-.sy-app .sy-agent-chat p,
-.sy-app .sy-agent-chat a,
-.sy-app .sy-agent-chat ul,
-.sy-app .sy-agent-chat ol,
-.sy-app .sy-agent-chat li,
-.sy-app .sy-agent-chat pre,
-.sy-app .sy-agent-chat code,
-.sy-app .sy-agent-chat blockquote {
+.sy-app .sy-agent-chat .agent-runtime button,
+.sy-app .sy-agent-chat .agent-runtime button:hover,
+.sy-app .sy-agent-chat .agent-runtime button:disabled,
+.sy-app .sy-agent-chat .agent-runtime input:not([type="checkbox"]):not([type="file"]),
+.sy-app .sy-agent-chat .agent-runtime textarea,
+.sy-app .sy-agent-chat .agent-runtime label,
+.sy-app .sy-agent-chat .agent-runtime small,
+.sy-app .sy-agent-chat .agent-runtime h1,
+.sy-app .sy-agent-chat .agent-runtime h2,
+.sy-app .sy-agent-chat .agent-runtime h3,
+.sy-app .sy-agent-chat .agent-runtime h4,
+.sy-app .sy-agent-chat .agent-runtime p,
+.sy-app .sy-agent-chat .agent-runtime a,
+.sy-app .sy-agent-chat .agent-runtime ul,
+.sy-app .sy-agent-chat .agent-runtime ol,
+.sy-app .sy-agent-chat .agent-runtime li,
+.sy-app .sy-agent-chat .agent-runtime pre,
+.sy-app .sy-agent-chat .agent-runtime code,
+.sy-app .sy-agent-chat .agent-runtime blockquote {
   all: revert-layer;
 }
 
@@ -51,13 +51,13 @@
   padding: 10px 14px;
   border: 1px solid var(--sy-line);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--sidebar);
 }
 
 .sy-discussion-archive > summary {
   cursor: pointer;
   font-size: 12px;
-  color: #595b65;
+  color: var(--muted);
 }
 
 .sy-discussion-archive .sy-discussion {

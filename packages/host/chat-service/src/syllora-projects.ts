@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, open, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { copyFile, cp, lstat, mkdir, open, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { SylloraError, SylloraService } from './syllora.ts'
@@ -12,11 +12,12 @@ import { courseIconSchema, defaultUiPreferences, uiPreferencesSchema, type UiPre
 interface Project { id:string;path:string;name:string;deletion?:'pending'|'failed' }
 interface Preferences { consent:boolean }
 interface StoredCourse { version:1;courses:Course[];jobs:unknown[];calls:number;consent:boolean }
-type Options=NonNullable<ConstructorParameters<typeof SylloraService>[1]> & { registerProject?: (path:string)=>Promise<void> }
+type Options=NonNullable<ConstructorParameters<typeof SylloraService>[1]> & { registerProject?: (path:string)=>Promise<void>; managedCoursesRoot?:string }
 
 /** Fixed application root holds only shared settings and recent paths. Every course owns its own service. */
 export class SylloraProjects {
   private projects:Project[]=[]
+  private relocationErrors=new Map<string,string>()
   private services=new Map<string,SylloraService>()
   private ready:Promise<void>|null=null
   private tail:Promise<unknown>=Promise.resolve()
@@ -31,18 +32,16 @@ export class SylloraProjects {
     this.ready??=(async()=>{
       await mkdir(this.root,{recursive:true});await stateDirectory(this.root)
       this.projects=await jsonFile<Project[]>(join(this.root,'.syllora','projects.json'))??[]
+      if(this.options.managedCoursesRoot)await this.relocateCourses()
     })()
     await this.ready
   }
   private async serialize<T>(fn:()=>Promise<T>) {
     const next=this.tail.then(async()=>{await this.load();return fn()});this.tail=next.catch(()=>undefined);return next
   }
-  private async preferences():Promise<Preferences> {
-    const saved=await jsonFile<Preferences>(join(this.root,'.syllora','preferences.json'))
-    if(saved)return saved
-    const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json'))
-    return {consent:legacy?.consent??false}
-  }
+  // The local app allows calls to user-configured providers without a separate toggle.
+  // Old persisted consent:false values must not block existing installations.
+  private async preferences():Promise<Preferences> { return {consent:true} }
   private async uiPreferences():Promise<UiPreferences> {
     const saved=await jsonFile<UiPreferences>(join(this.root,'.syllora','ui-preferences.json'))
     return saved?{...uiPreferencesSchema.parse(saved),revision:z.number().int().min(0).parse(saved.revision)}:defaultUiPreferences()
@@ -66,15 +65,79 @@ export class SylloraProjects {
     await atomicJson(join(this.root,'.syllora','projects.json'),this.projects)
     await this.options.registerProject?.(project.path)
   }
-  private async openFolder(payload:unknown) {
-    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional()}).parse(payload)
+  /** The course root is independent of shared settings/credentials. Never silently fall back. */
+  private async managedRoot() {
+    const path=resolve(this.options.managedCoursesRoot??join(this.root,'.syllora'))
+    await mkdir(path,{recursive:true})
+    if(await realpath(path)!==path)throw new SylloraError('INVALID_FOLDER','课程存储目录不能是目录链接')
+    return path
+  }
+  private async createManaged(payload:unknown) {
+    const p=z.object({requestId:z.string().uuid(),name:z.string().trim().min(1).max(60),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional()}).parse(payload)
     return this.serialize(async()=>{
+      const root=await managedDirectory(await this.managedRoot(),p.requestId),dir=await stateDirectory(root)
+      const creationFile=join(dir,'creation.json'),previous=await jsonFile<{name:string;timezone:string;icon?:string}>(creationFile)
+      const identity={name:p.name,timezone:p.timezone,...(p.icon?{icon:p.icon}:{})}
+      if(previous&&JSON.stringify(previous)!==JSON.stringify(identity))throw new SylloraError('REQUEST_CONFLICT','此创建请求已用于另一门课程，请重新发起')
+      if(!previous)await atomicJson(creationFile,identity)
+      const stored=await jsonFile<StoredCourse>(join(dir,'course.json'))
+      if(stored&&stored.courses[0]?.id!==p.requestId)throw new SylloraError('COURSE_EXISTS','课程存储目录已有其他课程，不会覆盖')
+      if(stored&&this.projects.some(project=>project.id===p.requestId&&project.path===root))return {id:p.requestId,path:root,created:false}
+      return this.openFolderUnlocked({...p,path:root},p.requestId)
+    })
+  }
+  /** Copy course files and published history before switching the durable registry.
+   * Original folders are retained. Failed copies keep the old course usable and can retry on restart. */
+  private async relocateCourses() {
+    for(const project of [...this.projects]) {
+      if(project.deletion)continue
+      try {
+        z.string().uuid().parse(project.id)
+        const base=await this.managedRoot(),destination=join(base,project.id)
+        if(resolve(project.path)===destination)continue
+        const source=await realpath(project.path),stateDir=await stateDirectory(source)
+        const snapshot=await jsonFile<StoredCourse>(join(stateDir,'course.json'))
+        if(!snapshot||snapshot.courses.length!==1||snapshot.courses[0]?.id!==project.id)throw new Error('课程状态与目录身份不一致')
+        const files=await scanFiles(source,snapshot.courses[0]!.materials)
+        const stamp={source,courseId:project.id,snapshot:sha(JSON.stringify(snapshot)),files:files.map(file=>({path:file.path,size:file.size,fingerprint:file.fingerprint}))}
+        let staging:string|null=null
+        if(await lstat(destination).catch(error=>{if(error.code==='ENOENT')return null;throw error})) {
+          if(await realpath(destination)!==destination)throw new Error('目标课程目录不能是目录链接')
+          const copied=await jsonFile<StoredCourse>(join(await stateDirectory(destination),'course.json'))
+          const previous=await jsonFile(join(destination,'.syllora','relocation.json'))
+          if(JSON.stringify(previous)!==JSON.stringify(stamp)||sha(JSON.stringify(copied))!==stamp.snapshot)throw new Error('目标课程目录已存在，迁移不会覆盖')
+        } else {
+          staging=await managedDirectory(base,`.migration-${project.id}-${randomUUID()}`)
+          await cp(stateDir,join(staging,'.syllora'),{recursive:true,errorOnExist:true,force:false,filter:async path=>{if((await lstat(path)).isSymbolicLink())throw new Error('课程记录含目录或文件链接');return !['config.yaml','credentials.json'].includes(basename(path))}})
+          for(const file of files) {
+            const original=await within(source,file.path),target=join(staging,file.path)
+            await mkdir(resolve(target,'..'),{recursive:true});await copyFile(original,target)
+            if(file.fingerprint&&sha(await readFile(target))!==file.fingerprint)throw new Error('迁移期间原始资料发生变化，请重试')
+          }
+          if(sha(JSON.stringify(await jsonFile<StoredCourse>(join(stateDir,'course.json'))))!==stamp.snapshot)throw new Error('迁移期间课程记录发生变化，请关闭其他实例后重试')
+          await atomicJson(join(staging,'.syllora','relocation.json'),stamp)
+          await rename(staging,destination)
+        }
+        const updated=this.projects.map(item=>item.id===project.id?{...item,path:destination}:item)
+        try {
+          await this.options.registerProject?.(destination)
+          await atomicJson(join(this.root,'.syllora','projects.json'),updated)
+        } catch(error) {if(staging)await rename(destination,staging);throw error}
+        this.projects=updated
+      } catch(error) {this.relocationErrors.set(project.id,`课程迁移未完成，原目录保留：${error instanceof Error?error.message:'存储错误'}`)}
+    }
+  }
+  private async openFolder(payload:unknown,identity?:string) {
+    const p=z.object({path:z.string().trim().min(1),name:z.string().trim().min(1).max(60).optional(),timezone:z.string().default('Asia/Shanghai'),icon:courseIconSchema.optional()}).parse(payload)
+    return this.serialize(()=>this.openFolderUnlocked(p,identity))
+  }
+  private async openFolderUnlocked(p:{path:string;name?:string|undefined;timezone:string;icon?:z.infer<typeof courseIconSchema>|undefined},identity?:string) {
       const root=await realpath(resolve(p.path))
       if(this.projects.some(project=>project.path===root&&(project.deletion||this.deleting.has(project.id))))throw new SylloraError('DELETING','课程删除未完成，请先重试清理，不能重新打开')
       if(!(await stat(root)).isDirectory())throw new SylloraError('INVALID_FOLDER','请选择课程文件夹')
       const stateDir=await stateDirectory(root), stored=await jsonFile<StoredCourse>(join(stateDir,'course.json'))
       if(stored&&(stored.version!==1||stored.courses.length!==1))throw new SylloraError('STORAGE_ERROR','课程状态格式不正确，请保留文件并检查')
-      const courseId=stored?.courses[0]?.id??randomUUID()
+      const courseId=stored?.courses[0]?.id??identity??randomUUID()
       z.string().uuid().parse(courseId)
       if(this.deleting.has(courseId))throw new SylloraError('DELETING','课程正在删除，请稍后重试')
       const old=this.projects.find(v=>v.id===courseId&&v.path!==root)
@@ -86,7 +149,6 @@ export class SylloraProjects {
       if(p.icon)await service.handle('coursePresentation',{courseId,icon:p.icon})
       this.services.set(courseId,service);await this.remember(project)
       return {id:courseId,path:root,created:!stored}
-    })
   }
   async handle(action:string,payload:unknown):Promise<unknown> {
     await this.load()
@@ -100,15 +162,12 @@ export class SylloraProjects {
       return saved
     })
     if(action==='activity') {const state=await this.handle('state',{}) as {courses:Course[]};return {activity:state.courses.flatMap(course=>course.activity??[])}}
+    if(action==='createCourse')return this.createManaged(payload)
     if(action==='openCourse')return this.openFolder(payload)
     if(action==='preferences') {
-      const p=z.object({consent:z.boolean()}).parse(payload)
-      await atomicJson(join(this.root,'.syllora','preferences.json'),p)
-      if(!p.consent)for(const [id,service] of this.services) {
-        if(this.deleting.has(id)||this.projects.find(project=>project.id===id)?.deletion)continue
-        const state=await service.handle('state',{}) as {jobs:Array<{id:string;state:string}>}
-        for(const job of state.jobs.filter(j=>j.state==='running'))await service.handle('cancel',{courseId:id,jobId:job.id})
-      }
+      // Compatibility endpoint for older UI clients; effective policy stays enabled.
+      z.object({consent:z.boolean()}).parse(payload)
+      await atomicJson(join(this.root,'.syllora','preferences.json'),{consent:true})
       return {saved:true}
     }
     if(action==='state') {
@@ -117,18 +176,14 @@ export class SylloraProjects {
         try {
           const result=await (await this.service(project.id)).handle('state',{}) as {courses:Course[];jobs:unknown[];settings:{calls:number}}
           courses.push(...result.courses.map(c=>({...c,folder:project.path})));jobs.push(...result.jobs);calls+=result.settings.calls
-          projects.push({...project,name:result.courses[0]?.name??project.name,error:null})
+          projects.push({...project,name:result.courses[0]?.name??project.name,error:this.relocationErrors.get(project.id)??null})
         } catch(error) { projects.push({...project,error:error instanceof Error?error.message:'课程无法读取'}) }
       }
       const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json'))
       return {courses,jobs,uiPreferences:await this.uiPreferences(),activity:courses.flatMap(course=>(course as Course).activity??[]),projects,legacyCourses:(legacy?.courses??[]).filter(c=>!this.projects.some(p=>p.id===c.id)).map(c=>({id:c.id,name:c.name,points:c.points.length})),settings:{...(await this.preferences()),calls:calls+(legacy?.calls??0)}}
     }
-    // Compatibility for existing automation clients; the UI opens user-selected folders.
-    if(action==='create') {
-      const p=z.object({name:z.string().trim().min(1).max(60),requestId:z.string().uuid(),timezone:z.string().optional()}).parse(payload)
-      const root=join(this.root,'courses',p.requestId);await mkdir(root,{recursive:true})
-      return this.openFolder({path:root,name:p.name,...(p.timezone?{timezone:p.timezone}:{})})
-    }
+    // Compatibility alias; creation now always uses an application-managed directory.
+    if(action==='create')return this.createManaged(payload)
     if(action==='migrateCourse')return this.migrate(payload)
     const p=z.object({courseId:z.string().uuid()}).passthrough().parse(payload)
     if(action==='delete'&&this.courseOperations.get(p.courseId)==='deleteMaterial')throw new SylloraError('COURSE_BUSY','本课程正在删除资料并收束旧任务，请等待原操作完成后重试')
@@ -204,11 +259,11 @@ export class SylloraProjects {
     return {path:`sources/${chosen}`,pending:true,duplicate:false}
   }
   private async migrate(payload:unknown) {
-    const p=z.object({courseId:z.string().uuid(),path:z.string().min(1)}).parse(payload)
+    const p=z.object({courseId:z.string().uuid(),path:z.string().min(1).optional()}).parse(payload)
     return this.serialize(async()=>{
       const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json')), course=legacy?.courses.find(c=>c.id===p.courseId)
       if(!course)throw new SylloraError('NOT_FOUND','旧课程不存在')
-      const root=await realpath(resolve(p.path)), dir=await stateDirectory(root)
+      const root=p.path?await realpath(resolve(p.path)):await managedDirectory(await this.managedRoot(),p.courseId), dir=await stateDirectory(root)
       if(await jsonFile(join(dir,'course.json')))throw new SylloraError('COURSE_EXISTS','目标文件夹已有课程，迁移不会覆盖')
       if(this.projects.some(v=>v.id===course.id))throw new SylloraError('COURSE_EXISTS','该旧课程已迁移')
       const copied=structuredClone(course);normalizeCourse(copied)

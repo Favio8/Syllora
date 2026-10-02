@@ -581,7 +581,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
-  const syllora = new SylloraProjects(settingsRoot, { pdf: extractPdfPages, registerProject: async path => {
+  const syllora = new SylloraProjects(settingsRoot, { managedCoursesRoot: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot,'.syllora'), pdf: extractPdfPages, registerProject: async path => {
     const workspace = await registry.create(path)
     await registry.setLastOpenedPath(workspace.workspace.path)
   } })

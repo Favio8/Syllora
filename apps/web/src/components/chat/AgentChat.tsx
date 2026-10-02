@@ -9,8 +9,8 @@
  * 校验），而工作台的课程 id 是 UUID，二者的换算只在这里发生。
  */
 
-import { useEffect, useMemo } from "react";
-import ChatArea from "@/src/components/chat/ChatArea";
+import { useEffect, useMemo, type ReactNode } from "react";
+import WorkbenchChat from "./WorkbenchChat";
 import CommandPalette from "@/src/components/palette/CommandPalette";
 import { api } from "@/src/lib/api";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -23,6 +23,10 @@ export interface AgentChatProps {
   courseName: string;
   /** 打开工作台自己的模型设置弹窗。 */
   onOpenSettings?: () => void;
+  children?: ReactNode;
+  onUpload?: () => void;
+  onPractice?: () => void;
+  disabled?: boolean;
 }
 
 /** 课程文件夹名 = chat/agent 端点的 courseId；Windows 分隔符也要切。 */
@@ -30,7 +34,7 @@ export function chatCourseIdOf(folder: string): string {
   return folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
-export default function AgentChat({ folder, courseName, onOpenSettings }: AgentChatProps) {
+export default function AgentChat({ folder, courseName, onOpenSettings, children, onUpload = () => {}, onPractice = () => {}, disabled }: AgentChatProps) {
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath);
   const setCourses = useAppStore((s) => s.setCourses);
   const setActiveCourse = useAppStore((s) => s.setActiveCourse);
@@ -64,7 +68,7 @@ export default function AgentChat({ folder, courseName, onOpenSettings }: AgentC
 
   return (
     <div className="sy-agent-chat">
-      <ChatArea />
+      <WorkbenchChat courseName={courseName} onUpload={onUpload} onPractice={onPractice} disabled={disabled}>{children}</WorkbenchChat>
       {paletteOpen ? <CommandPalette /> : null}
     </div>
   );

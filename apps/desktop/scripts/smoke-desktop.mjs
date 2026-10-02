@@ -13,6 +13,7 @@
  * 用法：node scripts/smoke-desktop.mjs
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync, rmSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -34,7 +35,7 @@ console.log('[smoke] userData =', userData)
 
 // ELECTRON_RUN_AS_NODE 会让 electron 二进制退化为纯 Node 运行（app 未定义，
 // main.cjs 直接崩）——调用方环境（CI/Harness）可能带着它，必须显式剔除。
-const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData, SYLLORA_DESKTOP_SMOKE: '1' }
+const childEnv = { ...process.env, ELECTRON_ENABLE_LOGGING: '1', SYLLORA_DESKTOP_USERDATA: userData, SYLLORA_COURSES_DIR: join(userData, 'application', '.syllora'), SYLLORA_DESKTOP_SMOKE: '1' }
 delete childEnv.ELECTRON_RUN_AS_NODE
 
 const child = spawn(electron, ['.'], {
@@ -135,6 +136,25 @@ if (fatalErrors.length > 0) console.log(fatalErrors.slice(0, 5).join('\n'))
 const ui = await fetch(`http://127.0.0.1:${cfg.port}/`, { signal: AbortSignal.timeout(8000) })
 const html = await ui.text()
 console.log('[smoke] GET / via sidecar →', ui.status, 'token-injected:', html.includes('__SYLLORA__'))
+
+// Verify the real packaged host's automatic course root without a paid model call.
+const rpc = async (action, payload) => {
+  const response = await fetch(`http://127.0.0.1:${cfg.port}/api/syllora/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
+    body: JSON.stringify({ payload }), signal: AbortSignal.timeout(8000),
+  })
+  const body = await response.json()
+  if (!response.ok || body.error || !body.result) throw new Error(`Course storage smoke failed: ${action}`)
+  return body.result
+}
+const requestId = randomUUID(), input = { requestId, name: '隔离冒烟课程', icon: 'math' }
+const first = await rpc('createCourse', input), replay = await rpc('createCourse', input)
+const second = await rpc('createCourse', { ...input, requestId: randomUUID() })
+if (first.path !== join(childEnv.SYLLORA_COURSES_DIR, requestId) || replay.id !== first.id || replay.created !== false) throw new Error('Managed course path/idempotency mismatch')
+await rpc('import', { courseId: first.id, name: 'notes.md', text: '# 甲章\n第一门课的冒烟资料。' })
+await rpc('import', { courseId: second.id, name: 'notes.md', text: '# 乙章\n第二门课的冒烟资料。' })
+if (!readFileSync(join(first.path, 'sources', 'notes.md'), 'utf8').includes('第一门课') || !readFileSync(join(second.path, 'sources', 'notes.md'), 'utf8').includes('第二门课')) throw new Error('Course uploads were not isolated')
+console.log('[smoke] managed course creation, replay and isolated uploads: PASS')
 
 // 退出：优先走应用自身的退出路径（before-quit → stopHost），验证收尾；
 // 优雅退出宽限内未生效才兜底强杀，并标记 graceful=false。

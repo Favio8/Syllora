@@ -7,7 +7,7 @@
 - 独立克隆本仓库时，本文件与 `CONTRIBUTING.md` 应足以说明开发协作要求。不要让构建、运行或测试依赖仓库外的本机文件和绝对路径。
 - 用户已明确要求直接搬入并复用本地 `studyclaw-next`。当前沿用其 pnpm monorepo、Next.js / React、Node Host、模型适配器与资料解析库，不另起技术栈。
 - Syllora 首页位于 `apps/web/src/components/Syllora.tsx`，业务服务与规则位于 `packages/host/chat-service/src/syllora.ts` 和 `syllora-domain.ts`。旧 StudyClaw 模块仍保留；不要把旧 SM-2／掌握度概率规则混入 Syllora 的证据状态。
-- `pnpm build:web` 生成静态前端，`pnpm serve` 启动本机服务。共享运行数据默认写入 `.syllora-home/` 与 `.syllora-data/`，课程数据写入用户打开目录的 `.syllora/`；不得提交运行数据或用户课程资料。
+- `pnpm build:web` 生成静态前端，`pnpm serve` 启动本机服务。共享运行数据默认写入 `.syllora-home/` 与 `.syllora-data/`，桌面课程数据写入应用所在目录的 `.syllora/<课程 UUID>/`，浏览器联调由 `SYLLORA_COURSES_DIR` 指定（启动脚本默认仓库根 `.syllora/`）；不得提交运行数据或用户课程资料。
 
 ## 执行前确认
 

@@ -41,11 +41,11 @@ describe('unified workbench service and preferences',()=>{
     const initial={name:'学习者',theme:'light' as const,dailyMinutes:40,revision:0},latest={...initial,name:'另页',dailyMinutes:60,revision:1};const payloads:any[]=[]
     vi.stubGlobal('fetch',vi.fn(async(_url:string,init:RequestInit)=>{const payload=JSON.parse(String(init.body)).payload;payloads.push(payload);return response(payload.baseVersion===undefined?{result:latest}:{error:{code:'VERSION_CONFLICT',message:'版本冲突'}},payload.baseVersion===undefined)}))
     const view=render(<PreferencesEditor initial={initial} onSaved={async()=>{}}/>);fireEvent.change(screen.getByLabelText('用户名称'),{target:{value:'本页草稿'}});view.rerender(<PreferencesEditor initial={latest} onSaved={async()=>{}}/>);
-    expect(screen.getByLabelText('用户名称')).toHaveValue('本页草稿');fireEvent.click(screen.getByRole('button',{name:'保存外观与偏好'}));await screen.findByText('版本冲突');expect(payloads[0]).toMatchObject({baseVersion:0,name:'本页草稿'});expect(screen.getByLabelText('用户名称')).toHaveValue('本页草稿');fireEvent.click(screen.getByRole('button',{name:'加载最新设置'}));await waitFor(()=>expect(screen.getByLabelText('用户名称')).toHaveValue('另页'))
+    expect(screen.getByLabelText('用户名称')).toHaveValue('本页草稿');fireEvent.click(screen.getByRole('button',{name:'保存偏好'}));await screen.findByText('版本冲突');expect(payloads[0]).toMatchObject({baseVersion:0,name:'本页草稿'});expect(screen.getByLabelText('用户名称')).toHaveValue('本页草稿');fireEvent.click(screen.getByRole('button',{name:'加载最新设置'}));await waitFor(()=>expect(screen.getByLabelText('用户名称')).toHaveValue('另页'))
   })
   it('preserves edits typed during a delayed successful preference save',async()=>{
     let finish!:(value:unknown)=>void;vi.stubGlobal('fetch',vi.fn(()=>new Promise(resolve=>{finish=resolve})));const initial={name:'学习者',theme:'light' as const,dailyMinutes:40,revision:0};render(<PreferencesEditor initial={initial} onSaved={async()=>{}}/>);
-    fireEvent.change(screen.getByLabelText('用户名称'),{target:{value:'发送版本'}});fireEvent.click(screen.getByRole('button',{name:'保存外观与偏好'}));fireEvent.change(screen.getByLabelText('用户名称'),{target:{value:'之后输入'}});finish(response({result:{...initial,name:'发送版本',revision:1}}));await waitFor(()=>expect(screen.getByRole('button',{name:'保存外观与偏好'})).not.toBeDisabled());expect(screen.getByLabelText('用户名称')).toHaveValue('之后输入')
+    fireEvent.change(screen.getByLabelText('用户名称'),{target:{value:'发送版本'}});fireEvent.click(screen.getByRole('button',{name:'保存偏好'}));fireEvent.change(screen.getByLabelText('用户名称'),{target:{value:'之后输入'}});finish(response({result:{...initial,name:'发送版本',revision:1}}));await waitFor(()=>expect(screen.getByRole('button',{name:'保存偏好'})).not.toBeDisabled());expect(screen.getByLabelText('用户名称')).toHaveValue('之后输入')
   })
   it('uses empty real activity for old snapshots and preserves all five evidence states',()=>{
     const states=['未评估','待验证','待加强','初步掌握','复测通过'] as const
@@ -59,3 +59,4 @@ describe('unified workbench service and preferences',()=>{
     const controller=new AbortController(),calls:string[]=[];let accept!:(value:unknown)=>void;vi.stubGlobal('fetch',vi.fn(async(url:string)=>{calls.push(url);if(url.endsWith('/generate'))return new Promise(resolve=>{accept=resolve});return response({result:{saved:true}})}));const pending=readingService.assist({id:'m',courseId:'c',revision:'v',name:'notes',title:'notes',content:'真实正文',source:'published',sources:[{id:'s',anchor:'段落1',text:'真实正文'}]},'真实','explain',controller.signal);await waitFor(()=>expect(accept).toBeDefined());controller.abort();accept(response({result:{jobId:'accepted'}}));await expect(pending).rejects.toThrow('取消');expect(calls).toContain('/api/syllora/cancel')
   })
 })
+

@@ -4,9 +4,8 @@
 
 ## 存储与身份
 
-一个本地文件夹对应一门课程。首次打开创建持久化 UUID，重命名只改显示名称。
-搬迁后重新打开新目录即可恢复身份；原路径仍存在时拒绝打开同 UUID 的复制目录，
-避免同一课程在两个位置写入。任务绑定启动时的目录，切换页面不改变其写入目标。
+应用自动管理课程目录，每门课程位于 `<应用所在目录>/.syllora/<课程 UUID>/`。新建只需名称和图标，UUID 同时作为幂等创建请求 ID，重命名不改文件路径。
+旧 `openCourse(path)` 仅为兼容 API 保留，界面没有目录选择器。任务绑定启动时的目录，切换页面不改变其写入目标。
 
 ```text
 课程根目录/
@@ -40,7 +39,7 @@
 扫描排除隐藏路径、`.syllora`、依赖和构建目录，不跟随目录链接。接受文本 PDF
 及 UTF-8 MD/TXT；单文件最多 20 MiB，单 PDF 最多 50 页，课程选中文本 PDF
 合计最多 100 页、解析正文最多 100,000 个 Unicode 字符。扫描件无正文时明确失败；
-空页或部分解析失败必须由用户排除或接受可用部分，失败范围保存在任务与 manifest。
+空页或部分解析失败默认接受明确可用的部分，失败范围仍保存在任务与 manifest；完全无正文仍失败，不伪造内容。兼容客户端可显式传 `acceptPartial:false` 拒绝部分结果。
 
 Markdown 先识别标题、段落、列表、围栏和表格，普通片段目标约 1,800 字符，
 超过 2,400 才按句子或完整行续分。超长单行必须按容量切分。补充标题与续段表头
@@ -79,7 +78,8 @@ PDF 预览读取课程中的原文件，经课程／资料归属、路径边界�
 
 | 动作 | payload 主要字段 | 返回 |
 | --- | --- | --- |
-| `openCourse` | `path`，可选 `name`、`timezone` | `id`、`path`、`created` |
+| `createCourse` | UUID `requestId`、`name`，可选 `icon`、`timezone`（默认 Asia/Shanghai） | `id`、自动目录 `path`、`created`；同请求重复返回原课程 |
+| `openCourse` | 兼容旧客户端的 `path`，可选 `name`、`timezone` | `id`、`path`、`created`；新版 UI 不调用 |
 | `scan` | `courseId` | `files`（路径、大小、状态、变化、指纹）、`missing` |
 | `import` | `courseId`、`name`、`text` 或 `base64` | 保存路径、`pending`、`duplicate` |
 | `initialize` | `courseId`、UUID `requestId`、`paths`，可选 `fingerprints`、`acceptPartial` | `jobId` |
@@ -87,13 +87,13 @@ PDF 预览读取课程中的原文件，经课程／资料归属、路径边界�
 | `cancel` | `courseId`、`jobId` | 保存结果 |
 | `lectures` | `courseId` | `revision`、`lectures` |
 | `materialFile` | `courseId`、`materialId` | 原文件元信息和 `base64`（兼容 RPC 客户端） |
-| `migrateCourse` | 旧 `courseId`、目标 `path` | `id`、`path`、`migrated` |
+| `migrateCourse` | 旧 `courseId`；`path` 仅旧客户端可选，新界面不传 | `id`、`path`、`migrated` |
 | `restorePointSources` | `courseId`、原 `pointId`、用户确认支持同一概念的 `replacementPointId` | 保存结果；原节点、任务与作答 ID 保留 |
 
 任务 `progress` 包含扫描／解析／整理／校验阶段、`done/total`、`failures` 与说明。
 扫描发生在调用模型之前，初始化请求立即返回持久化任务。兼容旧自动化客户端的
-`create` 在应用数据目录创建课程子文件夹，`generate(kind: outline)` 转入初始化；
-首页采用用户选择目录与显式检查清单。
+`create` 是 `createCourse` 的兼容别名，均在托管目录创建课程；`generate(kind: outline)` 转入初始化。
+新版界面创建课程不传 `path`，初始化显式传 `acceptPartial:true`。不同参数复用同一创建 requestId 返回 `REQUEST_CONFLICT`。
 
 `GET/HEAD /api/syllora/material-file?courseId=<UUID>&materialId=<UUID>` 返回
 PDF 原字节，沿用 token／Origin 门禁，包含 `nosniff` 与 `private, no-store`。
@@ -102,12 +102,12 @@ PDF 原字节，沿用 token／Origin 门禁，包含 `nosniff` 与 `private, no
 
 ## 迁移与删除
 
-首页为旧 `syllora.json` 中每门课程提供迁移入口。用户指定已有目标文件夹，
+首页为旧 `syllora.json` 中每门课程提供迁移入口，目标为自动分配的课程目录。
 目标已有课程或同 UUID 已迁移时拒绝覆盖。课程、知识点、来源、计划、题目、
 作答、操作与任务历史 ID 保留；运行中的旧任务按中断恢复规则处理。
 旧应用已保存的 PDF 经指纹校验后复制到目标 `sources/`，保留原存储，不覆盖目标文件；
 仅有片段的旧资料标记“缺少原文件”，不得当作完整解析结果；补充原文件后再初始化。
-旧快照一直保留，迁移失败可重新选择目标并重试。
+旧快照一直保留，迁移失败可修复存储目录后重试。
 
 删除课程须明确确认，先取消并等待任务，再清理本应用管理的 `course.json`、
 `revisions/` 与 `.staging/` 并移除最近课程记录。根目录、原资料、上传正文和继承
@@ -154,3 +154,13 @@ Job 新增可选诊断字段 `promptVersion`、`ruleVersion`、`finishedAt`、`e
 同一 Host 内，`deleteMaterial`、`initialize`、全部 `generate`（包括 `kind: outline` 兼容入口）与 `import` 共享课程级操作守卫。删除单份资料从标记失效、取消并排空旧 Job 到清理 `revisions/`、`.staging/` 完成一直持有守卫；新初始化不能在清理期间发布随后被删除的版本。初始化在配置读取等尚未创建 Job 的阶段也持有守卫。冲突明确返回 `COURSE_BUSY`，客户端应查询原操作结果后重试；普通查询和其他课程不受此守卫阻断，完成或失败后释放守卫。
 
 删除整门课程在单份资料清理期间同样返回 `COURSE_BUSY`；其原有持久化删除意图及迟到请求阻断不变。这是单 Host 内的保护，不支持多个进程共享可写课程目录。确定性测试覆盖两种初始化入口、排空旧任务、实际清理阶段、Job 前等待、另一课程可用及清理后成功重建。
+
+## 托管目录兼容（2026-10-02 第三轮）
+
+`SylloraProjects` 新增 `managedCoursesRoot` 选项；CLI 从 `SYLLORA_COURSES_DIR` 读取，未指定时使用共享应用根下的 `.syllora/`。桌面壳显式指定可执行文件所在目录，`scripts/syllora-serve.mjs` 默认指定仓库根 `.syllora/`。配置目录与课程目录分离。
+
+已登记外部课程在首次 `state`/请求初始化时自动迁移：复制扫描可见资料及完整 `.syllora` 课程记录（排除共享 config.yaml/credentials.json），保留嵌套路径、UUID、资料指纹、讲义修订、来源和学习记录。扫描仍排除隐藏资料、依赖/构建目录及链接。原课程目录不删除。
+
+迁移在 `.migration-<课程 ID>-<随机 ID>` 暂存中进行，原文或课程快照变化会中止；先发布目录，再原子替换项目登记。`relocation.json` 记录来源与快照/扫描指纹，可恢复发布后、登记前的中断。登记失败尽可能退回暂存目录；未经验证的已有目标拒绝覆盖。失败在 `state.projects[].error` 与“我的课程”显示，原课程保持可用，重启后重试。删除待处理课程不参与迁移。
+
+`createCourse` 的 `creation.json` 保存创建参数；重试不会新增目录或修改原课程，重命名后重试也不会改回名称。请求 UUID 不受课程显示名称影响，名称中的路径字符不会参与目录拼接。

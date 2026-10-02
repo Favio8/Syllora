@@ -139,11 +139,11 @@ describe('course folder initialization',()=>{
     const s=await setup(),target=join(s.root,'outside'),folder=join(s.root,'linked');await mkdir(target);await mkdir(folder);await symlink(target,join(folder,'.syllora'),'junction')
     await expect(s.projects.handle('openCourse',{path:folder})).rejects.toThrow('目录链接');expect(await stat(join(target,'course.json')).catch(()=>null)).toBeNull()
   })
-  it('revoking shared consent cancels running calls across course folders',async()=>{
+  it('legacy consent toggles do not cancel calls under the always-enabled local policy',async()=>{
     let entered!:()=>void,release!:()=>void;const start=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r)
     const s=await setup(async sources=>{entered();await gate;return lecture(sources)});await writeFile(join(s.folder,'lecture.md'),DOC)
     const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:['lecture.md']}) as any;await start;await s.projects.handle('preferences',{consent:false});release()
-    const result=await settle(s.projects,job.jobId);expect(result.job.state).toBe('cancelled');expect(result.state.settings.consent).toBe(false);expect(result.state.courses[0].revision).toBeUndefined()
+    const result=await settle(s.projects,job.jobId);expect(result.job.state).toBe('succeeded');expect(result.state.settings.consent).toBe(true);expect(result.state.courses[0].revision).toBeDefined()
   })
 })
 describe('structured sources and migration',()=>{
@@ -189,5 +189,75 @@ describe('structured sources and migration',()=>{
     const current=(await s.projects.handle('state',{}) as any).courses.find((c:any)=>c.id===legacyId),material=current.materials[0]
     expect(material.id).toBe(imported.id);expect(material.sources).toEqual(old.courses[0].materials[0].sources);expect(material.missingOriginal).toBe(false)
     expect((await s.projects.readMaterialFile(legacyId,material.id)).data).toEqual(bytes);expect(await readFile(join(s.app,'files',`${material.id}.pdf`))).toEqual(bytes)
+  })
+})
+
+
+describe('application-managed course directories',()=>{
+  it('creates isolated course folders, deduplicates a request and restores uploads after restart',async()=>{
+    const s=await setup(),managed=join(s.root,'executable','.syllora'),projects=new SylloraProjects(s.app,{managedCoursesRoot:managed})
+    const requestId=randomUUID(),input={requestId,name:'同名课程',icon:'math',timezone:'Asia/Shanghai'}
+    const first=await projects.handle('createCourse',input) as any
+    const replay=await projects.handle('createCourse',input) as any
+    expect(first).toMatchObject({id:requestId,path:join(managed,requestId),created:true});expect(replay).toMatchObject({id:requestId,created:false})
+    await expect(projects.handle('createCourse',{...input,name:'另一课程'})).rejects.toMatchObject({code:'REQUEST_CONFLICT'})
+    const second=await projects.handle('createCourse',{...input,requestId:randomUUID()}) as any
+    await projects.handle('import',{courseId:first.id,name:'notes.md',text:'# 甲章\n\n第一门课的材料。'})
+    await projects.handle('import',{courseId:second.id,name:'notes.md',text:'# 乙章\n\n第二门课的材料。'})
+    expect(await readFile(join(first.path,'sources','notes.md'),'utf8')).toContain('第一门课')
+    expect(await readFile(join(second.path,'sources','notes.md'),'utf8')).toContain('第二门课')
+    await projects.handle('rename',{courseId:first.id,name:'改名后的课程'})
+    const restarted=new SylloraProjects(s.app,{managedCoursesRoot:managed}),state=await restarted.handle('state',{}) as any
+    expect(state.courses.find((c:any)=>c.id===first.id)).toMatchObject({name:'改名后的课程',icon:'math',folder:first.path})
+    expect(state.courses.filter((c:any)=>c.id===requestId)).toHaveLength(1)
+    expect((await restarted.handle('scan',{courseId:first.id}) as any).files[0].path).toBe('sources/notes.md')
+  })
+  it('copies old course originals, lectures and history before updating the registry, leaving old files intact',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC);const published=await initialize(s)
+    const managed=join(s.root,'executable','.syllora'),projects=new SylloraProjects(s.app,{managedCoursesRoot:managed}),state=await projects.handle('state',{}) as any
+    const course=state.courses.find((c:any)=>c.id===s.id)
+    expect(course).toMatchObject({id:s.id,folder:join(managed,s.id),revision:published.state.courses[0].revision})
+    expect(await readFile(join(managed,s.id,'lecture.md'),'utf8')).toBe(DOC)
+    expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC)
+    expect((await projects.handle('lectures',{courseId:s.id}) as any).lectures).toHaveLength(2)
+    expect(state.projects[0].error).toBeNull()
+    const registry=JSON.parse(await readFile(join(s.app,'.syllora','projects.json'),'utf8'));expect(registry[0].path).toBe(join(managed,s.id))
+    expect((await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any).courses[0].revision).toBe(course.revision)
+  })
+  it('recovers the registry if a crash occurs after copying and publishing the managed folder',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const registryPath=join(s.app,'.syllora','projects.json'),oldRegistry=await readFile(registryPath,'utf8'),managed=join(s.root,'application','.syllora')
+    await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{})
+    // A crash before registry commit cannot have started the relocated service yet.
+    await writeFile(join(managed,s.id,'.syllora','course.json'),await readFile(join(s.folder,'.syllora','course.json')))
+    await writeFile(registryPath,oldRegistry)
+    const recovered=await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any
+    expect(recovered.courses[0].folder).toBe(join(managed,s.id));expect(recovered.projects[0].error).toBeNull()
+    expect(await readFile(join(managed,s.id,'lecture.md'),'utf8')).toBe(DOC)
+  })
+  it('keeps a legacy course usable when registry registration fails and retries safely on restart',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC);const managed=join(s.root,'executable','.syllora')
+    const failing=new SylloraProjects(s.app,{managedCoursesRoot:managed,registerProject:async()=>{throw new Error('registration fixture failed')}})
+    const state=await failing.handle('state',{}) as any
+    expect(state.courses[0].folder).toBe(s.folder);expect(state.projects[0].error).toContain('迁移未完成')
+    expect(await stat(join(managed,s.id)).catch(()=>null)).toBeNull()
+    const recovered=await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any
+    expect(recovered.courses[0].folder).toBe(join(managed,s.id));expect(recovered.projects[0].error).toBeNull()
+    expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC)
+  })
+  it('does not overwrite an existing destination or follow a linked storage root',async()=>{
+    const s=await setup(),managed=join(s.root,'executable','.syllora');await mkdir(join(managed,s.id),{recursive:true});await writeFile(join(managed,s.id,'keep.txt'),'untouched')
+    const state=await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any
+    expect(state.courses[0].folder).toBe(s.folder);expect(state.projects[0].error).toContain('不会覆盖')
+    expect(await readFile(join(managed,s.id,'keep.txt'),'utf8')).toBe('untouched')
+    const linked=join(s.root,'linked');await symlink(managed,linked,process.platform==='win32'?'junction':'dir')
+    await expect(new SylloraProjects(s.app,{managedCoursesRoot:linked}).handle('createCourse',{requestId:randomUUID(),name:'拒绝链接'})).rejects.toMatchObject({code:'INVALID_FOLDER'})
+  })
+  it('allows explicitly reported usable PDF pages by default while keeping missing-page diagnostics',async()=>{
+    const s=await setup(undefined,async()=>({total:2,pages:[{num:1,text:'这一页有完整的定义与依据。'},{num:2,text:''}]}));await writeFile(join(s.folder,'lecture.pdf'),'fixture')
+    const started=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:['lecture.pdf']}) as any
+    const result=await settle(s.projects,started.jobId)
+    expect(result.job.state).toBe('succeeded');expect(result.state.courses[0].materials[0].accepted).toBe(true)
+    expect(result.state.courses[0].materials[0].pageIssues).toEqual([{num:2,reason:'blank-page'}])
   })
 })

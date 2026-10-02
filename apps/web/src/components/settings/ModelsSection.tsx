@@ -945,7 +945,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const selectedEntry = addableCatalog.find((entry) => entry.id === addEntryId) ?? null;
 
   return (
-    <section ref={sectionRef} className="flex max-w-[720px] flex-col gap-3">
+    <section ref={sectionRef} className="models-section flex max-w-[720px] flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-medium text-text-primary">
@@ -1105,7 +1105,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
           )}
         </div>
       ) : (
-        <div className="flex gap-2">
+        <div className="provider-entry-actions flex gap-2">
           <button
             type="button"
             disabled={addableCatalog.length === 0}

@@ -24,7 +24,7 @@ const answerSchema = z.object({ text: z.string().min(1).max(16000), sourceIds: z
 const questionSchema = z.object({ stem: z.string().min(1).max(3000), options: z.array(z.string().min(1).max(1000)).length(4), answer: z.number().int().min(0).max(3), explanation: z.string().min(1).max(5000), sourceIds: citations, quote: z.string().min(4).max(3000) })
 interface Job extends JobDiagnostics { resultMessageId?:string; sessionId?:string; id: string; requestId: string; courseId: string; kind: string; state: 'running' | 'succeeded' | 'failed' | 'cancelled'; message: string; createdAt: number; model: string; calls: number; inputTokens: number | null; outputTokens: number | null; progress?: InitProgress;coverage?:JobCoverage|null }
 interface Database { version: 1; courses: Course[]; jobs: Job[]; consent: boolean; calls: number }
-const initial = (): Database => ({ version: 1, courses: [], jobs: [], consent: false, calls: 0 })
+const initial = (): Database => ({ version: 1, courses: [], jobs: [], consent: true, calls: 0 })
 export class SylloraError extends Error { constructor(readonly code: string, message: string) { super(message) } }
 function fail(code: string, message: string): never { throw new SylloraError(code,message) }
 const id = () => randomUUID()
@@ -90,7 +90,7 @@ export class SylloraService {
       return {file:{id:material.id,ext:'pdf',name:material.file?.name??material.name,bytes:data.length},data}
     } catch(error) {if(error instanceof SylloraError)throw error;fail('STORAGE_ERROR','原文件无法读取，请检查文件是否已移动或目录链接已变化')}
   }
-  private async consent(db: Database) { return this.options.isConsented ? this.options.isConsented() : db.consent }
+  private async consent(_db: Database) { return this.options.isConsented ? this.options.isConsented() : true }
   private now() { return this.options.now?.() ?? Date.now() }
   private async transaction<T>(fn: (db: Database) => T | Promise<T>, write = true, allowDeleting = false): Promise<T> {
     const run = this.tail.then(async () => {
@@ -153,9 +153,9 @@ export class SylloraService {
     if (action === 'state') {
       const dirty = await this.transaction(db => db.courses.some(course => refreshNotice(course, this.now()) || sessionNeedsExpiry(course,this.now()) || nextSyncTrigger(course, this.now()) !== null), false)
       if (dirty) await this.transaction(db => { for (const course of db.courses) { expireSessions(course,this.now()); refreshNotice(course, this.now()); const trigger = nextSyncTrigger(course, this.now()); if (trigger) recordNext(course, this.now(), id, trigger) } })
-      return this.transaction(db => ({
+      return this.transaction(async db => ({
         courses: db.courses.map(c => publicCourse(c,this.now(),db.jobs)), jobs: db.jobs.slice(-30),
-        settings: { consent: db.consent, calls: db.calls },
+        settings: { consent: await this.consent(db), calls: db.calls },
       }), false)
     }
     if (action === 'planDiff') return this.transaction(db => {
@@ -165,8 +165,8 @@ export class SylloraService {
     }, false)
     if (action === 'preferences') {
       // Zod strips legacy callLimit fields sent by older clients.
-      const p = z.object({ consent: z.boolean() }).parse(payload)
-      return this.transaction(db => { db.consent = p.consent; return { saved: true } })
+      z.object({ consent: z.boolean() }).parse(payload)
+      return this.transaction(db => { db.consent = true; return { saved: true } })
     }
     if (action === 'create') {
       const p = z.object({ name: title, timezone: z.string().default('Asia/Shanghai'), requestId: key }).parse(payload)
@@ -623,7 +623,7 @@ export class SylloraService {
   }
 
   private async initialize(payload: unknown) {
-    const p=z.object({courseId:key,requestId:key,paths:z.array(z.string().min(1)).min(1),fingerprints:z.record(z.string(),z.string()).default({}),acceptPartial:z.boolean().default(false)}).parse(payload)
+    const p=z.object({courseId:key,requestId:key,paths:z.array(z.string().min(1)).min(1),fingerprints:z.record(z.string(),z.string()).default({}),acceptPartial:z.boolean().default(true)}).parse(payload)
     const root=this.options.courseRoot ?? fail('NOT_SUPPORTED','请先打开课程文件夹')
     const config=await (this.options.config?.()??loadChatConfig(this.root))
     if(!config.model||!config.baseUrl||(!config.apiKey&&!process.env[config.apiKeyEnv??'']))fail('MODEL_NOT_CONFIGURED','请先配置共享模型供应商')

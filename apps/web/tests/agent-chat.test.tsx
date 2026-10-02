@@ -1,6 +1,6 @@
 /**
  * AgentChat 宿主：uuid 课程与「课程文件夹名」之间的桥接、设置弹窗转交与
- * 调色板条件挂载。ChatArea 用探针替身，避免把整条 SSE 链路拖进单测。
+ * 调色板条件挂载。WorkbenchChat 用探针替身，避免把整条 SSE 链路拖进单测。
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +14,7 @@ vi.mock("@/src/lib/api", () => ({
   api: { ensureCourse: ensureCourseMock },
 }));
 
-vi.mock("@/src/components/chat/ChatArea", () => ({
+vi.mock("@/src/components/chat/WorkbenchChat", () => ({
   default: () => <div data-testid="chat-area" />,
 }));
 
@@ -85,3 +85,4 @@ describe("AgentChat", () => {
     expect(await screen.findByTestId("command-palette")).toBeInTheDocument();
   });
 });
+
