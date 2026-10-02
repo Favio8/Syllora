@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil } from 'lucide-react';
 import ModelsSection from './settings/ModelsSection';
+import NotesWorkspace from './NotesWorkspace';
+import NotesGraph from './NotesGraph';
 import { api } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import type { SylloraState, Task, CourseView } from '../types/syllora';
@@ -41,7 +43,10 @@ type DiagFile = { name:string; bytes:number; text:string; truncated:boolean };
 export default function Syllora() {
   const [data,setData] = useState<SylloraState|null>(null);
   const [selected,setSelected] = useState('');
-  const [tab,setTab] = useState<'today'|'outline'|'materials'|'review'|'lecture'>('today');
+  const [tab,setTab] = useState<'today'|'outline'|'materials'|'review'|'lecture'|'graph'>('today');
+  // 笔记整页工作区 + 「图谱」刷新计数：新建/保存/删除后 +1，右栏图谱据此重拉笔记。
+  const [notesMode,setNotesMode] = useState(false);
+  const [notesEpoch,setNotesEpoch] = useState(0);
   const [settings,setSettings] = useState(false);
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
@@ -226,6 +231,8 @@ export default function Syllora() {
   useEffect(()=>{setEditMinutes({})},[course?.draft?.id]);
   const exposureError=useLearningExposures(course,rpc,tab);
   const courseList = (archived:boolean)=>(data?.courses??[]).filter(c=>c.archived===archived).map(c=><button className={`sy-course ${c.id===selected?'is-selected':''}`} key={c.id} onClick={()=>void selectCourse(c.id)}><BookOpen size={17}/><span>{c.name}<small>{c.points.length} 个知识点{c.archived?' · 已归档':''}</small></span></button>);
+  // 笔记整页工作区：接管整个应用视图（三栏），带返回。
+  if(notesMode&&course) return <NotesWorkspace courseId={course.id} courseName={course.name} onClose={()=>setNotesMode(false)} onEpoch={()=>setNotesEpoch(epoch=>epoch+1)}/>;
   return <div className={`sy-app ${showRight?'':'sy-no-right'}`}>
     {/* 常驻隐藏输入框：滚到任何标签页、以及「继续」在导入资料这一步，都靠它
         唤起同一个系统文件选择框（见 fileInput 的注释）。 */}
@@ -237,7 +244,7 @@ export default function Syllora() {
       <nav className="sy-courses" aria-label="课程">{courseList(false)}{data&&!data.courses.length&&<p className="sy-muted sy-pad">打开课程文件夹，检查资料后开始初始化。</p>}{data?.courses.some(c=>c.archived)&&<><div className="sy-section-title">已归档</div>{courseList(true)}</>}</nav>
       {data?.projects?.filter(p=>p.error).map(p=><div className="sy-pad sy-muted" key={p.id}><p>{p.name}：{p.error}</p>{p.deletion&&<button disabled={busy} onClick={()=>{if(window.confirm(`继续清理「${p.name}」的 Syllora 产物与学习记录？原始资料和课程文件夹保留。`))void run('delete',{courseId:p.id,confirmed:true})}}>重试删除课程</button>}</div>)}
       {!!data?.legacyCourses?.length&&<div className="sy-legacy"><div className="sy-section-title">旧课程迁移</div>{data.legacyCourses.map(c=><button key={c.id} onClick={()=>{setMigration(c);setCreating(true)}}>{c.name} · 迁移到文件夹</button>)}</div>}
-      <div className="sy-left-bottom"><p>Turn every course into<br/>a learning system.</p><button onClick={()=>{setSettings(true);setSettingsTab('models');setConsent(data?.settings.consent??false)}}><Settings size={17}/>模型与设置</button><small>本机单用户 · 资料保存在本地</small></div>
+      <div className="sy-left-bottom"><p>Turn every course into<br/>a learning system.</p><button title={course?'笔记':'请先打开一门课程'} onClick={()=>{if(!course){setError('请先打开一门课程');return}setNotesMode(true)}}><FileText size={17}/>笔记</button><button onClick={()=>{setSettings(true);setSettingsTab('models');setConsent(data?.settings.consent??false)}}><Settings size={17}/>模型与设置</button><small>本机单用户 · 资料保存在本地</small></div>
     </aside>
     <main className="sy-main">
       <header className="sy-top"><div><span>学习工作台</span><h1>{course?.name??'从一门课程开始'}</h1></div><div className="sy-actions">{course&&<><button aria-label="重命名课程" title="重命名" onClick={()=>{setRenameValue(course.name);setRenaming(true)}}><Pencil size={16}/></button><button aria-label={course.archived?'恢复课程':'归档课程'} title={course.archived?'恢复课程':'归档课程'} onClick={()=>void run('archive',{archived:!course.archived})}>{course.archived?<RotateCcw size={16}/>:<Archive size={16}/>}</button><button aria-label="删除课程" title="删除课程" onClick={()=>{if(window.confirm(`删除「${course.name}」的 Syllora 整理产物与学习记录？原始资料和课程文件夹保留。此操作不可撤销。`))void run('delete',{confirmed:true})}}><Trash2 size={16}/></button></>}<button aria-label="切换状态栏" onClick={()=>setShowRight(!showRight)}><PanelRight size={18}/></button></div></header>
@@ -262,8 +269,8 @@ export default function Syllora() {
       <form className="sy-composer" onSubmit={async e=>{e.preventDefault();if(await generate('answer',{prompt,...(task&&!(course.blockedPointIds??[]).includes(task.pointId)?{taskId:task.id}:{})})){const revision=(cacheRef.current[selected]?.revision??0)+1;cacheRef.current={...cacheRef.current,[selected]:{prompt:'',answers:answersRef.current,revision,savedRevision:revision,savedAt:Date.now()}};promptRef.current='';setPrompt('')}}}><input aria-label="向课程资料提问" placeholder={course.materials.some(m=>m.status!=='deleted')?'向课程资料提问，追问会带上本课程最近对话…':'先在右侧导入学习资料'} value={prompt} onChange={e=>rememberPrompt(e.target.value)} disabled={course.archived} maxLength={4000}/><button className="sy-primary" title="发送问题" aria-label="发送问题" disabled={!prompt.trim()||busy||!!running||course.archived}><Send size={18}/></button><small>未发送的问题按课程保存 · 依据只来自所选课程资料 · 模型生成内容需要核验</small></form>
       </>}
     </main>
-    {showRight&&<aside className="sy-right"><div className="sy-right-title">学习状态 <span>{course?.timezone??'本地时间'}</span></div><div className="sy-tabs" role="tablist">{([['today','计划'],['lecture','讲义'],['outline','大纲'],['review','复习'],['materials','资料']] as const).map(([id,label])=><button role="tab" aria-selected={tab===id} className={tab===id?'is-selected':''} key={id} onClick={()=>setTab(id)}>{label}</button>)}</div><div className="sy-panel">
-      {!course?<p className="sy-muted">打开课程文件夹后，在这里检查资料、阅读讲义与查看学习证据。</p>:tab==='lecture'?<><h2>阅读课程讲义</h2><p>在左侧阅读章节导读、概念解释与原文依据。</p><p className="sy-muted">{course.revision?'讲义已发布，学习范围与计划由你确认。':'请先在资料页检查文件并点击初始化。'}</p><button onClick={()=>setTab('materials')}>检查课程资料</button></>:tab==='materials'?<>
+    {showRight&&<aside className="sy-right"><div className="sy-right-title">学习状态 <span>{course?.timezone??'本地时间'}</span></div><div className="sy-tabs" role="tablist">{([['today','计划'],['lecture','讲义'],['outline','大纲'],['review','复习'],['materials','资料'],['graph','图谱']] as const).map(([id,label])=><button role="tab" aria-selected={tab===id} className={tab===id?'is-selected':''} key={id} onClick={()=>setTab(id)}>{label}</button>)}</div><div className="sy-panel">
+      {!course?<p className="sy-muted">打开课程文件夹后，在这里检查资料、阅读讲义与查看学习证据。</p>:tab==='graph'?<NotesGraph courseId={course.id} refreshKey={notesEpoch}/>:tab==='lecture'?<><h2>阅读课程讲义</h2><p>在左侧阅读章节导读、概念解释与原文依据。</p><p className="sy-muted">{course.revision?'讲义已发布，学习范围与计划由你确认。':'请先在资料页检查文件并点击初始化。'}</p><button onClick={()=>setTab('materials')}>检查课程资料</button></>:tab==='materials'?<>
         {course.folder&&<MaterialInitialization key={course.id} course={course} epoch={fileEpoch} busy={busy} running={!!running} onRun={run}/>}
         <h2>课程资料</h2><p className="sy-muted">支持文本 PDF、MD、TXT。单份最多 20 MiB／50 页，课程合计 100 页 PDF／10 万字符。</p><button className="sy-upload" disabled={busy||course.archived} onClick={pickMaterialFile}><Upload size={20}/><span>选择资料文件</span></button><label>或粘贴正文<textarea rows={4} value={text} onChange={e=>setText(e.target.value)} placeholder="粘贴有使用权限的学习资料"/></label><button disabled={!text.trim()||busy||course.archived} onClick={async()=>{if(await run('import',{name:'粘贴资料.txt',text}))setText('')}}>保存正文</button>
         {course.materials.map(m=><div className="sy-material" key={m.id}><FileText size={17}/><div>

@@ -35,6 +35,7 @@ import type {
   ApprovalRequestView,
   AgentProjectionView,
   SessionEventView,
+  NoteMeta,
 } from "@/src/types/api";
 import type { HarnessTask, Syllabus } from "@/src/types";
 
@@ -64,6 +65,13 @@ function authHeaders(): Record<string, string> {
   return token === null ? {} : { Authorization: `Bearer ${token}` };
 }
 
+/** 笔记图片的鉴权 URL。`<img>` 不能带 Authorization 头，所以 token 走 query（宿主支持 `?token=`）。 */
+export function noteAssetUrl(courseId: string, name: string): string {
+  const base = `/api/syllora/notes/asset?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(name)}`;
+  const token = bootstrapToken();
+  return token === null ? base : `${base}&token=${encodeURIComponent(token)}`;
+}
+
 /**
  * RPC 协议（M1 起）：POST /api/<method>，body `{ payload }`，响应信封
  * `{ ok: true, result } | { ok: false, error: { code, message } }`。
@@ -89,6 +97,37 @@ async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): 
     throw new ApiError(envelope.error?.code ?? "INTERNAL_ERROR", envelope.error?.message ?? "请求失败", 200);
   }
   return envelope.result as T;
+}
+
+/**
+ * Syllora 专线 RPC（`POST /api/syllora/<动作>`，宿主 bin.ts 的 syllora 路由）：
+ * 与上面点号方法表的 `{ ok, result }` 信封不同，专线成功时返回 `{ result }`、
+ * 失败时返回 `{ error: { code, message } }`。课程文件夹相关的动作只走这条专线。
+ */
+async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`/api/syllora/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ payload }),
+    signal,
+  });
+  const text = await response.text();
+  let body: { result?: T; error?: { code?: string; message?: string } } = {};
+  if (text) {
+    try {
+      body = JSON.parse(text) as typeof body;
+    } catch {
+      // UI-25 同口径：非 JSON 响应（代理错误页等）转可读 ApiError。
+      throw new ApiError("INTERNAL_ERROR", `非 JSON 响应（HTTP ${response.status}）`, response.status);
+    }
+  }
+  if (body.error) {
+    throw new ApiError(body.error.code ?? "INTERNAL_ERROR", body.error.message ?? "请求失败", response.status);
+  }
+  if (!response.ok) {
+    throw new ApiError("INTERNAL_ERROR", `HTTP ${response.status}`, response.status);
+  }
+  return body.result as T;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -542,4 +581,27 @@ export const api = {
 
   activateProvider: (providerId: string) =>
     rpc<SettingsPayload>("settings.activateProvider", { providerId }),
+
+  // ---------------------------------------------------------------------------
+  // 笔记（Notes）：宿主把 Markdown 存在 {课程文件夹}/notes/{id}.md + notes/index.json。
+  // ---------------------------------------------------------------------------
+  notes: {
+    /** 当前课程的笔记元数据（含正文解析出的 [[双链]] 目标标题）。 */
+    list: (courseId: string) =>
+      sylloraRpc<{ notes: NoteMeta[] }>("notes/list", { courseId }),
+    read: (courseId: string, noteId: string) =>
+      sylloraRpc<{ meta: NoteMeta; content: string }>("notes/read", { courseId, noteId }),
+    create: (courseId: string, title: string) =>
+      sylloraRpc<{ meta: NoteMeta }>("notes/create", { courseId, title }),
+    update: (courseId: string, noteId: string, payload: { title?: string; content?: string }) =>
+      sylloraRpc<{ meta: NoteMeta }>("notes/update", { courseId, noteId, ...payload }),
+    delete: (courseId: string, noteId: string) =>
+      sylloraRpc<{ deleted: boolean }>("notes/delete", { courseId, noteId }),
+    /** AI 续写：标题 + 光标前文 → 基于课程资料的续写正文。 */
+    suggest: (courseId: string, payload: { title: string; prefix: string }) =>
+      sylloraRpc<{ continuation: string; sourceIds: string[] }>("notes/suggest", { courseId, ...payload }),
+    /** 上传笔记图片（base64）。返回落盘后的文件名，写进正文的相对引用里。 */
+    uploadImage: (courseId: string, payload: { ext: string; data: string }) =>
+      sylloraRpc<{ name: string }>("notes/uploadImage", { courseId, ...payload }),
+  },
 };

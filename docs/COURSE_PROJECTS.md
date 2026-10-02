@@ -12,6 +12,7 @@
 课程根目录/
   原始资料.md、子目录/...         用户文件，保持原样
   sources/                       上传或粘贴的新资料，重名追加序号
+  notes/                         用户笔记（Markdown）与笔记索引，见「笔记」
   .syllora/
     course.json                  单课程快照、学习记录、任务、当前 revision
     .staging/cache/              按内容与模型配置复用的解析／讲义检查点
@@ -89,6 +90,22 @@ PDF 预览读取课程中的原文件，经课程／资料归属、路径边界�
 | `materialFile` | `courseId`、`materialId` | 原文件元信息和 `base64`（兼容 RPC 客户端） |
 | `migrateCourse` | 旧 `courseId`、目标 `path` | `id`、`path`、`migrated` |
 | `restorePointSources` | `courseId`、原 `pointId`、用户确认支持同一概念的 `replacementPointId` | 保存结果；原节点、任务与作答 ID 保留 |
+| `notes/list` | `courseId` | `notes`（笔记元数据：id、标题、解析出的 [[双链]] 目标标题、建改时间） |
+| `notes/read` | `courseId`、`noteId` | `meta`、`content`（Markdown 正文） |
+| `notes/create` | `courseId`、`title` | `meta`，并在 `{课程根}/notes/{id}.md` 写正文 |
+| `notes/update` | `courseId`、`noteId`，可选 `title`、`content` | `meta`；正文变化时重新解析 `[[双链]]` |
+| `notes/delete` | `courseId`、`noteId` | `deleted`；正文文件与索引条目一并删除 |
+| `notes/suggest` | `courseId`、`title`、`prefix`（光标前文） | `continuation`、`sourceIds`；基于课程资料续写，不落库、不建任务 |
+| `notes/uploadImage` | `courseId`、`ext`、`data`（base64） | `name`；写入 `{课程根}/notes/assets/`，超过 1.5 MiB 或后缀与内容不符则拒绝 |
+
+笔记图片经 `GET /api/syllora/notes/asset?courseId=<id>&name=<file>` 读取（沿用 token／Origin
+门禁，token 可走查询参数以便 `<img>` 直接加载），响应带 `nosniff` 与 `private` 缓存；
+文件名按白名单校验，杜绝目录穿越。
+
+`notes/create|read|update|delete` 的 `noteId` 与服务端生成时一致（UUID），同时杜绝
+路径穿越文件名；所有权按 `courseId` 校验，不属于本课程的 ID 一律拒绝。
+`notes/` 是用户内容：资料扫描（`scan`）排除该目录，笔记不会出现在「资料」Tab，
+也不会作为初始化讲义的来源依据。
 
 任务 `progress` 包含扫描／解析／整理／校验阶段、`done/total`、`failures` 与说明。
 扫描发生在调用模型之前，初始化请求立即返回持久化任务。兼容旧自动化客户端的
@@ -110,9 +127,9 @@ PDF 原字节，沿用 token／Origin 门禁，包含 `nosniff` 与 `private, no
 旧快照一直保留，迁移失败可重新选择目标并重试。
 
 删除课程须明确确认，先取消并等待任务，再清理本应用管理的 `course.json`、
-`revisions/` 与 `.staging/` 并移除最近课程记录。根目录、原资料、上传正文和继承
-模块其他 `.syllora` 文件保留。删除单份资料会使引用失效并清理整理版本，需重新
-初始化讲义；用户原文件仍留在目录中。
+`revisions/` 与 `.staging/` 并移除最近课程记录。根目录、原资料、上传正文、用户笔记
+`notes/` 和继承模块其他 `.syllora` 文件保留。删除单份资料会使引用失效并清理整理
+版本，需重新初始化讲义；用户原文件仍留在目录中。
 
 ## 2026-10-02 恢复与诊断契约
 
