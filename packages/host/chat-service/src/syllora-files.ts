@@ -76,18 +76,34 @@ export async function removeProducts(root: string, names: string[]) {
 }
 export async function scanFiles(root: string, materials: Material[]): Promise<FileCandidate[]> {
   const found: FileCandidate[] = []
+  /**
+   * Fingerprints already established for unchanged files. Re-hashing the whole folder on every scan costs one
+   * full read per file even when nothing changed; `mtimeMs + size` is the cheap identity, and every reader that
+   * trusts a fingerprint still re-reads the bytes (`initializeFolder` verifies, then verifies again at the end),
+   * so a stale fingerprint surfaces as a "资料发生变化" failure rather than as silent wrong content.
+   */
+  const known = new Map<string, Material>()
+  for (const material of materials) {
+    const path = material.path
+    if (!path || material.status === 'deleted' || typeof material.fingerprint !== 'string' || !material.fingerprint || !material.size || !material.mtimeMs) continue
+    if (!known.has(path)) known.set(path, material)
+  }
   async function walk(dir: string) {
     for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
       if (entry.name.startsWith('.') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
       const path = join(dir, entry.name), name = relative(root, path).split(sep).join('/')
       if (entry.isDirectory()) { await walk(path); continue }
       if (!entry.isFile()) continue
-      const size = (await stat(path)).size, supported = ['.pdf', '.md', '.txt'].includes(extname(entry.name).toLowerCase())
+      const info = await stat(path), size = info.size, mtimeMs = info.mtimeMs, supported = ['.pdf', '.md', '.txt'].includes(extname(entry.name).toLowerCase())
       let status: FileCandidate['status'] = !supported ? 'unsupported' : size > SOURCE_LIMIT ? 'too-large' : 'ready'
       let fingerprint: string | null = null
-      if (status === 'ready') try { fingerprint = sha(await readFile(path)) } catch { status = 'unreadable' }
+      if (status === 'ready') {
+        const previous = known.get(name)
+        if (previous && previous.size === size && previous.mtimeMs === info.mtimeMs) fingerprint = previous.fingerprint!
+        else try { fingerprint = sha(await readFile(path)) } catch { status = 'unreadable' }
+      }
       const old = materials.find(m => m.path === name && m.status !== 'deleted')
-      found.push({ path: name, size, fingerprint, status, change: !old ? 'added' : old.fingerprint === fingerprint ? 'unchanged' : 'changed', reason: status === 'ready' ? '' : status === 'too-large' ? '单文件超过 20 MiB' : status === 'unreadable' ? '文件无法读取' : '本轮仅支持文本 PDF、MD/TXT' })
+      found.push({ path: name, size, mtimeMs, fingerprint, status, change: !old ? 'added' : old.fingerprint === fingerprint ? 'unchanged' : 'changed', reason: status === 'ready' ? '' : status === 'too-large' ? '单文件超过 20 MiB' : status === 'unreadable' ? '文件无法读取' : '本轮仅支持文本 PDF、MD/TXT' })
     }
   }
   await walk(root)
@@ -95,8 +111,14 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
 }
 
 interface Block { text: string; start: number; end: number; section: string; context: string; kind: string; anchor: string }
-/** Structure-first scanner: fenced code and tables survive blank lines; raw offsets never include added context. */
-function blocks(text: string, label: string): Block[] {
+/**
+ * Structure-first scanner: fenced code and tables survive blank lines; raw offsets never include added context.
+ * `fallback` groups fragments that belong to one document: a PDF page anchor differs per page, so using it as
+ * the section fallback would make every page its own chapter and turn one chapter per model call into one call
+ * per page. When that fallback is accepted it is also the section shown to the learner, so the display keeps the
+ * document identity; the block anchor stays page-accurate.
+ */
+function blocks(text: string, label: string, fallback: string): Block[] {
   const lines = text.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) ?? []
   const result: Block[] = [], headings: string[] = []
   let offset = 0, i = 0
@@ -125,7 +147,7 @@ function blocks(text: string, label: string): Block[] {
         body += next; offset += next.length; i++
       }
     }
-    result.push({ text: body, start, end: offset, section: headings.filter(Boolean).join(' / ') || label, context: headings.filter(Boolean).join(' > '), kind, anchor: `${label} · 行 ${startLine}–${i}` })
+    result.push({ text: body, start, end: offset, section: headings.filter(Boolean).join(' / ') || fallback, context: headings.filter(Boolean).join(' > '), kind, anchor: `${label} · 行 ${startLine}–${i}` })
   }
   return result
 }
@@ -147,10 +169,11 @@ function pieces(block: Block): Block[] {
   }
   return result
 }
-export function structuredSources(materialId: string, version: string, parts: Array<{ text: string; anchor: string }>): Source[] {
+export function structuredSources(materialId: string, version: string, parts: Array<{ text: string; anchor: string; name?: string }>): Source[] {
   const groups: Block[] = []
   for (const part of parts) {
-    for (const block of blocks(part.text, part.anchor).flatMap(pieces)) {
+    const fallback = part.name ?? part.anchor
+    for (const block of blocks(part.text, part.anchor, fallback).flatMap(pieces)) {
       const prev = groups.at(-1)
       if (prev && prev.section === block.section && prev.anchor.startsWith(part.anchor) && prev.kind === 'paragraph' && block.kind === 'paragraph' && [...part.text.slice(prev.start,block.end)].length <= 1800) {
         // Only merge contiguous raw ranges; skipped blank lines remain in the original text.

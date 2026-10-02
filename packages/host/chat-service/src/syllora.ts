@@ -447,12 +447,13 @@ export class SylloraService {
     const data = p.base64 ? Buffer.from(p.base64,'base64') : Buffer.from(p.text ?? '', 'utf8')
     if (data.length > 20 * 1024 * 1024) fail('LIMIT_EXCEEDED','单文件不能超过 20 MiB')
     const fingerprint = digest(data)
+    const materialName = p.name.split(/[\\/]/).at(-1) ?? p.name
     const previous = await this.transaction(db => this.course(db,p.courseId).materials.find(m => m.fingerprint === fingerprint && m.status !== 'deleted'),false)
     if (previous) return { id: previous.id, duplicate: true,version:previous.revisionNumber??previous.version??1,previewAvailable:!!previous.file }
     let pages = 0
     let partial = false
     let pageIssues:PageIssue[]=[]
-    let parts: Array<{ text: string; anchor: string }>
+    let parts: Array<{ text: string; anchor: string; name: string }>
     if (ext === 'pdf') {
       if (!this.options.pdf) fail('UNSUPPORTED_INPUT','PDF 解析器不可用')
       let parsed:Awaited<ReturnType<NonNullable<typeof this.options.pdf>>>
@@ -460,11 +461,12 @@ export class SylloraService {
       pages = parsed.total
       if (pages > 50) fail('LIMIT_EXCEEDED','单份 PDF 不能超过 50 页')
       pageIssues=pdfPageIssues(parsed);partial=pageIssues.length>0
-      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, anchor: `第 ${p.num} 页` }))
+      parts = parsed.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, anchor: `第 ${p.num} 页`, name: materialName }))
     } else {
       let text: string
       try { text = new TextDecoder('utf-8',{ fatal: true }).decode(data) } catch { fail('UNSUPPORTED_INPUT','请将文本转换为 UTF-8 编码') }
-      parts = text.trim() ? [{ text: text.replaceAll('\r\n','\n'), anchor: p.name }] : []
+      // 与 PDF 分支同一口径：anchor 负责定位，name 是结构化取章节回退键时用的文档身份
+      parts = text.trim() ? [{ text: text.replaceAll('\r\n','\n'), anchor: materialName, name: materialName }] : []
     }
     if (!parts.length) fail('NO_USABLE_SOURCE','未提取到正文，扫描 PDF 请先转换为文本型 PDF')
     const chars = parts.reduce((n,p) => n + [...p.text].length,0)

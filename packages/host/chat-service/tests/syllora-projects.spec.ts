@@ -165,6 +165,36 @@ describe('structured sources and migration',()=>{
     value.concepts[0]!.quote='编造的依据';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
     const incomplete=lecture([sources[0]]);expect(()=>validateLecture(incomplete,sources)).toThrow('没有完整关联')
   })
+  it('keeps one document as one chapter even though every PDF page has its own anchor',()=>{
+    // 页锚点必须只做定位：一旦它同时充当章节回退键，每一页都会变成独立批次，
+    // 初始化就退化成"每页一次模型调用"。
+    const pages=[{text:'第一页的正文依据。',anchor:'第 1 页',name:'讲义.pdf'},{text:'第二页的正文依据。',anchor:'第 2 页',name:'讲义.pdf'}]
+    const sources=structuredSources('m','v',pages)
+    expect(sources.map(s=>s.anchor)).toEqual(['第 1 页 · 行 1–1 · 字符 1–9','第 2 页 · 行 1–1 · 字符 1–9'])
+    // 同一文档的多页无标题正文必须落进同一批次键，否则页数直接等于模型调用数。
+    expect(new Set(sources.map(s=>s.section))).toEqual(new Set(['讲义.pdf']))
+    const fourPages=['第一页依据。','第二页依据。','第三页依据。','第四页依据。'].map((text,i)=>({text,anchor:`第 ${i+1} 页`,name:'讲义.pdf'}))
+    expect(new Set(structuredSources('m','v',fourPages).map(s=>s.section)).size).toBe(1)
+  })
+  it('reuses stored fingerprints for files whose size and modification time are unchanged',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
+    const first=await files.scanFiles(s.folder,[])
+    expect(first[0]!.status).toBe('ready');expect(first[0]!.fingerprint).toMatch(/^[0-9a-f]{64}$/)
+    const material={id:'m',name:'lecture.md',fingerprint:first[0]!.fingerprint!,status:'ready' as const,accepted:true,pages:0,sources:[],path:'lecture.md',size:first[0]!.size,mtimeMs:first[0]!.mtimeMs}
+    // 未变化的资料必须复用已存指纹（不再整读文件），并且与首次扫描结果一致。
+    const again=await files.scanFiles(s.folder,[material])
+    expect(again[0]!.fingerprint).toBe(material.fingerprint);expect(again[0]!.change).toBe('unchanged')
+    // 大小与记录不符时必须重算，不能盲信已存指纹。
+    const wrongSize=await files.scanFiles(s.folder,[{...material,size:1}])
+    expect(wrongSize[0]!.fingerprint).toBe(material.fingerprint);expect(wrongSize[0]!.change).toBe('unchanged')
+    // 内容真的变了：指纹与 change 都要跟着变。
+    await writeFile(join(s.folder,'lecture.md'),DOC+'\n补充依据。')
+    const modified=await files.scanFiles(s.folder,[material])
+    expect(modified[0]!.fingerprint).not.toBe(material.fingerprint);expect(modified[0]!.change).toBe('changed')
+    // 缺文件属性的老课程记录不得被当成"未变化"而跳过：必须重算并按真实内容判定。
+    const legacy=await files.scanFiles(s.folder,[{...material,fingerprint:'stale-legacy-hash',size:undefined,mtimeMs:undefined}])
+    expect(legacy[0]!.fingerprint).toBe(modified[0]!.fingerprint);expect(legacy[0]!.change).toBe('changed')
+  })
   it('migrates old courses with their identifiers and evidence, refuses existing destinations and keeps the original snapshot',async()=>{
     const s=await setup(),id=randomUUID(),pointId=randomUUID(),materialId=randomUUID(),sourceId=randomUUID(),questionId=randomUUID()
     const old:Course={id,name:'旧课程',timezone:'Asia/Shanghai',archived:false,materials:[{id:materialId,name:'旧讲义.pdf',fingerprint:'fingerprint',status:'ready',accepted:true,pages:1,sources:[{id:sourceId,materialId,anchor:'第 1 页',text:'单位矩阵的主对角线元素为一。'}]}],points:[{id:pointId,name:'单位矩阵',chapter:'矩阵',sourceIds:[sourceId]}],scope:[pointId],plan:null,draft:null,questions:[{id:questionId,pointId,taskId:randomUUID(),slot:0,family:'f',stem:'题干',options:['一','二','三','四'],answer:0,explanation:'解释',sourceIds:[sourceId],quote:'主对角线元素为一',status:'valid',assisted:false}],attempts:[{id:randomUUID(),questionId,option:0,correct:true,assisted:false,at:1,sequence:0}],messages:[],actions:[],drafts:{prompt:'草稿',answers:[]},changes:[],notice:null,createdAt:0}
