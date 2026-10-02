@@ -881,7 +881,7 @@ export class Agent {
         }, entry.turnId)
         const userInputRow = await this.append('user/input', { content: entry.input.content, ...(entry.input.metadata ?? {}) }, entry.turnId)
         userInputSeq = userInputRow.seq
-        await this.append('turn/start', { mode: entry.input.mode ?? 'socratic', target: entry.target }, entry.turnId)
+        await this.append('turn/start', { mode: entry.input.mode ?? 'quick', target: entry.target }, entry.turnId)
       }
     let blockedByAsk = false
     let blockedByApproval = false

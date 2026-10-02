@@ -80,7 +80,7 @@ describe('TutorSession chat loop', () => {
     const { root, courseDir, wsRoot } = await setup()
     const session = makeSession(courseDir, wsRoot, {
       rounds: [{ text: '<think>先想一下。</think>答案是覆写。' }],
-    }, { new: true, mode: 'socratic' })
+    }, { new: true, mode: 'quick' })
     await session.init()
 
     const events: string[] = []
@@ -105,7 +105,7 @@ describe('TutorSession chat loop', () => {
         { calls: [{ id: 'call_1', name: 'read_source', arguments: { path: 'overview.md' } }] },
         { text: '资料里说了：重载与覆写的关键区别。' },
       ],
-    }, { new: true, mode: 'socratic' })
+    }, { new: true, mode: 'quick' })
     await session.init()
 
     const events = []
@@ -119,7 +119,7 @@ describe('TutorSession chat loop', () => {
   it('ask_user_question produces a pending ask line and resumes on the next turn', async () => {
     const { root, courseDir, wsRoot } = await setup()
     const askScript = { rounds: [{ calls: [{ id: 'call_1', name: 'ask_user_question', arguments: { question: '你先说说你的理解？' } }] }] }
-    const session = makeSession(courseDir, wsRoot, askScript, { new: true, mode: 'socratic' })
+    const session = makeSession(courseDir, wsRoot, askScript, { new: true, mode: 'quick' })
     await session.init()
 
     const events = []
@@ -134,7 +134,7 @@ describe('TutorSession chat loop', () => {
 
     // Next turn: the pending question feeds back as assistant context; the
     // answer records an answered ask line before the new pending one.
-    const answerSession = makeSession(courseDir, wsRoot, { rounds: [{ text: '好的回答。' }] }, { sessionId: session.sessionId, mode: 'socratic' })
+    const answerSession = makeSession(courseDir, wsRoot, { rounds: [{ text: '好的回答。' }] }, { sessionId: session.sessionId, mode: 'quick' })
     await answerSession.init()
     const events2 = []
     for await (const event of answerSession.chatEvents('我的理解是 A 和 B')) events2.push(event)
@@ -153,7 +153,7 @@ describe('TutorSession chat loop', () => {
     const eventStore = new SessionEventStore(join(courseDir, 'history'))
     const first = makeSession(courseDir, wsRoot, { rounds: [{ text: '回答' }] }, {
       new: true,
-      mode: 'socratic',
+      mode: 'quick',
       persistLegacy: false,
       eventStore,
     })
@@ -172,7 +172,7 @@ describe('TutorSession chat loop', () => {
       rounds: [{
         text: `讲解完成。${'[SYLLORA_SYNC]'}{"_syllora_sync":{"concept_updates":[{"id":"c_1","score":0.7}],"memory_hints":["混淆了重载与覆写"],"changelog":"+ 攻克覆写"}}`,
       }],
-    }, { new: true, mode: 'socratic' })
+    }, { new: true, mode: 'quick' })
     await session.init()
 
     const events = []
@@ -201,7 +201,7 @@ describe('TutorSession chat loop', () => {
       }],
     }, {
       new: true,
-      mode: 'socratic',
+      mode: 'quick',
       courseLock: async <T,>(fn: () => Promise<T>): Promise<T> => {
         lockCalls += 1
         return await fn()

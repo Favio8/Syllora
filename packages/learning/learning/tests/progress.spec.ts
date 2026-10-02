@@ -88,7 +88,7 @@ describe('heatmap metrics', () => {
     const today = new Date()
     const iso = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12)).toISOString()
     await writeFile(join(historyDir, 'session_20260821-100000.jsonl'), [
-      JSON.stringify({ type: 'session_meta', title: '', mode: 'socratic', created_at: iso }),
+      JSON.stringify({ type: 'session_meta', title: '', mode: 'quick', created_at: iso }),
       JSON.stringify({ type: 'chat', ts: iso, role: 'user', content: 'hi' }),
       JSON.stringify({ type: 'eval', ts: iso, task_id: 't_1', concept_id: 'c_1', passed: false }),
       JSON.stringify({ type: 'eval', ts: iso, task_id: 't_1', concept_id: 'c_1', passed: true }),
@@ -111,7 +111,7 @@ describe('heatmap metrics', () => {
     const noon = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12))
     const iso = (offsetSeconds: number): string => new Date(noon.getTime() + offsetSeconds * 1000).toISOString()
     await writeFile(join(historyDir, 'session_20260821-100000.events.jsonl'), [
-      JSON.stringify({ seq: 1, ts: iso(0), type: 'session/create', payload: { mode: 'socratic' } }),
+      JSON.stringify({ seq: 1, ts: iso(0), type: 'session/create', payload: { mode: 'quick' } }),
       JSON.stringify({ seq: 2, ts: iso(1), type: 'user/input', payload: { content: '失败回合的输入', turnId: 't1' } }),
       JSON.stringify({ seq: 3, ts: iso(2), type: 'turn/error', payload: { message: 'boom', turnId: 't1' } }),
       JSON.stringify({ seq: 4, ts: iso(3), type: 'input/voided', payload: { seq: 2, reason: 'turn-failed', turnId: 't1' } }),

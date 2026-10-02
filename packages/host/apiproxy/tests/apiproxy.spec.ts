@@ -65,7 +65,7 @@ async function setup(): Promise<Harness> {
       list: async () => [{
         sessionId: '20260821-100000',
         title: '会话一',
-        mode: 'socratic',
+        mode: 'quick',
         turns: 2,
         createdAt: '2026-08-21T10:00:00Z',
         lastActiveAt: '2026-08-21T10:05:00Z',
@@ -74,7 +74,7 @@ async function setup(): Promise<Harness> {
         items: [{
           sessionId: '20260821-100000',
           title: '会话一',
-          mode: 'socratic',
+          mode: 'quick',
           turns: 2,
           createdAt: '2026-08-21T10:00:00Z',
           lastActiveAt: '2026-08-21T10:05:00Z',
@@ -94,7 +94,7 @@ async function setup(): Promise<Harness> {
         sessions: [{
           sessionId: '20260821-100000',
           title: '会话一',
-          mode: 'socratic',
+          mode: 'quick',
           turns: 2,
           createdAt: '2026-08-21T10:00:00Z',
           lastActiveAt: '2026-08-21T10:05:00Z',
@@ -103,7 +103,7 @@ async function setup(): Promise<Harness> {
       restore: async (courseId, sessionId) => ({
         sessionId,
         title: '会话一',
-        mode: 'socratic',
+        mode: 'quick',
         restored: true,
         turns: [{ role: 'user', ts: '2026-08-21T10:00:00Z', content: '你好' }],
         suggestedEntry: null,
@@ -111,16 +111,16 @@ async function setup(): Promise<Harness> {
         pendingAsk: null,
       }),
     },
-    chatConfig: async () => ({ defaultMode: 'socratic', model: 'mock', providerId: 'mock', apiKeyConfigured: true }),
+    chatConfig: async () => ({ defaultMode: 'quick', model: 'mock', providerId: 'mock', apiKeyConfigured: true }),
     settingsService: {
-      get: async () => ({ version: 1, activeProviderId: 'mock', llm: { model: 'mock', apiKeyConfigured: true }, providers: [], ui: { defaultMode: 'socratic' } }),
+      get: async () => ({ version: 1, activeProviderId: 'mock', llm: { model: 'mock', apiKeyConfigured: true }, providers: [], ui: { defaultMode: 'quick' } }),
       update: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'quick' } }),
       catalog: async () => [{ id: 'deepseek', name: 'DeepSeek 官方', baseUrl: 'https://api.deepseek.com', models: [] }],
       discover: async () => [{ id: 'm1', name: 'M1', contextWindow: null, maxTokens: null }],
-      save: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'socratic' } }),
-      remove: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'socratic' } }),
-      activate: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'socratic' } }),
-      credential: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'socratic' } }),
+      save: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'quick' } }),
+      remove: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'quick' } }),
+      activate: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'quick' } }),
+      credential: async () => ({ version: 1, activeProviderId: 'mock', llm: {}, providers: [], ui: { defaultMode: 'quick' } }),
     },
   }
   return {
@@ -256,6 +256,6 @@ describe('apiproxy dispatch', () => {
 
   it('settings.get projects the config default mode', async () => {
     const result = await dispatch('settings.get', undefined, harness.services)
-    expect(result).toMatchObject({ ok: true, result: { ui: { defaultMode: 'socratic' }, llm: { model: 'mock', apiKeyConfigured: true } } })
+    expect(result).toMatchObject({ ok: true, result: { ui: { defaultMode: 'quick' }, llm: { model: 'mock', apiKeyConfigured: true } } })
   })
 })

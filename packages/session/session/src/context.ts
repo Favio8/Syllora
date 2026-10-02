@@ -112,12 +112,12 @@ export class ContextAssembler {
   }
 
   async assembleUser(userInput: string, conceptId: string | null = null): Promise<string> {
-    return (await this.renderTurn('socratic', userInput, conceptId)).user
+    return (await this.renderTurn('quick', userInput, conceptId)).user
   }
 
   private async agentPersona(): Promise<string> {
     const text = await readFile(join(workspaceStateDirOf(this.workspaceRoot), 'Agent.md'), 'utf8').catch(() => null)
-    return (text ?? '你是 Syllora 的苏格拉底式技术导师。').trim()
+    return (text ?? '你是 Syllora 的技术学习导师。').trim()
   }
 
   private async memory(): Promise<string> {

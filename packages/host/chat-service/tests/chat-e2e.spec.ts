@@ -83,7 +83,7 @@ const mockConfig: ResolvedChatConfig = {
   apiKey: 'test-key',
   temperature: 0.3,
   maxConcurrency: 1,
-  defaultMode: 'socratic',
+  defaultMode: 'quick',
 }
 
 describe('DeepSeekAdapter tool client (mock OpenAI server)', () => {
@@ -127,7 +127,7 @@ describe('chatStream e2e (config + tools + persistence)', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -140,7 +140,7 @@ describe('chatStream e2e (config + tools + persistence)', () => {
 
     const events: string[] = []
     const meta = { sessionId: '' }
-    for await (const event of chatStream(ws, basename(ws), { message: '解释一下覆写', mode: 'socratic' }, config)) {
+    for await (const event of chatStream(ws, basename(ws), { message: '解释一下覆写', mode: 'quick' }, config)) {
       if (event.kind === 'meta') meta.sessionId = String(event.payload['sessionId'])
       events.push(event.kind)
       if (event.kind === 'tool') {

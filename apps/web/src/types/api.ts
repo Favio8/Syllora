@@ -71,8 +71,14 @@ export interface SettingsPayload {
     apiKeyConfigured: boolean;
   };
   providers: ProviderPayload[];
-  ui: { defaultMode: "socratic" | "quick" | "feynman" | "debug" };
-  agent: { preset: string; presets: Array<{ id: string; name: string; description: string }> };
+  ui: { defaultMode: "quick" | "quick" | "feynman" | "debug" };
+  agent: {
+    preset: string;
+    /** 自定义预设提示词；空串＝使用所选预设自带的默认提示词。 */
+    systemPrompt: string;
+    maxPromptChars: number;
+    presets: Array<{ id: string; name: string; description: string; defaultPrompt: string }>;
+  };
   permissions: { preset: string; presets: Array<{ id: string; name: string; sandboxMode: "read-only" | "workspace-write" | "danger-full-access"; approvalPolicy: "deny" | "ask" | "never"; description: string }> };
   plugins: { inventory: Array<{ id: string; name: string; enabled: boolean; source: "builtin" | "workspace"; reason?: string }> };
 }

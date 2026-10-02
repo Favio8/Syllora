@@ -184,7 +184,7 @@ export class TutorSession {
     this.forceNew = options.new === true
     this.resumed = options.sessionId !== undefined && options.sessionId !== null
     this.sessionId = options.sessionId ?? ''
-    this.mode = options.mode ?? 'socratic'
+    this.mode = options.mode ?? 'quick'
     this.conceptId = options.conceptId ?? null
     this.assembler = options.assembler ?? new ContextAssembler(courseDir, workspaceRoot)
     this.applier = options.applier ?? new SyncApplier(courseDir, workspaceRoot)

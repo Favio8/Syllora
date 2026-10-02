@@ -52,7 +52,7 @@ harness_learning/
 
 ## 3. 学习会话：AI 对话
 
-- 新建对话 → 创建 sessionId 与事件流文件；四种模式（苏格拉底/极速/费曼/实战）影响 system 提示词。
+- 新建对话 → 创建 sessionId 与事件流文件；三种模式（极速/费曼/实战）影响 system 提示词。原「苏格拉底」模式已废弃并从枚举移除，历史会话里的该值在回放时映射为极速。
 - Prompt 组装（`packages/session/session/src/context.ts`）：system = 导师人设 + 模式指令 + 记忆 + 课程状态（章节×概念×掌握度）+ 聚焦概念的原文切片；user = 进度摘要 + 学生消息。
 - 流式回复三分流：`<think>`→思考折叠、正文→消息卡、隐藏 `[SYLLORA_SYNC]{json}`→**掌握度回写**。
 - AI 判断你理解了某概念时通过 sync 块更新该概念掌握度 → 改写 `progress.md` → 前端收到 `sync` 帧立即刷新右栏四 Tab 并点亮角标。

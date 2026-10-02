@@ -26,7 +26,7 @@ vi.mock("../src/components/settings/SettingsDialog", () => ({ default: () => nul
 vi.mock("../src/lib/api", () => ({
   api: {
     health: vi.fn(async () => ({})),
-    settings: vi.fn(async () => ({ ui: { defaultMode: "socratic" }, providers: [] })),
+    settings: vi.fn(async () => ({ ui: { defaultMode: "quick" }, providers: [] })),
     workspaces: vi.fn(async () => ({ current: null, items: [] })),
     courseList: vi.fn(async () => ({ courses: [], missing: false })),
     ensureCourse: vi.fn(async () => ({})),

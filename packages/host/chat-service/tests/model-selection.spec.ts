@@ -35,7 +35,7 @@ async function setup(): Promise<{ root: string; sessionId: string }> {
   void saved
   await setCredential(root, 'acme', 'test-key')
   await activateProvider(root, 'acme')
-  const created = await createSession(root, basename(root), 'socratic', null)
+  const created = await createSession(root, basename(root), 'quick', null)
   return { root, sessionId: created.sessionId }
 }
 
@@ -73,7 +73,7 @@ describe('session model directory', () => {
   it('does not expose obsolete DeepSeek defaults and reports an unroutable empty setup', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-model-empty-'))
     await mkdir(join(root, '.syllora', 'history'), { recursive: true })
-    const created = await createSession(root, basename(root), 'socratic', null)
+    const created = await createSession(root, basename(root), 'quick', null)
     const directory = await sessionModels(root, basename(root), created.sessionId)
     expect(directory.current).toBeNull()
     expect(directory.routable).toBe(false)
@@ -85,7 +85,7 @@ describe('session model directory', () => {
   it('updates a live Agent immediately after the session selection is persisted', async () => {
     const { root, sessionId } = await setup()
     const service = new LearningAgentService(new AgentRegistry())
-    await service.register(root, basename(root), sessionId, 'socratic')
+    await service.register(root, basename(root), sessionId, 'quick')
     await selectSessionModel(root, basename(root), sessionId, { provider: 'acme', model: 'acme-large' })
     await service.selectModel(sessionId, { provider: 'acme', model: 'acme-large' })
     expect(service.status(`study-${sessionId}`).modelSelection).toEqual({ provider: 'acme', model: 'acme-large' })
@@ -97,7 +97,7 @@ describe('session model directory', () => {
     const { root, sessionId } = await setup()
     const events = new SessionEventStore(join(root, '.syllora', 'history'))
     await events.append(sessionId,
-      { ts: utcTs(), type: 'session/create', payload: { mode: 'socratic' } },
+      { ts: utcTs(), type: 'session/create', payload: { mode: 'quick' } },
       { ts: utcTs(), type: 'session/model', payload: { provider: 'acme', model: 'acme-large' } },
     )
     await new SessionStore(join(root, '.syllora', 'history')).append(sessionId,

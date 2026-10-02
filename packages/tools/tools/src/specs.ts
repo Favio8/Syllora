@@ -174,7 +174,7 @@ export function buildDefaultSpecs(): ToolSpec[] {
     }, 'action', ACTION_TIMEOUT_LLM),
     spec(
       'evaluate_answer',
-      'Rubric 判定学生作答；只回通过/未通过 + 苏格拉底式引导摘要（零泄题）',
+      'Rubric 判定学生作答；只回通过/未通过 + 引导式反馈摘要（零泄题）',
       {
         type: 'object',
         properties: {

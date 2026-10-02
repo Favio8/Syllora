@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, BookOpen, LoaderCircle, Paperclip, PencilLine, Square } from 'lucide-react';
+import { ArrowUp, BookOpen, Bot, LoaderCircle, Paperclip, PencilLine, Square } from 'lucide-react';
 import MessageCard from './MessageCard';
 import ApprovalPanel from './ApprovalPanel';
 import QueueDock from './QueueDock';
@@ -11,8 +11,8 @@ import { useSessionActions } from '@/src/hooks/useSessionActions';
 import { useAppStore } from '@/src/store/useAppStore';
 
 /** Original learning workspace shell, backed by the existing streaming Agent. */
-export default function WorkbenchChat({ courseName, children, onUpload, onPractice, disabled = false }: {
-  courseName: string; children?: ReactNode; onUpload: () => void; onPractice: () => void; disabled?: boolean;
+export default function WorkbenchChat({ courseName, children, onUpload, onPractice, onAgentManage, disabled = false }: {
+  courseName: string; children?: ReactNode; onUpload: () => void; onPractice: () => void; onAgentManage?: () => void; disabled?: boolean;
 }) {
   const messages = useAppStore(s => s.messages);
   const streaming = useAppStore(s => s.streaming);
@@ -74,7 +74,7 @@ export default function WorkbenchChat({ courseName, children, onUpload, onPracti
         <textarea ref={input} aria-label="向学习伙伴提问" value={value} disabled={disabled} placeholder={pendingAsk ? '回答学习伙伴的问题…' : `关于${courseName}，有什么想一起弄明白的？`} onChange={event => setDraft(key, event.target.value)} onFocus={() => setChatFocus(true)} onBlur={() => setChatFocus(false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} />
         <div className="workbench-composer-controls">{streaming ? <button type="button" className="icon-button" aria-label="停止生成" onClick={stop}><Square size={17} /></button> : <button className="icon-button composer-send" aria-label="发送消息" disabled={!value.trim() || disabled || answering}><ArrowUp size={19} /></button>}</div>
       </form>
-      <div className="composer-actions"><button className="button small" disabled={disabled} onClick={onUpload}><Paperclip size={16} />上传资料</button><button className="button small" disabled={disabled} onClick={onPractice}><PencilLine size={16} />练习</button></div>
+      <div className="composer-actions"><button className="button small" disabled={disabled} onClick={onUpload}><Paperclip size={16} />上传资料</button><button className="button small" disabled={disabled} onClick={onPractice}><PencilLine size={16} />练习</button>{onAgentManage ? <button className="button small" disabled={disabled} onClick={onAgentManage}><Bot size={16} />Agent 管理</button> : null}</div>
     </div>
   </div>;
 }

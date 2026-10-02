@@ -34,9 +34,9 @@ function chatHandlers(extra: Record<string, (payload: unknown) => unknown> = {})
   return {
     ...SINGLE_WORKSPACE,
     'sessions.list': () => ({ sessions: [
-      { sessionId: 's1', title: '旧会话', mode: 'socratic', turns: 3, createdAt: '2026-08-20T09:00:00Z', lastActiveAt: '2026-08-22T09:00:00Z' },
+      { sessionId: 's1', title: '旧会话', mode: 'quick', turns: 3, createdAt: '2026-08-20T09:00:00Z', lastActiveAt: '2026-08-22T09:00:00Z' },
     ] }),
-    'sessions.create': () => ({ sessionId: 's-new', title: '新会话', mode: 'socratic' }),
+    'sessions.create': () => ({ sessionId: 's-new', title: '新会话', mode: 'quick' }),
     ...extra,
   }
 }
@@ -56,7 +56,7 @@ describe('chat', () => {
       'sessions.list': () => ({ sessions: [] }),
     }
     await runChat({ rpc: fakeRpc(handlers), chatStream: fakeChat.stream, answerStream: answerStreamFactory([]).stream, terminal: testTerminal(['你好', '/exit'], cap) }, {
-      mode: 'socratic', newSession: false, initialMessage: null, turns: null,
+      mode: 'quick', newSession: false, initialMessage: null, turns: null,
     })
 
     const text = cap.text()
@@ -88,7 +88,7 @@ describe('chat', () => {
       { event: 'done', data: {} },
     ])
     await runChat({ rpc: fakeRpc(chatHandlers()), chatStream: fakeChat.stream, answerStream: answerStreamFactory([]).stream, terminal: testTerminal([], cap) }, {
-      mode: 'socratic', newSession: true, initialMessage: '你好', turns: 1,
+      mode: 'quick', newSession: true, initialMessage: '你好', turns: 1,
     })
     expect(cap.text()).toContain('单发回答')
     expect(cap.text()).toContain('会话已自动保存')
@@ -111,7 +111,7 @@ describe('chat', () => {
       ],
     ])
     await runChat({ rpc: fakeRpc(chatHandlers()), chatStream: fakeChat.stream, answerStream: fakeAnswer.stream, terminal: testTerminal(['你好', '我的解释', '/exit'], cap) }, {
-      mode: 'socratic', newSession: false, initialMessage: null, turns: null,
+      mode: 'quick', newSession: false, initialMessage: null, turns: null,
     })
     expect(cap.text()).toContain('请解释 Filter 的作用？')
     expect(fakeAnswer.calls).toEqual([{ agentId: 'study-s1', answer: '我的解释' }])
@@ -138,7 +138,7 @@ describe('chat', () => {
     const cap = capture()
     const fakeChat = chatStreamFactory([{ event: 'done', data: {} }])
     await runChat({ rpc: fakeRpc(chatHandlers()), chatStream: fakeChat.stream, answerStream: answerStreamFactory([]).stream, terminal: testTerminal([], cap) }, {
-      mode: 'socratic', newSession: false, initialMessage: null, turns: null,
+      mode: 'quick', newSession: false, initialMessage: null, turns: null,
     })
     expect(cap.text()).toContain('会话已自动保存')
     expect(fakeChat.calls).toHaveLength(0)
@@ -150,7 +150,7 @@ describe('chat', () => {
       { event: 'error', data: { code: 'LLM_NOT_CONFIGURED', message: 'LLM_NOT_CONFIGURED' } },
     ])
     await expect(runChat({ rpc: fakeRpc(chatHandlers()), chatStream: fakeChat.stream, answerStream: answerStreamFactory([]).stream, terminal: testTerminal(['你好'], cap) }, {
-      mode: 'socratic', newSession: false, initialMessage: null, turns: null,
+      mode: 'quick', newSession: false, initialMessage: null, turns: null,
     })).rejects.toMatchObject({ code: 'LLM_NOT_CONFIGURED' })
   })
 

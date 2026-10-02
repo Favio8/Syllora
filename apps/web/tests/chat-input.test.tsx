@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { storeState, apiMocks } = vi.hoisted(() => {
   const state = {
-    mode: "socratic" as const,
+    mode: "quick" as const,
     pendingAsk: null,
     activeCourseId: "course-a",
     activeSessionId: "session-a" as string | null,
@@ -47,7 +47,7 @@ function draftKey(): string {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  storeState.mode = "socratic";
+  storeState.mode = "quick";
   storeState.pendingAsk = null;
   storeState.activeCourseId = "course-a";
   storeState.activeSessionId = "session-a";
@@ -135,16 +135,18 @@ describe("ChatInput session drafts", () => {
 describe("ChatInput 模式单控件", () => {
   it("只显示当前模式，点开菜单可切换（aria-checked 跟随、选中即关）", () => {
     render(<ChatInput onSend={vi.fn()} />);
-    // 触发器只显示当前模式；四个模式不再平铺成行（旧分段控件在窄行会把
+    // 触发器只显示当前模式；三种模式不再平铺成行（旧分段控件在窄行会把
     // CJK 按字折断成两行，故收成单控件）。
-    const trigger = screen.getByRole("button", { name: "苏格拉底" });
+    const trigger = screen.getByRole("button", { name: "极速冲刺" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");
-    expect(screen.queryByRole("button", { name: "极速冲刺" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "费曼输出" })).toBeNull();
 
     fireEvent.click(trigger);
     const menu = screen.getByRole("menu", { name: "切换学习模式" });
-    expect(within(menu).getByRole("menuitemradio", { name: "苏格拉底" })).toHaveAttribute("aria-checked", "true");
+    expect(within(menu).getByRole("menuitemradio", { name: "极速冲刺" })).toHaveAttribute("aria-checked", "true");
+    // 「苏格拉底」已废弃：菜单里不应再出现
+    expect(within(menu).queryByRole("menuitemradio", { name: "苏格拉底" })).toBeNull();
     expect(within(menu).getByRole("menuitemradio", { name: "费曼输出" })).toHaveAttribute("aria-checked", "false");
 
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "费曼输出" }));
@@ -155,7 +157,7 @@ describe("ChatInput 模式单控件", () => {
 
   it("控件不被行内空间压缩（shrink-0 + 内部 truncate，CJK 不折字）", () => {
     render(<ChatInput onSend={vi.fn()} />);
-    const trigger = screen.getByRole("button", { name: "苏格拉底" });
+    const trigger = screen.getByRole("button", { name: "极速冲刺" });
     const wrapper = trigger.closest("[data-mode-menu]");
     expect(wrapper).not.toBeNull();
     expect(wrapper).toHaveClass("shrink-0");

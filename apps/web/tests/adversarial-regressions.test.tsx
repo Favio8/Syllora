@@ -72,7 +72,7 @@ describe("UI-9 会话管理：乱序恢复守卫", () => {
     restoreSessionMock.mockImplementation(async (_courseId: string, sessionId: string) => {
       const delay = sessionId === "s1" ? 50 : 0;
       await new Promise((resolve) => setTimeout(resolve, delay));
-      return { sessionId, title: `会话 ${sessionId}`, mode: "socratic", restored: true, turns: [], suggestedEntry: null, wakeup: null, pendingAsk: null };
+      return { sessionId, title: `会话 ${sessionId}`, mode: "quick", restored: true, turns: [], suggestedEntry: null, wakeup: null, pendingAsk: null };
     });
     const { result } = renderHook(() => useSessionActions());
     await act(async () => {

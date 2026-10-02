@@ -15,7 +15,7 @@
 
 /** 四大学习模式（PRD §6.4）。 */
 export const LearningMode = {
-  Socratic: "socratic",
+  Socratic: "quick",
   Quick: "quick",
   Feynman: "feynman",
   Debug: "debug",

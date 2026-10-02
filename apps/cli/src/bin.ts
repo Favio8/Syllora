@@ -441,7 +441,7 @@ async function healStartupRegistry(registry: StartupRegistry): Promise<void> {
 }
 
 function usage(): void {
-  console.log('usage: syllora serve [--port <n>] [--open] [--insecure-no-token] | status | course <list|show> [<courseId>] | sync [--course <id>] | session migrate [<sessionId>] | quiz [count] [--mode new|review] [--course <id>] [--concept <id>] | review [count] [--course <id>] [--concept <id>] | chat [message] [--mode socratic|quick|feynman|debug] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N] | agent <create|resume|prompt|send|answer|status|cancel|whenIdle|maintenance|maintenance-jobs|dispose> | approvals <list|resolve> | plan <get|update> | todo <get|update> | acp')
+  console.log('usage: syllora serve [--port <n>] [--open] [--insecure-no-token] | status | course <list|show> [<courseId>] | sync [--course <id>] | session migrate [<sessionId>] | quiz [count] [--mode new|review] [--course <id>] [--concept <id>] | review [count] [--course <id>] [--concept <id>] | chat [message] [--mode quick|feynman|debug] [--course <id>] [--session <id>] [--new] [--concept <id>] [--turns N] | agent <create|resume|prompt|send|answer|status|cancel|whenIdle|maintenance|maintenance-jobs|dispose> | approvals <list|resolve> | plan <get|update> | todo <get|update> | acp')
 }
 
 function hostUrl(): string {
@@ -464,7 +464,7 @@ async function acpRpc<T>(method: string, params: Record<string, unknown>): Promi
 async function agentCommand(argv: string[]): Promise<void> {
   const action = argv[1]
   let result: unknown
-  if (action === 'create') result = await hostRpc('agents.create', { courseId: argv[2], mode: argv[3] ?? 'socratic', title: argv[4] ?? null })
+  if (action === 'create') result = await hostRpc('agents.create', { courseId: argv[2], mode: argv[3] ?? 'quick', title: argv[4] ?? null })
   else if (action === 'resume') result = await hostRpc('agents.resume', { courseId: argv[2], sessionId: argv[3] })
   else if (action === 'answer') result = await hostRpc('agents.answer', { agentId: argv[2], answer: argv.slice(3).join(' ') })
   else if (action === 'prompt' || action === 'send') {
@@ -826,7 +826,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       : typeof input['prompt'] === 'string' ? input['prompt'] : ''
     if (courseId === '' || message.trim() === '') throw new AcpProtocolError(-32602, 'courseId and message are required')
     const sessionId = typeof input['sessionId'] === 'string' ? input['sessionId'] : null
-    const mode = input['mode'] === 'quick' || input['mode'] === 'feynman' || input['mode'] === 'debug' ? input['mode'] : 'socratic'
+    const mode = input['mode'] === 'quick' || input['mode'] === 'feynman' || input['mode'] === 'debug' ? input['mode'] : 'quick'
     const streaming = input['stream'] === true
     const requestedAfterSeq = typeof input['afterSeq'] === 'number' && Number.isInteger(input['afterSeq']) && input['afterSeq'] >= 0 ? input['afterSeq'] : 0
     const config = await configFacts()
@@ -1453,9 +1453,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (response.writableEnded || response.destroyed) return
       response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     }
-    const mode = typeof input.mode === 'string' && ['socratic', 'quick', 'feynman', 'debug'].includes(input.mode)
+    const mode = typeof input.mode === 'string' && ['quick', 'quick', 'feynman', 'debug'].includes(input.mode)
       ? input.mode as LearningMode
-      : 'socratic'
+      : 'quick'
     const sessionId = typeof input.sessionId === 'string' ? input.sessionId : null
     let resolvedSessionId = sessionId
     const conceptId = typeof input.conceptId === 'string' ? input.conceptId : null

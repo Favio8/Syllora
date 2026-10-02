@@ -44,7 +44,7 @@ const payload = {
     apiKeyConfigured: false,
   },
   providers: [],
-  ui: { defaultMode: "socratic" as const },
+  ui: { defaultMode: "quick" as const },
 };
 
 describe("SettingsDialog 通用设置（部分更新语义）", () => {

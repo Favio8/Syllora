@@ -407,6 +407,7 @@ export const api = {
     maxConcurrency?: number;
     defaultMode?: SettingsPayload["ui"]["defaultMode"];
     agentPreset?: string;
+    agentSystemPrompt?: string;
     permissionPreset?: string;
     plugins?: Record<string, boolean>;
   }) => rpc<SettingsPayload>("settings.update", payload),

@@ -545,6 +545,8 @@ const handlers = {
       maxConcurrency: z.number().int().min(1).max(32).optional(),
       defaultMode: z.string().optional(),
       agentPreset: z.string().optional(),
+      // 自定义预设提示词：长度上限与 config.ts 的 MAX_AGENT_PROMPT_CHARS 一致（此处留余量，精确校验在 settings.ts）。
+      agentSystemPrompt: z.string().max(20000).optional(),
       permissionPreset: z.string().optional(),
       plugins: z.record(z.string(), z.boolean()).optional(),
     }),

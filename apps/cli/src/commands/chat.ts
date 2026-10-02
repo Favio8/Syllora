@@ -13,11 +13,10 @@ import { EndOfInput, makeTerminal, type Terminal } from '../lib/terminal.ts'
 import { parseArgs, UsageError } from '../lib/args.ts'
 import { resolveCourse } from './course.ts'
 
-const MODES = ['socratic', 'quick', 'feynman', 'debug'] as const
+const MODES = ['quick', 'quick', 'feynman', 'debug'] as const
 export type LearningMode = typeof MODES[number]
 
 const MODE_LABELS: Record<LearningMode, string> = {
-  socratic: '苏格拉底引导',
   quick: '快速直答',
   feynman: '费曼解释',
   debug: '调试诊断',
@@ -220,7 +219,7 @@ export async function chatCommand(argv: string[]): Promise<void> {
   const parsed = parseArgs(argv)
   const modeRaw = parsed.options.mode
   if (modeRaw !== undefined && (modeRaw === true || !MODES.includes(modeRaw as LearningMode))) {
-    throw new UsageError('--mode 取值 socratic | quick | feynman | debug')
+    throw new UsageError('--mode 取值 quick | feynman | debug')
   }
   const sessionFlag = parsed.options.session
   if (sessionFlag === true) throw new UsageError('--session 需要会话 ID（可用 syllora sessions.list 查看）')
@@ -234,7 +233,7 @@ export async function chatCommand(argv: string[]): Promise<void> {
   await runChat(makeChatDeps(), {
     courseId: parsed.options.course === undefined ? null : String(parsed.options.course),
     conceptId: parsed.options.concept === undefined ? null : String(parsed.options.concept),
-    mode: (modeRaw === undefined ? 'socratic' : modeRaw) as LearningMode,
+    mode: (modeRaw === undefined ? 'quick' : modeRaw) as LearningMode,
     sessionId: sessionFlag === undefined ? null : String(sessionFlag),
     newSession: parsed.options.new === true,
     initialMessage: message === '' ? null : message,

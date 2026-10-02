@@ -109,7 +109,7 @@ describe('study tools e2e (snapshot reads through the agent loop)', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -118,7 +118,7 @@ describe('study tools e2e (snapshot reads through the agent loop)', () => {
     delete process.env.MOCK_KEY
 
     const tools: Array<Record<string, unknown>> = []
-    for await (const event of chatStream(courseDir, basename(courseDir), { message: '今天学什么？', mode: 'socratic' }, config)) {
+    for await (const event of chatStream(courseDir, basename(courseDir), { message: '今天学什么？', mode: 'quick' }, config)) {
       if (event.kind === 'tool') tools.push(event.payload)
     }
 

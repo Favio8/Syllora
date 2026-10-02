@@ -67,7 +67,7 @@ export class SessionStore {
     let title = ''
     let userNamed = false
     let autoProvenance: 'fallback' | 'llm' | '' = ''
-    let mode: LearningMode = 'socratic'
+    let mode: LearningMode = 'quick'
     let createdAt = ''
     let archived = false
     for (const raw of text.split(/\r?\n/)) {
@@ -76,7 +76,8 @@ export class SessionStore {
         const row = JSON.parse(raw) as { type?: string; ts?: string; payload?: Record<string, unknown> }
         const payload = row.payload ?? {}
         if (row.type === 'session/create' || row.type === 'session/meta') {
-          if (payload['mode'] === 'quick' || payload['mode'] === 'feynman' || payload['mode'] === 'debug' || payload['mode'] === 'socratic') mode = payload['mode']
+          // 兼容历史事件：'socratic' 已从枚举移除，读到就映射为 'quick'。
+          if (payload['mode'] === 'quick' || payload['mode'] === 'feynman' || payload['mode'] === 'debug' || payload['mode'] === 'socratic') mode = payload['mode'] === 'socratic' ? 'quick' : payload['mode']
           if (typeof payload['title'] === 'string' && payload['title'].trim() !== '') title = payload['title'].trim()
           if (typeof payload['createdAt'] === 'string' && payload['createdAt'] !== '') createdAt = payload['createdAt']
           if (typeof row.ts === 'string' && row.ts !== '') createdAt = row.ts
@@ -154,7 +155,7 @@ export class SessionStore {
   }
 
   async newSession(
-    mode: LearningMode = 'socratic',
+    mode: LearningMode = 'quick',
     title: string | null = null,
     now = new Date(),
   ): Promise<{ sessionId: string; path: string }> {
@@ -205,7 +206,7 @@ export class SessionStore {
         infos.push({
           id,
           title: event?.title || meta?.title || '',
-          mode: meta?.mode ?? event?.mode ?? 'socratic',
+          mode: meta?.mode ?? event?.mode ?? 'quick',
           createdAt: event?.createdAt || meta?.created_at || '',
           mtimeMs: info.mtimeMs,
         })
@@ -214,7 +215,7 @@ export class SessionStore {
       const event = eventSummary ?? await this.eventSummary(id)
       let title = event?.title ?? ''
       let userNamed = false
-      let mode: LearningMode = event?.mode ?? 'socratic'
+      let mode: LearningMode = event?.mode ?? 'quick'
       let createdAt = info.mtimeMs > 0 ? new Date(info.mtimeMs).toISOString() : ''
       const text = await readFile(join(this.historyDir, name), 'utf8').catch(() => '')
       for (const raw of text.split(/\r?\n/)) {
@@ -222,7 +223,7 @@ export class SessionStore {
         try {
           const row = JSON.parse(raw) as { type?: string; ts?: string; payload?: Record<string, unknown> }
           if (row.type === 'session/create') {
-            mode = row.payload?.['mode'] === 'quick' || row.payload?.['mode'] === 'feynman' || row.payload?.['mode'] === 'debug' ? row.payload['mode'] : 'socratic'
+            mode = row.payload?.['mode'] === 'quick' || row.payload?.['mode'] === 'feynman' || row.payload?.['mode'] === 'debug' ? row.payload['mode'] : row.payload?.['mode'] === 'socratic' ? 'quick' : 'quick'
             title = typeof row.payload?.['title'] === 'string' && row.payload['title'] !== '' ? row.payload['title'] : title
             createdAt = row.ts ?? createdAt
           }
@@ -495,7 +496,7 @@ export class SessionStore {
       rows[0] = dumps({
         type: 'session_meta',
         title: `${sourceMeta?.title || '未命名会话'}（副本）`,
-        mode: sourceMeta?.mode ?? 'socratic',
+        mode: sourceMeta?.mode ?? 'quick',
         created_at: candidate.toISOString(),
       })
       await writeFile(path, rows.join('\n'), 'utf8')

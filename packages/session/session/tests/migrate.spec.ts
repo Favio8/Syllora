@@ -12,9 +12,9 @@ describe('migrateLegacySession', () => {
     await mkdir(root, { recursive: true })
     const source = join(root, 'session_20260822-120000.jsonl')
     await writeFile(source, [
-      JSON.stringify({ type: 'session_meta', title: '', mode: 'socratic', created_at: '2026-08-22T12:00:00.000Z' }),
+      JSON.stringify({ type: 'session_meta', title: '', mode: 'quick', created_at: '2026-08-22T12:00:00.000Z' }),
       JSON.stringify({ type: 'chat', ts: '2026-08-22T12:00:01.000Z', role: 'user', content: 'hello' }),
-      JSON.stringify({ type: 'chat', ts: '2026-08-22T12:00:02.000Z', role: 'agent', content: 'world', mode: 'socratic' }),
+      JSON.stringify({ type: 'chat', ts: '2026-08-22T12:00:02.000Z', role: 'agent', content: 'world', mode: 'quick' }),
     ].join('\n') + '\n', 'utf8')
     const result = await migrateLegacySession(root, '20260822-120000')
     expect(result.migrated).toBe(true)
@@ -29,7 +29,7 @@ describe('migrateLegacySession', () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-migrate-effort-'))
     const source = join(root, 'session_20260822-120000.jsonl')
     await writeFile(source, [
-      JSON.stringify({ type: 'session_meta', title: '', mode: 'socratic', created_at: '2026-08-22T12:00:00.000Z' }),
+      JSON.stringify({ type: 'session_meta', title: '', mode: 'quick', created_at: '2026-08-22T12:00:00.000Z' }),
       JSON.stringify({ type: 'session_model', ts: '2026-08-22T12:00:01.000Z', provider: 'acme', model: 'acme-small', effort: 'high' }),
     ].join('\n') + '\n', 'utf8')
     await migrateLegacySession(root, '20260822-120000')
@@ -49,7 +49,7 @@ describe('migrateLegacySession', () => {
   it('reports malformed JSON with its source line and leaves the legacy file untouched', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-migrate-json-'))
     const source = join(root, 'session_20260822-120000.jsonl')
-    const raw = '{"type":"session_meta","title":"x","mode":"socratic","created_at":"2026-08-22T12:00:00.000Z"}\nnot-json\n'
+    const raw = '{"type":"session_meta","title":"x","mode":"quick","created_at":"2026-08-22T12:00:00.000Z"}\nnot-json\n'
     await writeFile(source, raw, 'utf8')
     await expect(migrateLegacySession(root, '20260822-120000')).rejects.toThrow('旧会话第 2 行不是有效 JSON')
     expect(await readFile(source, 'utf8')).toBe(raw)
@@ -60,7 +60,7 @@ describe('migrateLegacySession', () => {
   it('is idempotent and retains the legacy backup on repeat migration', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-migrate-repeat-'))
     const source = join(root, 'session_20260822-120000.jsonl')
-    await writeFile(source, JSON.stringify({ type: 'session_meta', title: '旧标题', mode: 'socratic', created_at: '2026-08-22T12:00:00.000Z' }) + '\n', 'utf8')
+    await writeFile(source, JSON.stringify({ type: 'session_meta', title: '旧标题', mode: 'quick', created_at: '2026-08-22T12:00:00.000Z' }) + '\n', 'utf8')
     const first = await migrateLegacySession(root, '20260822-120000')
     const second = await migrateLegacySession(root, '20260822-120000')
     expect(first.migrated).toBe(true)
@@ -71,7 +71,7 @@ describe('migrateLegacySession', () => {
   it('keeps migrated metadata immutable and appends rename to the event log', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-migrate-rename-'))
     const source = join(root, 'session_20260822-120000.jsonl')
-    await writeFile(source, JSON.stringify({ type: 'session_meta', title: '旧标题', mode: 'socratic', created_at: '2026-08-22T12:00:00.000Z' }) + '\n', 'utf8')
+    await writeFile(source, JSON.stringify({ type: 'session_meta', title: '旧标题', mode: 'quick', created_at: '2026-08-22T12:00:00.000Z' }) + '\n', 'utf8')
     await migrateLegacySession(root, '20260822-120000')
     const legacyBefore = await readFile(source, 'utf8')
     await new SessionStore(root).renameSession('20260822-120000', '新标题')

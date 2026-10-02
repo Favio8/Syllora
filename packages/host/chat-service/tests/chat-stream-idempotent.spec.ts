@@ -73,7 +73,7 @@ const mockConfig: ResolvedChatConfig = {
   apiKey: 'test-key',
   temperature: 0.3,
   maxConcurrency: 1,
-  defaultMode: 'socratic',
+  defaultMode: 'quick',
 }
 
 describe('chatStream requestId 幂等（UI-1）', () => {
@@ -97,7 +97,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -111,7 +111,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     // ── 第一次调用：正常流 ──
     const firstTokens: string[] = []
     let firstSessionId = ''
-    for await (const event of chatStream(ws, courseId, { message: '解释覆写', mode: 'socratic', requestId }, config)) {
+    for await (const event of chatStream(ws, courseId, { message: '解释覆写', mode: 'quick', requestId }, config)) {
       if (event.kind === 'meta') firstSessionId = String(event.payload['sessionId'])
       if (event.kind === 'token') firstTokens.push(event.delta)
     }
@@ -126,7 +126,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     let secondSessionId = ''
     let replayedTurnId: string | undefined
     const secondEventKinds: string[] = []
-    for await (const event of chatStream(ws, courseId, { message: '解释覆写', mode: 'socratic', requestId, sessionId: firstSessionId }, config)) {
+    for await (const event of chatStream(ws, courseId, { message: '解释覆写', mode: 'quick', requestId, sessionId: firstSessionId }, config)) {
       secondEventKinds.push(event.kind)
       if (event.kind === 'meta') {
         secondSessionId = String(event.payload['sessionId'])
@@ -173,7 +173,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -186,13 +186,13 @@ describe('chatStream requestId 幂等（UI-1）', () => {
 
     // 第一个 requestId
     let sid = ''
-    for await (const event of chatStream(ws, courseId, { message: '问题一', mode: 'socratic', requestId: 'req_A' }, config)) {
+    for await (const event of chatStream(ws, courseId, { message: '问题一', mode: 'quick', requestId: 'req_A' }, config)) {
       if (event.kind === 'meta') sid = String(event.payload['sessionId'])
     }
     expect(llmCallCount).toBe(callsBefore + 1)
 
     // 不同 requestId → 新 turn，再次请求 LLM
-    for await (const event of chatStream(ws, courseId, { message: '问题二', mode: 'socratic', requestId: 'req_B', sessionId: sid }, config)) {
+    for await (const event of chatStream(ws, courseId, { message: '问题二', mode: 'quick', requestId: 'req_B', sessionId: sid }, config)) {
       void event
     }
     expect(llmCallCount).toBe(callsBefore + 2)
@@ -224,7 +224,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -245,11 +245,11 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     const seedStore = new SessionEventStore(join(ws, '.syllora', 'history'))
     const ts = (offset: number): string => new Date(Date.UTC(2026, 8, 27, 12, 0, offset)).toISOString()
     await seedStore.append(sid,
-      { ts: ts(0), type: 'session/create', payload: { mode: 'socratic', agentId: `study-${sid}` } },
+      { ts: ts(0), type: 'session/create', payload: { mode: 'quick', agentId: `study-${sid}` } },
       { ts: ts(1), type: 'inbox/queued', payload: { turnId: 'turn-1', target: 'next-turn', content: '解释覆写' } },
       { ts: ts(2), type: 'inbox/dequeued', payload: { turnId: 'turn-1', target: 'next-turn', content: '解释覆写' } },
       { ts: ts(3), type: 'user/input', payload: { content: '解释覆写', requestId, turnId: 'turn-1' } },
-      { ts: ts(4), type: 'turn/start', payload: { mode: 'socratic', target: 'next-turn', turnId: 'turn-1' } },
+      { ts: ts(4), type: 'turn/start', payload: { mode: 'quick', target: 'next-turn', turnId: 'turn-1' } },
       { ts: ts(5), type: 'assistant/message', payload: { content: '部分输出', turnId: 'turn-1' } },
       { ts: ts(6), type: 'turn/cancelled', payload: { reason: 'user', turnId: 'turn-1' } },
     )
@@ -257,7 +257,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
 
     // 两个并发同 requestId 重试（模拟 SSE 断连自动重试与手动重试重叠）。
     const drain = async (): Promise<void> => {
-      for await (const _event of chatStream(ws, courseId, { message: '解释覆写', mode: 'socratic', requestId, sessionId: sid }, config, registry)) {
+      for await (const _event of chatStream(ws, courseId, { message: '解释覆写', mode: 'quick', requestId, sessionId: sid }, config, registry)) {
         void _event
       }
     }
@@ -295,7 +295,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
       '  temperature: 0.3',
       '  max_concurrency: 1',
       'ui:',
-      '  default_mode: socratic',
+      '  default_mode: quick',
       '',
     ].join('\n'), 'utf8')
 
@@ -307,7 +307,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     controller.abort()
     const before = llmCallCount
     const kinds: string[] = []
-    for await (const event of chatStream(ws, basename(ws), { message: '解释覆写', mode: 'socratic', requestId: 'req_pre_abort_001', signal: controller.signal }, config)) {
+    for await (const event of chatStream(ws, basename(ws), { message: '解释覆写', mode: 'quick', requestId: 'req_pre_abort_001', signal: controller.signal }, config)) {
       kinds.push(event.kind)
     }
     // 不请求 LLM、不产出任何帧、不落 user/input（旧实现 abort() 后仍 send+跑完整 turn）。

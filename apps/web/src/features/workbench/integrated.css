@@ -307,3 +307,25 @@
 .sy-manage-body>h2{font-size:19px;font-weight:600;margin-bottom:10px}
 .sy-manage-body>p{margin-bottom:14px}
 @media(max-width:760px){.sy-manage-head{padding:12px 16px;gap:9px}.sy-manage-body{padding:18px 16px 30px}}
+
+/* 计划管理页与计划标签入口 */
+.sy-panel-empty-button{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;margin:6px 0;padding:14px 16px;border:1px solid var(--line);border-radius:9px;background:var(--white);color:var(--ink);font-size:13px;font-weight:500;text-align:left}
+.sy-panel-empty-button:hover{border-color:var(--blue);color:var(--blue)}
+.primary-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:#fff;font-size:13px;font-weight:500}
+.primary-btn:hover{background:var(--blue-deep)}
+.primary-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* 「Agent 管理」弹窗 */
+.sy-modal.sy-agent-manage{width:min(620px,100%);max-height:88dvh}
+.sy-agent-field{display:block;margin:16px 0}
+.sy-agent-field>span{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
+.sy-agent-field>span small{font-weight:400;color:var(--muted);margin-left:6px}
+.sy-agent-field textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:12.5px;line-height:1.8;resize:vertical;background:var(--white);color:var(--ink)}
+.sy-agent-field textarea:focus-visible{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+.sy-agent-radios,.sy-agent-plugins{display:grid;gap:8px}
+.sy-agent-radio,.sy-agent-plugin{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer}
+.sy-agent-radio.is-selected{border-color:var(--blue);background:var(--blue-light)}
+.sy-agent-radio input,.sy-agent-plugin input{margin-top:3px;flex-shrink:0}
+.sy-agent-radio strong,.sy-agent-plugin strong{display:block;font-size:12.5px}
+.sy-agent-radio small,.sy-agent-plugin small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.sy-agent-error{color:#a12727;font-size:12px;margin:8px 0}

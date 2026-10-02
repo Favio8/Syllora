@@ -28,6 +28,8 @@ export interface AgentChatProps {
   children?: ReactNode;
   onUpload?: () => void;
   onPractice?: () => void;
+  /** 打开「Agent 管理」弹窗（skill / 插件 / 预设提示词）。 */
+  onAgentManage?: () => void;
   disabled?: boolean;
 }
 
@@ -36,7 +38,7 @@ export function chatCourseIdOf(folder: string): string {
   return folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
-export default function AgentChat({ folder, courseName, onOpenSettings, children, onUpload = () => {}, onPractice = () => {}, disabled }: AgentChatProps) {
+export default function AgentChat({ folder, courseName, onOpenSettings, children, onUpload = () => {}, onPractice = () => {}, onAgentManage, disabled }: AgentChatProps) {
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath);
   const setCourses = useAppStore((s) => s.setCourses);
   const setActiveCourse = useAppStore((s) => s.setActiveCourse);
@@ -83,7 +85,7 @@ export default function AgentChat({ folder, courseName, onOpenSettings, children
 
   return (
     <div className="sy-agent-chat">
-      <WorkbenchChat courseName={courseName} onUpload={onUpload} onPractice={onPractice} disabled={disabled}>{children}</WorkbenchChat>
+      <WorkbenchChat courseName={courseName} onUpload={onUpload} onPractice={onPractice} {...(onAgentManage ? { onAgentManage } : {})} disabled={disabled}>{children}</WorkbenchChat>
       {paletteOpen ? <CommandPalette /> : null}
     </div>
   );

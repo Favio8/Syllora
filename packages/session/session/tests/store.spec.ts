@@ -17,14 +17,14 @@ async function setup(): Promise<{ root: string; store: SessionStore }> {
 describe('SessionStore', () => {
   it('creates a session with a meta first line and lists by mtime desc', async () => {
     const { store } = await setup()
-    const first = await store.newSession('socratic', '第一轮', new Date('2026-08-21T10:00:00Z'))
+    const first = await store.newSession('quick', '第一轮', new Date('2026-08-21T10:00:00Z'))
     const second = await store.newSession('quick', null, new Date('2026-08-21T10:01:00Z'))
 
     expect(first.sessionId).toMatch(/^\d{8}-\d{6}$/)
     expect(first.sessionId).toBe('20260821-100000')
     const meta = await store.readMeta(first.sessionId)
     expect(meta?.title).toBe('第一轮')
-    expect(meta?.mode).toBe('socratic')
+    expect(meta?.mode).toBe('quick')
 
     const listed = await store.listSessions()
     expect(listed[0]!.id).toBe(second.sessionId)
@@ -34,25 +34,39 @@ describe('SessionStore', () => {
 
   it('tolerates an out-of-enum mode in the legacy meta line instead of failing the listing', async () => {
     const { root, store } = await setup()
-    const { sessionId, path } = await store.newSession('socratic', '外部工具会话')
+    const { sessionId, path } = await store.newSession('quick', '外部工具会话')
     const rows = (await readFile(path, 'utf8')).split(/\r?\n/)
     rows[0] = JSON.stringify({ type: 'session_meta', title: '外部工具会话', mode: 'tutor', created_at: '2026-08-21T10:00:00Z' })
     await writeFile(path, rows.join('\n'))
 
     const meta = await store.readMeta(sessionId)
-    expect(meta).toMatchObject({ title: '外部工具会话', mode: 'socratic' })
+    expect(meta).toMatchObject({ title: '外部工具会话', mode: 'quick' })
     const listed = await store.listSessions()
     expect(listed.some(session => session.id === sessionId)).toBe(true)
     await rm(root, { recursive: true, force: true })
   })
 
+  it('maps the retired socratic mode to quick when replaying legacy sessions', async () => {
+    // 「苏格拉底」已从 LEARNING_MODES 移除：旧会话文件里仍写着它，读取时必须映射，
+    // 否则历史会话会因为枚举校验失败而打不开。
+    const { root, store } = await setup()
+    const { sessionId, path } = await store.newSession('quick', '旧会话')
+    const rows = (await readFile(path, 'utf8')).split(/\r?\n/)
+    rows[0] = JSON.stringify({ type: 'session_meta', title: '旧会话', mode: 'socratic', created_at: '2026-08-21T10:00:00Z' })
+    await writeFile(path, rows.join('\n'))
+
+    const meta = await store.readMeta(sessionId)
+    expect(meta?.mode).toBe('quick')
+    await rm(root, { recursive: true, force: true })
+  })
+
   it('appends chat lines and loads chat-only rows in order', async () => {
     const { store } = await setup()
-    const { sessionId } = await store.newSession('socratic', '会话')
+    const { sessionId } = await store.newSession('quick', '会话')
     await store.append(
       sessionId,
       chatLine.parse({ type: 'chat', ts: '2026-08-21T10:00:00Z', role: 'user', content: '你好' }),
-      chatLine.parse({ type: 'chat', ts: '2026-08-21T10:00:01Z', role: 'agent', content: '我是导师', mode: 'socratic' }),
+      chatLine.parse({ type: 'chat', ts: '2026-08-21T10:00:01Z', role: 'agent', content: '我是导师', mode: 'quick' }),
     )
     const chats = await store.loadChat(sessionId)
     expect(chats.map(c => c.content)).toEqual(['你好', '我是导师'])
@@ -60,7 +74,7 @@ describe('SessionStore', () => {
 
   it('backfills the title from the first user chat when empty', async () => {
     const { store } = await setup()
-    const { sessionId } = await store.newSession('socratic', '')
+    const { sessionId } = await store.newSession('quick', '')
     await store.fillDefaultTitle(sessionId, '这是一段超过二十个字符的用户消息内容用于标题回填')
     const meta = await store.readMeta(sessionId)
     expect(meta?.title).toBe('这是一段超过二十个字符的用户消息内容用于标题回填'.slice(0, 20))
@@ -78,9 +92,9 @@ describe('SessionStore', () => {
 
   it('tolerates corrupt lines when loading', async () => {
     const { root, store } = await setup()
-    const { sessionId } = await store.newSession('socratic', '')
+    const { sessionId } = await store.newSession('quick', '')
     const path = store.pathFor(sessionId)
-    await writeFile(path, '{"type":"session_meta","title":"","mode":"socratic","created_at":"2026-08-21T10:00:00Z"}\nnot-json{\n{"type":"chat","ts":"2026-08-21T10:00:00Z","role":"user","content":"x"}\n', 'utf8')
+    await writeFile(path, '{"type":"session_meta","title":"","mode":"quick","created_at":"2026-08-21T10:00:00Z"}\nnot-json{\n{"type":"chat","ts":"2026-08-21T10:00:00Z","role":"user","content":"x"}\n', 'utf8')
     const rows = await store.load(sessionId)
     expect(rows).toHaveLength(2)
     await rm(root, { recursive: true, force: true })
@@ -88,7 +102,7 @@ describe('SessionStore', () => {
 
   it('renames only metadata and preserves the append-only chat history', async () => {
     const { store } = await setup()
-    const { sessionId } = await store.newSession('socratic', '旧标题')
+    const { sessionId } = await store.newSession('quick', '旧标题')
     await store.append(sessionId, chatLine.parse({ type: 'chat', ts: '2026-08-21T10:00:00Z', role: 'user', content: '保留' }))
     const before = await store.load(sessionId)
     await store.renameSession(sessionId, '  新标题  ')
@@ -125,7 +139,7 @@ describe('SessionStore', () => {
 
   it('archives a session without deleting it and filters it from listings', async () => {
     const { store } = await setup()
-    const { sessionId } = await store.newSession('socratic', '待归档', new Date('2026-08-21T10:00:00Z'))
+    const { sessionId } = await store.newSession('quick', '待归档', new Date('2026-08-21T10:00:00Z'))
     expect((await store.listSessions()).map((item) => item.id)).toEqual([sessionId])
     await store.archiveSession(sessionId)
     expect(await store.listSessions()).toEqual([])
@@ -134,7 +148,7 @@ describe('SessionStore', () => {
 
   it('persists manual insertion, reconciles missing sessions, and removes archived ids', async () => {
     const { store } = await setup()
-    const first = await store.newSession('socratic', '第一轮', new Date('2026-08-21T10:00:00Z'))
+    const first = await store.newSession('quick', '第一轮', new Date('2026-08-21T10:00:00Z'))
     const second = await store.newSession('quick', '第二轮', new Date('2026-08-21T10:01:00Z'))
     await store.insertSessionBefore(first.sessionId, second.sessionId)
     expect((await store.listSessions()).map((session) => session.id)).toEqual([first.sessionId, second.sessionId])

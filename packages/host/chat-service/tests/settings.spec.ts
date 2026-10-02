@@ -56,7 +56,7 @@ async function setup(): Promise<{ root: string; ws: string }> {
     '    - id: mock-model',
     '      name: Mock Model',
     'ui:',
-    '  default_mode: socratic',
+    '  default_mode: quick',
     '',
   ].join('\n'), 'utf8')
   return { root, ws }
@@ -118,7 +118,7 @@ describe('settings domain', () => {
     expect(payload.providers).toHaveLength(1)
     expect(payload.providers[0]).toMatchObject({ id: 'mock', model: 'mock-model', models: [{ id: 'mock-model' }] })
     expect(payload.llm.apiBase).toBe('https://example.com/v1')
-    expect(payload.ui.defaultMode).toBe('socratic')
+    expect(payload.ui.defaultMode).toBe('quick')
     await rm(root, { recursive: true, force: true })
   })
 

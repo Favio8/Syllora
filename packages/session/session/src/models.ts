@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 
-export const LEARNING_MODES = ['socratic', 'quick', 'feynman', 'debug'] as const
+export const LEARNING_MODES = ['quick', 'feynman', 'debug'] as const
 export type LearningMode = (typeof LEARNING_MODES)[number]
 
 export const learningMode = z.enum(LEARNING_MODES)
@@ -17,7 +17,7 @@ export const learningMode = z.enum(LEARNING_MODES)
 export const sessionMetaLine = z.object({
   type: z.literal('session_meta'),
   title: z.string(),
-  mode: learningMode.default('socratic'),
+  mode: learningMode.default('quick'),
   created_at: z.string(),
 })
 export type SessionMetaLine = z.infer<typeof sessionMetaLine>

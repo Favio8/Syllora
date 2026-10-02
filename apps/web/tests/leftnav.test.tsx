@@ -19,7 +19,7 @@ const { storeState, selectSession, createSession, renameSession, forkSession, ar
         {
           sessionId: "session-1",
           title: "调度基础",
-          mode: "socratic",
+          mode: "quick",
           turns: 1,
           createdAt: "2026-08-20T00:00:00Z",
           lastActiveAt: "2026-08-20T00:00:00Z",
@@ -96,7 +96,7 @@ afterEach(() => {
     {
       sessionId: "session-1",
       title: "调度基础",
-      mode: "socratic",
+      mode: "quick",
       turns: 1,
       createdAt: "2026-08-20T00:00:00Z",
       lastActiveAt: "2026-08-20T00:00:00Z",
@@ -174,7 +174,7 @@ describe("LeftNav search state", () => {
       items: [{
         sessionId: "session-remote",
         title: "多态复习",
-        mode: "socratic",
+        mode: "quick",
         turns: 2,
         createdAt: "2026-08-20T00:00:00Z",
         lastActiveAt: "2026-08-20T00:01:00Z",
@@ -341,7 +341,7 @@ describe("LeftNav 对话操作", () => {
       {
         sessionId: "session-1",
         title: "调度基础",
-        mode: "socratic",
+        mode: "quick",
         turns: 1,
         createdAt: "2026-08-20T00:00:00Z",
         lastActiveAt: "2026-08-20T00:00:00Z",
@@ -349,7 +349,7 @@ describe("LeftNav 对话操作", () => {
       {
         sessionId: "session-2",
         title: "网络基础",
-        mode: "socratic",
+        mode: "quick",
         turns: 1,
         createdAt: "2026-08-20T00:01:00Z",
         lastActiveAt: "2026-08-20T00:01:00Z",
@@ -440,7 +440,7 @@ describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
       items: [{
         sessionId: "session-remote",
         title: "命中对话",
-        mode: "socratic",
+        mode: "quick",
         turns: 2,
         createdAt: "2026-08-20T00:00:00Z",
         lastActiveAt: "2026-08-20T00:01:00Z",

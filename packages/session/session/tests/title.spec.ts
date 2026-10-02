@@ -23,8 +23,8 @@ describe('SessionStore.applyAutoTitle (DSH title semantics)', () => {
     try {
       const store = new SessionStore(historyDir)
       const events = new SessionEventStore(historyDir)
-      const { sessionId } = await store.newSession('socratic', null)
-      await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: 'socratic' } })
+      const { sessionId } = await store.newSession('quick', null)
+      await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: 'quick' } })
 
       // 1) 首条消息：fallback 落盘，列表立即显示。
       expect(await store.applyAutoTitle(sessionId, sylloraFallbackTitle('帮我复习线性代数第三章'), 'fallback')).toBe(true)
@@ -54,8 +54,8 @@ describe('SessionStore.applyAutoTitle (DSH title semantics)', () => {
     try {
       const store = new SessionStore(historyDir)
       const events = new SessionEventStore(historyDir)
-      const { sessionId } = await store.newSession('socratic', null)
-      await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: 'socratic' } })
+      const { sessionId } = await store.newSession('quick', null)
+      await events.append(sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: 'quick' } })
       await events.append(sessionId, { ts: utcTs(), type: 'user/input', payload: { content: '旧版本会话的第一条消息' } })
       const listed = (await store.listSessions()).find(s => s.id === sessionId)
       expect(listed?.title).toBe('旧版本会话的第一条消息')

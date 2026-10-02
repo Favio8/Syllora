@@ -14,6 +14,7 @@ import yaml from 'js-yaml'
 import { workspaceStateDirOf } from '@syllora/tools'
 import { ANTHROPIC_VERSION, anthropicEndpoint } from '@syllora/llm-anthropic'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
+import { MAX_AGENT_PROMPT_CHARS } from './config.ts'
 
 export interface ProviderModelPayload {
   readonly id: string
@@ -40,6 +41,8 @@ export interface AgentPresetPayload {
   readonly id: string
   readonly name: string
   readonly description: string
+  /** 该预设自带的默认系统提示词；自定义提示词留空时使用它。 */
+  readonly defaultPrompt: string
 }
 
 export interface PermissionPresetPayload {
@@ -72,7 +75,7 @@ export interface SettingsPayload {
   }
   readonly providers: ProviderPayload[]
   readonly ui: { readonly defaultMode: string }
-  readonly agent: { readonly preset: string; readonly presets: AgentPresetPayload[] }
+  readonly agent: { readonly preset: string; readonly systemPrompt: string; readonly maxPromptChars: number; readonly presets: AgentPresetPayload[] }
   readonly permissions: { readonly preset: string; readonly presets: PermissionPresetPayload[] }
   readonly plugins: { readonly inventory: PluginInventoryPayload[] }
 }
@@ -102,14 +105,20 @@ interface ConfigYaml {
   providers?: Record<string, ProviderConfigYaml>
   active_provider?: string
   ui?: { default_mode?: string }
-  agent?: { preset?: string }
+  agent?: { preset?: string; system_prompt?: string }
   permissions?: { preset?: string }
   plugins?: Record<string, unknown>
 }
 
+/** 两个预设的默认系统提示词；service 构造 AgentPreset 时直接取这里，避免两处漂移。 */
+export const AGENT_PRESET_PROMPTS: Record<string, string> = {
+  'syllora-learning': 'You are the Syllora learning agent. Guide the learner with evidence from the active course and preserve their agency.',
+  general: 'You are the Syllora general agent. Use the available tools deliberately and explain outcomes clearly.',
+}
+
 const AGENT_PRESETS: AgentPresetPayload[] = [
-  { id: 'syllora-learning', name: 'Syllora 学习导师', description: '课程上下文与学习工具 preset' },
-  { id: 'general', name: '通用 Agent', description: '不注入课程专属上下文' },
+  { id: 'syllora-learning', name: 'Syllora 学习导师', description: '课程上下文与学习工具 preset', defaultPrompt: AGENT_PRESET_PROMPTS['syllora-learning']! },
+  { id: 'general', name: '通用 Agent', description: '不注入课程专属上下文', defaultPrompt: AGENT_PRESET_PROMPTS.general! },
 ]
 
 const PERMISSION_PRESETS: PermissionPresetPayload[] = [
@@ -289,8 +298,8 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
       apiKeyConfigured: await credentialConfigured(workspaceRoot, llmRef),
     },
     providers,
-    ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'socratic' },
-    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning', presets: AGENT_PRESETS },
+    ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'quick' },
+    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning', systemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim() : '', maxPromptChars: MAX_AGENT_PROMPT_CHARS, presets: AGENT_PRESETS },
     permissions: { preset: PERMISSION_PRESETS.some(item => item.id === config.permissions?.preset) ? config.permissions!.preset! : 'workspace-write', presets: PERMISSION_PRESETS },
     plugins: { inventory: pluginInventory(config) },
   }
@@ -667,6 +676,8 @@ export async function updateSettings(workspaceRoot: string, partial: {
   maxConcurrency?: number
   defaultMode?: string
   agentPreset?: string
+  /** 自定义预设提示词；空串表示清除（回到预设自带默认）。 */
+  agentSystemPrompt?: string
   permissionPreset?: string
   plugins?: Record<string, boolean>
 }): Promise<SettingsPayload> {
@@ -692,15 +703,22 @@ export async function updateSettings(workspaceRoot: string, partial: {
     if (partial.maxConcurrency !== undefined) nextLlm.max_concurrency = partial.maxConcurrency
     const nextUi: NonNullable<ConfigYaml['ui']> = { ...(config.ui ?? {}) }
     if (partial.defaultMode !== undefined) {
-      if (!['socratic', 'quick', 'feynman', 'debug'].includes(partial.defaultMode)) {
+      if (!['quick', 'quick', 'feynman', 'debug'].includes(partial.defaultMode)) {
         throw new Error('默认学习模式无效')
       }
       nextUi.default_mode = partial.defaultMode
     }
-    const nextAgent = { ...(config.agent ?? {}) }
+    const nextAgent: { preset?: string; system_prompt?: string } = { ...(config.agent ?? {}) }
     if (partial.agentPreset !== undefined) {
       if (!AGENT_PRESETS.some(item => item.id === partial.agentPreset)) throw new Error('Agent preset 无效')
       nextAgent.preset = partial.agentPreset
+    }
+    if (partial.agentSystemPrompt !== undefined) {
+      const value = partial.agentSystemPrompt.trim()
+      if (value.length > MAX_AGENT_PROMPT_CHARS) throw new Error(`预设提示词过长（上限 ${MAX_AGENT_PROMPT_CHARS} 字符）`)
+      // 空串=清除：写 undefined 让 yaml 不留空字段，读取时自然回退到预设默认。
+      if (value === '') delete nextAgent.system_prompt
+      else nextAgent.system_prompt = value
     }
     const nextPermissions = { ...(config.permissions ?? {}) }
     if (partial.permissionPreset !== undefined) {

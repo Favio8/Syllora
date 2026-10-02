@@ -99,13 +99,17 @@ describe('ToolRegistry', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('mode filtering: socratic exposes readonly + ask; unknown mode falls back', async () => {
+  it('mode filtering: each mode exposes its own tool set; unknown mode fails closed to readonly', async () => {
     const { root, courseDir, wsRoot } = await setup()
     const registry = defaultToolRegistry(courseDir, wsRoot)
-    const socratic = registry.namesForMode('socratic')
-    expect(socratic).toContain('read_source')
-    expect(socratic).toContain('ask_user_question')
-    expect(socratic).not.toContain('run_quiz')
+    const quick = registry.namesForMode('quick')
+    expect(quick).toContain('read_source')
+    expect(quick).toContain('ask_user_question')
+    // quick 允许直接练习；feynman 允许写笔记；debug 允许执行命令——三者确实不同
+    expect(quick).toContain('run_quiz')
+    expect(registry.namesForMode('feynman')).toContain('write_note')
+    // debug 另外暴露动态卡片生成（命令执行类工具依赖注入的 provider，测试环境不注册）
+    expect(registry.namesForMode('debug')).toContain('generate_dynamic_card')
 
     const unknown = registry.namesForMode('bogus')
     expect(unknown.sort()).toEqual(['get_course_state', 'read_source', 'search_sources'])
@@ -412,7 +416,7 @@ describe('ToolRegistry', () => {
     for (const name of study) {
       expect(registry.spec(name)).toMatchObject({ policy: 'read', execution: 'parallel', requiresApproval: false })
     }
-    for (const mode of ['socratic', 'quick', 'feynman', 'debug']) {
+    for (const mode of ['quick', 'feynman', 'debug']) {
       expect(registry.namesForMode(mode)).toEqual(expect.arrayContaining(study))
     }
     // general 预设与未知模式（fail-closed 只读回落）不暴露课程快照工具。

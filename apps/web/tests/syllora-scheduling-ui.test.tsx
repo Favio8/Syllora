@@ -61,8 +61,10 @@ describe('PRD scheduled actions and material recovery UI',()=>{
     const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({result:state(course)})});vi.stubGlobal('fetch',fetch)
     render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByRole('heading',{name:'等待已确认任务的计划日期'})
     expect(screen.getByRole('button',{name:/^继续/})).toBeDisabled()
-    expect(screen.getByRole('button',{name:/旧知识点.*待开始/})).toBeDisabled()
     expect(screen.getByText(/可执行时间：/)).toBeVisible()
+    // 任务列表已移入「计划管理」整页：先在工作台断言下一步卡片，再点入口看任务状态
+    fireEvent.click(screen.getByRole('button',{name:/^计划管理/}))
+    expect(screen.getByRole('button',{name:/旧知识点.*待开始/})).toBeDisabled()
     expect(fetch.mock.calls.every(([url])=>url==='/api/syllora/state')).toBe(true)
   })
   it('offers explicit source recovery and hides generation on a blocked active task',async()=>{

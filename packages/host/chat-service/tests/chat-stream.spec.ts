@@ -13,7 +13,7 @@ describe('chatStream 课程校验', () => {
     for await (const event of chatStream(
       'D:/definitely/not/a/workspace',
       'some-course',
-      { message: 'hi', mode: 'socratic' },
+      { message: 'hi', mode: 'quick' },
       null,
     )) {
       events.push(event as { kind: string; code?: string })

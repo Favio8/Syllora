@@ -20,8 +20,8 @@ describe('LearningAgentService durable runtime state', () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-agent-inbox-service-'))
     await mkdir(join(root, '.syllora', 'history'), { recursive: true })
     const service = new LearningAgentService(new AgentRegistry())
-    const created = await service.create(root, basename(root), 'socratic', 'inbox test')
-    const queued = await service.send(root, basename(root), created.sessionId, 'socratic', 'queued message')
+    const created = await service.create(root, basename(root), 'quick', 'inbox test')
+    const queued = await service.send(root, basename(root), created.sessionId, 'quick', 'queued message')
     expect(String(queued.turnId)).not.toBe('')
     const eventStore = new SessionEventStore(join(root, '.syllora', 'history'))
     const rows = await waitFor(
@@ -45,7 +45,7 @@ describe('LearningAgentService durable runtime state', () => {
 
     const registry = new AgentRegistry()
     const service = new LearningAgentService(registry)
-    const created = await service.create(root, basename(root), 'socratic', 'runtime test')
+    const created = await service.create(root, basename(root), 'quick', 'runtime test')
     const initial = await service.projection(created.agentId)
     expect(initial.agentConfig).toMatchObject({ agentPreset: 'general', permissionPreset: 'read-only', plugins: { learning: false, sandbox: true } })
 

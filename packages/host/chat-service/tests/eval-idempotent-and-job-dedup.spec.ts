@@ -32,7 +32,7 @@ const fakeConfig: ResolvedChatConfig = {
   temperature: 0.3,
   maxConcurrency: 1,
   maxTokens: null,
-  defaultMode: 'socratic',
+  defaultMode: 'quick',
   permissionPreset: 'workspace-write',
   plugins: {},
 }

@@ -22,7 +22,7 @@ import type { ResolvedChatConfig } from './config.ts'
 import { createDeepSeekToolClient, reasoningEffortsForConfig } from './adapter.ts'
 import { configProblem, createCourseService, type CourseService } from './course.ts'
 import { loadChatConfig } from './config.ts'
-import { discoverModels, settingsPayload, saveProvider } from './settings.ts'
+import { AGENT_PRESET_PROMPTS, discoverModels, settingsPayload, saveProvider } from './settings.ts'
 import { stateDirOf } from '@syllora/course-builder'
 import { createSylloraStudyActions } from './syllora-study-actions.ts'
 
@@ -278,6 +278,8 @@ export interface LearningAgentOptions {
 
 export interface AgentRuntimeConfig {
   readonly agentPreset: string
+  /** 自定义预设提示词（空串=用预设自带默认）。快照进 agent/config 事件，便于回看当时生效的提示词。 */
+  readonly agentSystemPrompt: string
   readonly permissionPreset: 'read-only' | 'workspace-write' | 'danger-full-access'
   readonly plugins: Record<string, boolean>
 }
@@ -285,6 +287,7 @@ export interface AgentRuntimeConfig {
 function runtimeConfigOf(config: ResolvedChatConfig): AgentRuntimeConfig {
   return {
     agentPreset: config.agentPreset === 'general' ? 'general' : 'syllora-learning',
+    agentSystemPrompt: config.agentSystemPrompt ?? '',
     permissionPreset: config.permissionPreset === 'read-only' || config.permissionPreset === 'danger-full-access' ? config.permissionPreset : 'workspace-write',
     plugins: Object.fromEntries(Object.entries(config.plugins ?? {}).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')),
   }
@@ -317,7 +320,8 @@ async function ensureAgentRuntimeConfig(events: SessionEventStore, sessionId: st
   if (existingLock !== undefined) return existingLock
   const pending = (async (): Promise<AgentRuntimeConfig> => {
     const current = (await events.project(sessionId).catch(() => null))?.agentConfig
-    if (current !== null && current !== undefined) return current
+    // 旧会话的 agent/config 行没有 agentSystemPrompt：补齐为空串再返回。
+    if (current !== null && current !== undefined) return { agentSystemPrompt: '', ...current }
     const snapshot = runtimeConfigOf(config)
     await events.append(sessionId, { ts: utcTs(), type: 'agent/config', payload: { ...snapshot } })
     return snapshot
@@ -365,12 +369,13 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
     { id: 'lsp', available: providers.lsp !== undefined, reason: providers.lsp === undefined ? '未安装 LSP Provider' : null, installAction: providers.lsp === undefined ? '安装并配置 LSP Provider' : null },
     { id: 'subagent', available: providers.subagent !== undefined, reason: providers.subagent === undefined ? '当前 Host 未启用子 Agent Provider' : null, installAction: providers.subagent === undefined ? '启用 Agent registry' : null },
   ]
+  // 用户在「Agent 管理」里写的自定义提示词优先；留空则回退到预设自带的默认提示词。
+  const presetId = options.runtimeConfig?.agentPreset === 'general' ? 'general' : 'syllora-learning'
+  const customPrompt = options.runtimeConfig?.agentSystemPrompt?.trim() ?? ''
   const preset: AgentPreset = {
-    id: options.runtimeConfig?.agentPreset === 'general' ? 'general' : 'syllora-learning',
-    label: options.runtimeConfig?.agentPreset === 'general' ? 'General Agent' : 'Syllora Learning Tutor',
-    systemPrompt: options.runtimeConfig?.agentPreset === 'general'
-      ? 'You are the Syllora general agent. Use the available tools deliberately and explain outcomes clearly.'
-      : 'You are the Syllora learning agent. Guide the learner with evidence from the active course and preserve their agency.',
+    id: presetId,
+    label: presetId === 'general' ? 'General Agent' : 'Syllora Learning Tutor',
+    systemPrompt: customPrompt !== '' ? customPrompt : AGENT_PRESET_PROMPTS[presetId] ?? '',
   }
   return new AgentLoop({
     agentId: options.agentId ?? `study-${options.sessionId}`,
@@ -398,7 +403,7 @@ export function createLearningAgent(options: LearningAgentOptions): AgentLoop {
         ? turn.content
         : `${turn.content}\n\n[Agent context]\n${injectedContext.join('\n\n')}`
       const metadata = turn.metadata ?? {}
-      const mode = (typeof metadata['mode'] === 'string' ? metadata['mode'] : options.mode ?? 'socratic') as LearningMode
+      const mode = (typeof metadata['mode'] === 'string' ? metadata['mode'] : options.mode ?? 'quick') as LearningMode
       const conceptId = typeof metadata['conceptId'] === 'string' ? metadata['conceptId'] : options.conceptId ?? null
       const selectedEffort = context.modelSelection?.effort ?? null
       const effort = selectedEffort ?? (typeof metadata['effort'] === 'string' ? metadata['effort'] : null)
@@ -613,7 +618,7 @@ export class LearningAgentService {
         )
         if (!needsRecovery || this.registry.get(`study-${sessionId}`) !== undefined) continue
         const meta = await new SessionStore(historyDir).readMeta(sessionId).catch(() => null)
-        const mode = meta?.mode ?? rows.find(row => ['socratic', 'quick', 'feynman', 'debug'].includes(String(row.payload['mode'] ?? '')))?.payload['mode'] as LearningMode | undefined ?? 'socratic'
+        const mode = meta?.mode ?? rows.find(row => ['quick', 'quick', 'feynman', 'debug'].includes(String(row.payload['mode'] ?? '')))?.payload['mode'] as LearningMode | undefined ?? 'quick'
         try {
           recovered.push(await this.register(workspaceRoot, projectId, sessionId, mode))
         } catch {
@@ -1096,7 +1101,7 @@ export async function restoreSession(
     : projection.messages.map(message => ({ type: 'chat' as const, ts: eventRows.find(row => row.seq === message.seq)?.ts ?? utcTs(), role: message.role === 'user' ? 'user' as const : 'agent' as const, content: message.content }))
   const meta = await store.readMeta(sessionId)
   let title = meta?.title ?? ''
-  let mode = meta?.mode ?? 'socratic'
+  let mode = meta?.mode ?? 'quick'
   let userNamed = (meta?.title ?? '') !== ''
   if (projection !== null) {
     for (const row of eventRows) {
@@ -1109,7 +1114,7 @@ export async function restoreSession(
       if (row.type === 'session/title' && !userNamed && typeof row.payload['title'] === 'string' && row.payload['title'].trim() !== '') {
         title = row.payload['title'].trim()
       }
-      if ((row.type === 'session/meta' || row.type === 'session/create') && (row.payload['mode'] === 'quick' || row.payload['mode'] === 'feynman' || row.payload['mode'] === 'debug' || row.payload['mode'] === 'socratic')) mode = row.payload['mode']
+      if ((row.type === 'session/meta' || row.type === 'session/create') && (row.payload['mode'] === 'quick' || row.payload['mode'] === 'feynman' || row.payload['mode'] === 'debug' || row.payload['mode'] === 'quick')) mode = row.payload['mode']
     }
   }
   let pendingAsk: { question: string } | null = null
@@ -1362,7 +1367,7 @@ export async function* chatStream(
   }
   const session = new TutorSession(courseDir, workspaceRoot, {
     sessionId: input.sessionId ?? null,
-    mode: input.mode ?? 'socratic',
+    mode: input.mode ?? 'quick',
     persistLegacy: false,
     eventStore: new SessionEventStore(join(stateDirOf(courseDir), 'history')),
   })
@@ -1381,7 +1386,7 @@ export async function* chatStream(
     await session.init()
     const store = new SessionEventStore(join(stateDirOf(courseDir), 'history'))
     if (!(await store.exists(session.sessionId))) {
-      await store.append(session.sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: input.mode ?? 'socratic', agentId: `study-${session.sessionId}` } })
+      await store.append(session.sessionId, { ts: utcTs(), type: 'session/create', payload: { mode: input.mode ?? 'quick', agentId: `study-${session.sessionId}` } })
     }
     const runtimeConfig = await ensureAgentRuntimeConfig(store, session.sessionId, inputConfig ?? await loadChatConfig(workspaceRoot))
     const modelSelection = await ensureSessionModel(workspaceRoot, courseId, session.sessionId)
@@ -1398,7 +1403,7 @@ export async function* chatStream(
       workspaceRoot,
       courseId,
       sessionId: session.sessionId,
-      mode: input.mode ?? 'socratic',
+      mode: input.mode ?? 'quick',
       conceptId: input.conceptId ?? null,
       inputConfig,
       modelSelection,
@@ -1446,7 +1451,7 @@ export async function* chatStream(
       content: input.message,
       ...(input.mode === undefined ? {} : { mode: input.mode }),
       metadata: {
-        mode: input.mode ?? 'socratic',
+        mode: input.mode ?? 'quick',
         conceptId: input.conceptId ?? null,
         fileRefs: input.fileRefs ?? [],
         ...(input.effort === undefined || input.effort === null ? {} : { effort: input.effort }),

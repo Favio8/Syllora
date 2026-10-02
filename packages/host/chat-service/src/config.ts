@@ -30,11 +30,16 @@ export interface ResolvedChatConfig {
   readonly maxConcurrency: number
   /** Per-request output cap（config.yaml `max_tokens`）；null=适配器默认。 */
   readonly maxTokens?: number | null
-  readonly defaultMode: 'socratic' | 'quick' | 'feynman' | 'debug'
+  readonly defaultMode: 'quick' | 'quick' | 'feynman' | 'debug'
   readonly agentPreset?: string
+  /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
+  readonly agentSystemPrompt?: string
   readonly permissionPreset?: 'read-only' | 'workspace-write' | 'danger-full-access'
   readonly plugins?: Record<string, boolean>
 }
+
+/** 自定义预设提示词上限：与 settings RPC 的校验一致。 */
+export const MAX_AGENT_PROMPT_CHARS = 8000
 
 interface ConfigYaml {
   readonly llm?: { provider?: string; model?: string; api_key_env?: string | null; api_base?: string | null; temperature?: number; max_concurrency?: number; max_tokens?: number | null; judge_model?: string | null; judge_reasoning_effort?: string | null }
@@ -50,7 +55,7 @@ interface ConfigYaml {
     readonly max_tokens?: number | null
   }>
   readonly ui?: { default_mode?: string }
-  readonly agent?: { preset?: string }
+  readonly agent?: { preset?: string; system_prompt?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
 }
@@ -119,8 +124,9 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
       temperature: 0.3,
       maxConcurrency: 8,
       maxTokens: null,
-      defaultMode: 'socratic',
+      defaultMode: 'quick',
       agentPreset: 'syllora-learning',
+      agentSystemPrompt: '',
       permissionPreset: 'workspace-write',
       plugins: {},
     }
@@ -137,7 +143,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
   const maxTokens = direct.maxTokens ?? config.llm?.max_tokens ?? null
   const defaultMode = config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug'
     ? config.ui.default_mode
-    : 'socratic'
+    : 'quick'
   const permissionPreset = config.permissions?.preset === 'read-only' || config.permissions?.preset === 'danger-full-access'
     ? config.permissions.preset
     : 'workspace-write'
@@ -162,6 +168,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
     maxTokens,
     defaultMode,
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
+    agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
     permissionPreset,
     plugins,
   }

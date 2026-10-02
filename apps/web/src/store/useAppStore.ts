@@ -278,7 +278,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploading: false,
   chatFocus: false,
   mascotPulse: null,
-  mode: "socratic",
+  mode: "quick",
   focusConceptId: null,
   modeBanner: null,
   activeTab: "progress",
