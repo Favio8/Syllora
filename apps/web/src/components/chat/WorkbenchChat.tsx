@@ -72,7 +72,7 @@ export default function WorkbenchChat({ courseName, children, onUpload, onPracti
       <div className="agent-runtime"><ApprovalPanel agentId={sessionId ? `study-${sessionId}` : null} /><QueueDock /></div>
       <form onSubmit={event => { event.preventDefault(); void submit(); }}>
         <textarea ref={input} aria-label="向学习伙伴提问" value={value} disabled={disabled} placeholder={pendingAsk ? '回答学习伙伴的问题…' : `关于${courseName}，有什么想一起弄明白的？`} onChange={event => setDraft(key, event.target.value)} onFocus={() => setChatFocus(true)} onBlur={() => setChatFocus(false)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }} />
-        <div className="workbench-composer-controls"><small>Enter 发送 · Shift + Enter 换行</small>{streaming ? <button type="button" className="icon-button" aria-label="停止生成" onClick={stop}><Square size={17} /></button> : <button className="icon-button composer-send" aria-label="发送消息" disabled={!value.trim() || disabled || answering}><ArrowUp size={19} /></button>}</div>
+        <div className="workbench-composer-controls">{streaming ? <button type="button" className="icon-button" aria-label="停止生成" onClick={stop}><Square size={17} /></button> : <button className="icon-button composer-send" aria-label="发送消息" disabled={!value.trim() || disabled || answering}><ArrowUp size={19} /></button>}</div>
       </form>
       <div className="composer-actions"><button className="button small" disabled={disabled} onClick={onUpload}><Paperclip size={16} />上传资料</button><button className="button small" disabled={disabled} onClick={onPractice}><PencilLine size={16} />练习</button></div>
     </div>

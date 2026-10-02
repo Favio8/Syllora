@@ -39,15 +39,29 @@ export function ProjectDialog({onClose,onOpen,migrationName}:{onClose:()=>void;o
   </section></div>;
 }
 export function MaterialInitialization({course,epoch,busy,running,onRun}:{course:CourseView;epoch:number;busy:boolean;running:boolean;onRun:(action:string,payload:Record<string,unknown>)=>Promise<unknown>}) {
-  const [files,setFiles]=useState<FileCandidate[]>([]),[selected,setSelected]=useState<string[]>([]),[missing,setMissing]=useState<string[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
-  const scan=async()=>{setLoading(true);setError('');try{const result=await projectRpc<{files:FileCandidate[];missing:string[]}>('scan',{courseId:course.id});setFiles(result.files);setMissing(result.missing);setSelected(result.files.filter(f=>f.status==='ready'&&course.materials.find(m=>m.path===f.path)?.active!==false).map(f=>f.path))}catch(e){setError(e instanceof Error?e.message:'扫描失败')}finally{setLoading(false)}};
+  const [files,setFiles]=useState<FileCandidate[]>([]),[selected,setSelected]=useState<string[]>([]),[missing,setMissing]=useState<string[]>([]),[loading,setLoading]=useState(false),[failure,setFailure]=useState<{title:string;message:string}|null>(null);
+  const scan=async()=>{setLoading(true);setFailure(null);try{const result=await projectRpc<{files:FileCandidate[];missing:string[]}>('scan',{courseId:course.id});setFiles(result.files);setMissing(result.missing);setSelected(result.files.filter(f=>f.status==='ready'&&course.materials.find(m=>m.path===f.path)?.active!==false).map(f=>f.path))}catch(e){setFailure({title:'资料扫描失败',message:e instanceof Error?e.message:'扫描失败'})}finally{setLoading(false)}};
   useEffect(()=>{void scan()},[course.id,epoch,course.revision]); // component is keyed by course; scans never cross project selection
-  return <section className="sy-initialization"><h2>检查课程资料</h2><p className="sy-muted">先选择本轮资料，再初始化为可阅读的章节讲义。原文件保持原样。</p><button disabled={loading||running} onClick={()=>void scan()}>{loading?'正在扫描…':'重新扫描资料'}</button>
-    {error&&<p role="alert">{error}</p>}
+  // 失败一律走居中弹窗：旧实现只有行内一行提示，初始化失败后没有可关闭的出口。
+  const initialize=async(payload:Record<string,unknown>)=>{try{await onRun('initialize',payload)}catch(e){setFailure({title:'初始化失败',message:e instanceof Error?e.message:'初始化未完成。已归档的资料与学习记录不受影响，可检查资料后重试。'})}};
+  return <><section className="sy-initialization"><h2>检查课程资料</h2><p className="sy-muted">先选择本轮资料，再初始化为可阅读的章节讲义。原文件保持原样。</p><button disabled={loading||running} onClick={()=>void scan()}>{loading?'正在扫描…':'重新扫描资料'}</button>
     {files.map(f=><label className="sy-file-candidate" key={f.path}><input type="checkbox" disabled={f.status!=='ready'||running||course.archived} checked={selected.includes(f.path)} onChange={e=>setSelected(e.target.checked?[...selected,f.path]:selected.filter(p=>p!==f.path))}/><span><strong>{f.path}</strong><small>{(f.size/1024).toFixed(1)} KiB · {f.status==='ready'?({added:'新增',changed:'内容已变化',unchanged:'未变化'}[f.change]):f.reason}</small></span></label>)}
     {missing.length>0&&<p className="sy-muted">原文件已缺失：{missing.join('、')}。已有学习记录仍保留。</p>}
-    <button className="sy-primary" disabled={!selected.length||busy||running||course.archived} onClick={()=>void onRun('initialize',{paths:selected,fingerprints:Object.fromEntries(files.filter(f=>selected.includes(f.path)).map(f=>[f.path,f.fingerprint])),acceptPartial:true})}>{course.revision?'更新课程讲义':'初始化课程'} · {selected.length} 份资料</button>
-  </section>;
+    <button className="sy-primary" disabled={!selected.length||busy||running||course.archived} onClick={()=>void initialize({paths:selected,fingerprints:Object.fromEntries(files.filter(f=>selected.includes(f.path)).map(f=>[f.path,f.fingerprint])),acceptPartial:true})}>{course.revision?'更新课程讲义':'初始化课程'} · {selected.length} 份资料</button>
+  </section>
+  {failure&&<CenteredErrorDialog title={failure.title} message={failure.message} onClose={()=>setFailure(null)}/>}
+  </>;
+}
+
+/** 居中错误弹窗：遮罩点击 / 右上角按钮 / 底部按钮 / Esc 四条路都能关闭。 */
+function CenteredErrorDialog({title,message,onClose}:{title:string;message:string;onClose:()=>void}) {
+  const closeRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{closeRef.current?.focus();const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose()};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[onClose]);
+  return <div className="sy-overlay" onClick={onClose}><section className="sy-modal sy-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sy-error-dialog-title" aria-describedby="sy-error-dialog-message" onClick={event=>event.stopPropagation()}>
+    <header><h2 id="sy-error-dialog-title">{title}</h2><button aria-label="关闭错误提示" onClick={onClose}><X size={19}/></button></header>
+    <p id="sy-error-dialog-message" className="sy-error-dialog-message" role="alert">{message}</p>
+    <div className="sy-row"><button className="sy-primary" ref={closeRef} onClick={onClose}>关闭</button></div>
+  </section></div>;
 }
 const Markdown=({text}:{text:string})=><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{img:({alt})=><span>{alt?`[图片：${alt}]`:'[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{text}</ReactMarkdown>;
 export function LectureReader({course,onSource}:{course:CourseView;onSource:(id:string)=>void}) {

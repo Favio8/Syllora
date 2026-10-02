@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil, Menu, MessageSquareText, BookOpenText, ChevronRight, PanelRightOpen, UserRound, SlidersHorizontal, Monitor, Database, Clock } from 'lucide-react';
+import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, Trash2, X, LoaderCircle, PanelRight, Pencil, Menu, ChevronRight, PanelRightOpen, UserRound, SlidersHorizontal, Monitor, Database, Clock } from 'lucide-react';
 import ModelsSection from './settings/ModelsSection';
 import NotesWorkspace from './NotesWorkspace';
 import NotesGraph from './NotesGraph';
@@ -48,7 +48,7 @@ type DesktopBridge = {
   platform?: string;
   hostInfo?: () => Promise<{ dev?: boolean; port?: number|null; hostHome?: string; logsDir?: string; dataDir?: string }>;
   openPath?: (path:string) => Promise<{ ok:boolean; error?:string }>;
-  setWindowTheme?: (theme:'light'|'dark') => Promise<{ok:boolean}>;
+  setWindowTheme?: (spec:{theme:'light'|'dark';color?:string;symbolColor?:string;height?:number}) => Promise<{ok:boolean}>;
 };
 const desktopBridge = (): DesktopBridge|undefined => (window as unknown as { sylloraDesktop?: DesktopBridge }).sylloraDesktop;
 
@@ -90,6 +90,8 @@ export default function Syllora() {
   const [notesEpoch,setNotesEpoch] = useState(0);
   const [settings,setSettings] = useState(false);
   const [error,setError] = useState('');
+  // 已手动关闭的失败作业 id：失败条必须能关掉，否则会一直挂在内容区上方。
+  const [dismissedJob,setDismissedJob] = useState('');
   const [busy,setBusy] = useState(false);
   const [migration,setMigration] = useState<{id:string;name:string}|null>(null);
   const [fileEpoch,setFileEpoch] = useState(0);
@@ -286,7 +288,32 @@ export default function Syllora() {
   const exposureError=useLearningExposures(course,rpc,tab);
   const uiData=data?projectWorkspace(data):null;
   const displayCourse=uiData?.courses.find(item=>item.id===selected);
-  useEffect(()=>{const theme=data?.uiPreferences?.theme??'light';document.documentElement.dataset.theme=theme;void desktopBridge()?.setWindowTheme?.(theme);},[data?.uiPreferences?.theme]);
+  // 原生窗口按钮区（Electron titleBarOverlay）必须与顶栏严丝合缝：底色取顶栏实际渲染的背景色、
+  // 高度取实际渲染高度。写死颜色或高度会在主题切换、响应式断点变化时露出底色或溢出。
+  useEffect(()=>{
+    const theme=data?.uiPreferences?.theme??'light';
+    document.documentElement.dataset.theme=theme;
+    const bridge=desktopBridge();
+    if(!bridge?.setWindowTheme)return;
+    const push=()=>{
+      const header=document.querySelector<HTMLElement>('.sy-top')??document.querySelector<HTMLElement>('.sy-nw-top');
+      if(!header)return;
+      const height=Math.round(header.getBoundingClientRect().height);
+      const match=/^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(header).backgroundColor);
+      if(!height||!match)return;
+      const hex=(value:string)=>Number(value).toString(16).padStart(2,'0');
+      void bridge.setWindowTheme?.({
+        theme,
+        color:`#${hex(match[1]!)}${hex(match[2]!)}${hex(match[3]!)}`,
+        symbolColor:theme==='dark'?'#b9cbe4':'#617796',
+        height,
+      });
+    };
+    // 等一帧再量：view/断点切换后的样式尚未生效时量到的是旧值。
+    const frame=requestAnimationFrame(push);
+    window.addEventListener('resize',push);
+    return ()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',push)};
+  },[data?.uiPreferences?.theme,view,learningMode,showRight,notesMode]);
   const openUiCourse=async(id:string,mode:LearningMode='chat')=>{setRenaming(false);if(!(await selectCourse(id)))return false;setView('workspace');setLearningMode(mode);setMobileNav(false);return true;};
   const manageUiCourse=async(item:DisplayCourse,action:CourseAction)=>{
     if(!(await selectCourse(item.id)))return;
@@ -305,7 +332,7 @@ export default function Syllora() {
       else if(action==='logout'){void flushDraft().then(ok=>{if(ok){setSignedOut(true);setView('home');}});}
       else setUserPage(action);
     }}/>
-    <header className="sy-top topbar"><button className="icon-button mobile-only" aria-label="打开导航" onClick={()=>setMobileNav(true)}><Menu size={20}/></button><div className="breadcrumbs">{view==='home'?<span className="home-breadcrumb">主页</span>:<><button className="breadcrumb-link" onClick={()=>setView('courses')}>我的课程</button><ChevronRight size={15}/><span>{view==='workspace'?course?.name??'学习工作台':view==='courses'?'课程管理':view==='materials'?'资料库':'复习与巩固'}</span>{view==='workspace'&&displayCourse&&<CourseMenu course={displayCourse} variant="workspace" onAction={(item,action)=>void manageUiCourse(item,action)} onChangeCourse={()=>setCoursePicker(true)}/>}</>}</div><div className="sy-actions"><div className="learning-mode-switch" role="group" aria-label="学习模式"><button disabled={!course} aria-pressed={view==='workspace'&&learningMode==='chat'} onClick={()=>{setView('workspace');setLearningMode('chat')}}><MessageSquareText size={16}/>对话学习</button><button disabled={!course} aria-pressed={view==='workspace'&&learningMode==='reading'} onClick={()=>{setView('workspace');setLearningMode('reading')}}><BookOpenText size={16}/>辅助阅读</button><button className="button small" title={course?'笔记':'请先打开一门课程'} disabled={!course} onClick={()=>{if(!course){setError('请先打开一门课程');return}setNotesMode(true)}}>笔记</button></div></div></header>
+    <header className="sy-top topbar"><button className="icon-button mobile-only" aria-label="打开导航" onClick={()=>setMobileNav(true)}><Menu size={20}/></button><div className="breadcrumbs">{view==='home'?<span className="home-breadcrumb">主页</span>:<><button className="breadcrumb-link" onClick={()=>setView('courses')}>我的课程</button><ChevronRight size={15}/><span>{view==='workspace'?course?.name??'学习工作台':view==='courses'?'课程管理':view==='materials'?'资料库':'复习与巩固'}</span>{view==='workspace'&&displayCourse&&<CourseMenu course={displayCourse} variant="workspace" onAction={(item,action)=>void manageUiCourse(item,action)} onChangeCourse={()=>setCoursePicker(true)}/>}</>}</div><div className="sy-actions">{view==='workspace'&&!notesMode&&<div className="learning-mode-switch" role="group" aria-label="学习模式"><button disabled={!course} aria-pressed={learningMode==='chat'} onClick={()=>{setView('workspace');setLearningMode('chat')}}>对话学习</button><button disabled={!course} aria-pressed={learningMode==='reading'} onClick={()=>{setView('workspace');setLearningMode('reading')}}>辅助阅读</button><button title={course?'笔记':'请先打开一门课程'} disabled={!course} onClick={()=>{if(!course){setError('请先打开一门课程');return}setNotesMode(true)}}>笔记</button></div>}</div></header>
     <main className="sy-main main-area view-stage" key={`${view}-${learningMode}`}>
 
       {error&&<div className="sy-error" role="alert">{error}<button aria-label="关闭错误" onClick={()=>setError('')}><X size={14}/></button></div>}
@@ -333,7 +360,7 @@ export default function Syllora() {
         </DiscussionShell>}
       </div>
       </ChatWorkspace>
-      {running?<div className="sy-job" role="status"><LoaderCircle size={16} className="sy-spin"/><span>{running.message}{running.createdAt&&Date.now()-running.createdAt>=60000?' · 已等待超过 60 秒，仍在查询原任务；可取消，不会自动重复生成。':''}</span><button onClick={()=>void run('cancel',{jobId:running.id})}>取消</button></div>:lastJob?.state==='failed'?<div className="sy-job sy-error" role="alert">{lastJob.message}{lastJob.errorCode?`（${lastJob.errorCode}）`:''}</div>:coverageNote?<div className="sy-job" role="status">{coverageNote}</div>:null}
+      {running?<div className="sy-job" role="status"><LoaderCircle size={16} className="sy-spin"/><span>{running.message}{running.createdAt&&Date.now()-running.createdAt>=60000?' · 已等待超过 60 秒，仍在查询原任务；可取消，不会自动重复生成。':''}</span><button onClick={()=>void run('cancel',{jobId:running.id})}>取消</button></div>:lastJob?.state==='failed'&&lastJob.id!==dismissedJob?<div className="sy-job sy-error" role="alert"><span>{lastJob.message}{lastJob.errorCode?`（${lastJob.errorCode}）`:''}</span><button aria-label="关闭失败提示" onClick={()=>setDismissedJob(lastJob.id)}><X size={14}/></button></div>:coverageNote?<div className="sy-job" role="status">{coverageNote}</div>:null}
       {!course.folder&&<form className="sy-composer" onSubmit={async e=>{e.preventDefault();const courseId=selected,submitted=cacheRef.current[courseId]?.revision??0;const accepted=await generate('answer',{prompt,...(task&&!(course.blockedPointIds??[]).includes(task.pointId)?{taskId:task.id}:{})}) as {draftVersion?:number}|null;if(accepted){const local=cacheRef.current[courseId];if(local&&accepted.draftVersion!==undefined)cacheRef.current={...cacheRef.current,[courseId]:{...local,baseVersion:accepted.draftVersion}};if((cacheRef.current[courseId]?.revision??0)===submitted){const revision=submitted+1;cacheRef.current={...cacheRef.current,[courseId]:{prompt:'',answers:cacheRef.current[courseId]?.answers??{},revision,savedRevision:revision,savedAt:Date.now(),baseVersion:accepted.draftVersion??cacheRef.current[courseId]?.baseVersion??0}};if(selectedRef.current===courseId){promptRef.current='';setPrompt('')}}saveDraftRecovery(cacheRef.current);}}}><input aria-label="向课程资料提问" placeholder={course.materials.some(m=>m.status!=='deleted')?'向课程资料提问，追问会带上本课程最近对话…':'先在右侧导入学习资料'} value={prompt} onChange={e=>rememberPrompt(e.target.value)} disabled={course.archived} maxLength={4000}/><button className="sy-primary" title="发送问题" aria-label="发送问题" disabled={!prompt.trim()||busy||!!running||course.archived}><Send size={18}/></button><small>未发送的问题按课程保存 · 依据只来自所选课程资料 · 模型生成内容需要核验</small></form>}{!course.folder&&<div className="composer-actions legacy-composer-actions"><button className="button small" onClick={pickMaterialFile}><Upload size={16}/>上传资料</button><button className="button small" onClick={openPractice}><Pencil size={16}/>练习</button></div>}
       </>}</>}
     </main>

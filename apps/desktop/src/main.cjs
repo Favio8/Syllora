@@ -375,11 +375,27 @@ ipcMain.handle('syllora:pick-directory', async event => {
 })
 
 // Only the trusted main renderer may update the native caption buttons.
-ipcMain.handle('syllora:window-theme', (event, theme) => {
+// 入参兼容两种形态：旧的 'light'|'dark' 字符串，以及渲染层实测的
+// { theme, color, symbolColor, height }——实测值才能保证按钮区与顶栏完全贴合
+// （顶栏高度随响应式断点变化，底色随主题变化，写死任意一个都会露出背景）。
+ipcMain.handle('syllora:window-theme', (event, input) => {
   if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Invalid window theme caller')
   const currentUrl = win.webContents.getURL()
   if (!currentUrl || new URL(event.senderFrame.url).origin !== new URL(currentUrl).origin) throw new Error('Invalid window theme origin')
+  const spec = typeof input === 'string' ? { theme: input } : input
+  if (!spec || typeof spec !== 'object') throw new Error('Invalid window theme')
+  const theme = spec.theme
   if (theme !== 'light' && theme !== 'dark') throw new Error('Invalid window theme')
-  win.setTitleBarOverlay({ color: theme === 'dark' ? '#171f2e' : '#ffffff', symbolColor: theme === 'dark' ? '#b9cbe4' : '#617796', height: 70 })
+  const isHex = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+  if (spec.color !== undefined && !isHex(spec.color)) throw new Error('Invalid window theme color')
+  if (spec.symbolColor !== undefined && !isHex(spec.symbolColor)) throw new Error('Invalid window theme symbol color')
+  if (spec.height !== undefined && (!Number.isInteger(spec.height) || spec.height < 40 || spec.height > 120)) throw new Error('Invalid window theme height')
+  // setTitleBarOverlay 只在 Windows 上存在；其他平台直接跳过，不影响主题本身。
+  if (typeof win.setTitleBarOverlay !== 'function') return { ok: false }
+  win.setTitleBarOverlay({
+    color: spec.color ?? (theme === 'dark' ? '#171f2e' : '#ffffff'),
+    symbolColor: spec.symbolColor ?? (theme === 'dark' ? '#b9cbe4' : '#617796'),
+    height: spec.height ?? 70,
+  })
   return { ok: true }
 })
