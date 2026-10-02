@@ -5,6 +5,10 @@ lib/
 # 源码目录 src/lib 不是构建产物，必须重新包含（lib/ 规则会吞掉任意深度的 lib/）
 !**/src/lib/
 !**/src/lib/**
+# 附录项目 OpenMAIC 的 lib/ 是它的应用源码（agent/classroom/generation/document 等），
+# 不是构建产物。少了这条，vendored 快照会静默丢掉 812 个文件。
+!vendor/OpenMAIC/lib/
+!vendor/OpenMAIC/lib/**
 # Workbench source helpers are nested below src/features, not build output.
 !apps/web/src/features/workbench/lib/
 !apps/web/src/features/workbench/lib/**

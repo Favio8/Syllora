@@ -25,6 +25,19 @@ notices are retained in the copied files and directories.
   modifications list).
 - License: MIT — original copyrights retained per package.
 
+## OpenMAIC (`vendor/OpenMAIC/`)
+
+- Upstream: https://github.com/THU-MAIC/OpenMAIC — `openmaic@1.1.1`, commit
+  `5312c2b4b4bcb2e7db07cacabcdac8bfddc827fa` (2026-10-02).
+- License: MIT — Copyright (c) 2026 THU-MAIC. The upstream `LICENSE` file and the
+  `license` field in `package.json` are both preserved unchanged.
+- Reused parts: kept in full as a source snapshot under `vendor/OpenMAIC/`. It is an
+  appendix kept for reference and reuse; no Syllora code imports it, and it is
+  excluded from the pnpm workspace (see `vendor/README.md`).
+- Note: the upstream website states AGPL-3.0, which contradicts the repository. The
+  upstream changelog records the switch from AGPL-3.0 to MIT in v0.3.0 (2026-06-28),
+  so this snapshot is treated as MIT with the repository `LICENSE` as the authority.
+
 ## runtime dependencies
 
 - `zod` — MIT

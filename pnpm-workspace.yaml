@@ -1,5 +1,9 @@
 packages:
   - vendor/*
+  # 附录项目：OpenMAIC 的源码快照只作参考与复用来源，不参与本仓安装与构建。
+  # 它的 postinstall 会构建自己的 8 个内部包（`pnpm run build:packages`），
+  # 若被当成工作区包会让本仓 `pnpm install` 失败，所以显式排除。
+  - '!vendor/OpenMAIC'
   - packages/*/*
   - apps/*
 allowBuilds:

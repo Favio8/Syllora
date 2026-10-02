@@ -51,6 +51,19 @@ Keep this log exhaustive — every divergence from upstream must be listed.
 17. **`@deepseek-ai` rescope**: every vendored manifest `name`, every internal dependency entry among the vendored set, and every module specifier that reaches them use the scoped names in the manifest table's `npm name` column. Directory names, version numbers, and dependency ranges are unchanged, and no upstream runtime identifier is renamed — `Symbol.for('schemastery')` and Schemastery's `vendor:` metadata field keep their upstream values. Re-apply with `pnpm run rescope-vendor --apply` after a sync; the table's two name columns are the mapping, restated for consumers in [docs/rescope.md](../docs/rescope.md).
 18. **Entry `disabled` interpolation in `loader/src/config/entry.ts`**: a `disabled: !!js` expression evaluates against the loader context at every mount decision; the raw node stays in the options, so write-back keeps the `!!js` form. `disabled` is the only interpolated metadata field. Covered by `packages/boot/app-boot/tests/user-patches.spec.ts` and `apps/cli/tests/windows-shell.spec.ts`.
 
+## Appendix: OpenMAIC (`vendor/OpenMAIC/`)
+
+Not part of the Cordis framework layer and not a workspace package. This is a pinned source snapshot of
+[OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) (open multi-agent interactive classroom, `openmaic@1.1.1`, commit
+`5312c2b4b4bcb2e7db07cacabcdac8bfddc827fa`, MIT), kept as a reference and reuse source for material-to-course
+work. See [OpenMAIC/README.md](OpenMAIC/README.md) for the manifest, the local-modification log (assets removed,
+upstream READMEs renamed, no source edits) and its sync procedure.
+
+It is excluded from the workspace by `'!vendor/OpenMAIC'` in `pnpm-workspace.yaml`: its `postinstall` builds six
+`@openmaic/*` packages plus two modified third-party packages, so treating it as a workspace package makes the
+repository's own `pnpm install` fail. Verified by removing the exclusion and observing `pnpm list --recursive`
+report `openmaic@1.1.1` and `@openmaic/dsl@0.11.2`.
+
 ## Sync procedure
 
 To update a vendored package from upstream:

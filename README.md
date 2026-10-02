@@ -65,6 +65,7 @@ packages/host/chat-service/src/
 packages/course/builder/            复用资料解析与结构化模型调用
 packages/llm/                       复用模型适配
 vendor/                             保留的上游基础组件与许可
+vendor/OpenMAIC/                    附录项目：OpenMAIC 源码快照（不参与构建，见其 README）
 scripts/syllora-serve.mjs           Syllora 启动入口
 ```
 
