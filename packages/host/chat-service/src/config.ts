@@ -117,7 +117,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
       apiKeyEnv: null,
       apiKey: null,
       temperature: 0.3,
-      maxConcurrency: 4,
+      maxConcurrency: 8,
       maxTokens: null,
       defaultMode: 'socratic',
       agentPreset: 'syllora-learning',
@@ -133,7 +133,7 @@ export async function loadChatConfig(workspaceRoot: string, selection?: { provid
   const apiKeyEnv = direct.apiKeyEnv ?? config.llm?.api_key_env ?? null
   const apiKey = await resolveCredential(workspaceRoot, providerId, apiKeyEnv)
   const temperature = direct.temperature ?? config.llm?.temperature ?? 0.3
-  const maxConcurrency = direct.maxConcurrency ?? config.llm?.max_concurrency ?? 4
+  const maxConcurrency = direct.maxConcurrency ?? config.llm?.max_concurrency ?? 8
   const maxTokens = direct.maxTokens ?? config.llm?.max_tokens ?? null
   const defaultMode = config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug'
     ? config.ui.default_mode

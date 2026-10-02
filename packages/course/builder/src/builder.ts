@@ -252,7 +252,7 @@ function bumpPatch(version: string): string {
  *  T-6：首败即停——旧实现 Promise.all 拒绝后其余 worker 仍把剩余队列全部跑完
  *  才弃结果，批量出题里一个单元失败会白烧完全部剩余 LLM 调用（计费+耗时）；
  *  在途单元跑完自然结算，但不再认领新项。 */
-async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
   const width = Math.max(1, Math.min(Math.floor(limit), items.length))
   const results = new Array<R>(items.length)
   let cursor = 0
