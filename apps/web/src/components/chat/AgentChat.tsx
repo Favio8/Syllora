@@ -3,14 +3,14 @@
 /**
  * 工作台「对话学习」的 agent 聊天宿主。
  *
- * 自包含：不依赖独立的 Console 外壳，只把已提交的 ChatArea（含工具调用行、
- * ask 折叠、审批面板）挂到课程工作区里，并补齐两套 id 空间之间的桥接——
+ * 自包含：不依赖独立的 Console 外壳，使用 PR #43 的 LearningChat，保留工具调用行、
+ * ask 折叠和审批面板，并补齐两套 id 空间之间的桥接——
  * chat/agent 端点的 courseId 必须是「课程文件夹名」（courseDirOf 的等值
  * 校验），而工作台的课程 id 是 UUID，二者的换算只在这里发生。
  */
 
-import { useEffect, useMemo } from "react";
-import ChatArea from "@/src/components/chat/ChatArea";
+import { useEffect, useMemo, type ReactNode } from "react";
+import LearningChat from "@/src/features/workbench/components/LearningChat";
 import CommandPalette from "@/src/components/palette/CommandPalette";
 import { api } from "@/src/lib/api";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -19,6 +19,13 @@ import "@/src/components/chat/agent-chat.css";
 export interface AgentChatProps {
   /** 课程文件夹绝对路径（工作台 project 的 path）。 */
   folder: string;
+  name?: string;
+  draft?: string;
+  onDraft?: (value:string) => void;
+  disabled?: boolean;
+  children?: ReactNode;
+  onUpload?: () => void;
+  onPractice?: () => void;
   /** 课程显示名（会话面板标题）。 */
   courseName: string;
   /** 打开工作台自己的模型设置弹窗。 */
@@ -30,7 +37,7 @@ export function chatCourseIdOf(folder: string): string {
   return folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
-export default function AgentChat({ folder, courseName, onOpenSettings }: AgentChatProps) {
+export default function AgentChat({ folder, courseName, onOpenSettings, ...props }: AgentChatProps) {
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath);
   const setCourses = useAppStore((s) => s.setCourses);
   const setActiveCourse = useAppStore((s) => s.setActiveCourse);
@@ -63,8 +70,8 @@ export default function AgentChat({ folder, courseName, onOpenSettings }: AgentC
   }, [chatCourseId]);
 
   return (
-    <div className="sy-agent-chat">
-      <ChatArea />
+    <div className="workbench-agent">
+      <LearningChat folder={folder} courseName={courseName} name={props.name??'学习者'} onOpenSettings={onOpenSettings} {...props}/>
       {paletteOpen ? <CommandPalette /> : null}
     </div>
   );

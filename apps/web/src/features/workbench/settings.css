@@ -1,0 +1,137 @@
+/*
+ * Settings dialog. Layout and visual language adapted from deepseek-harness
+ * (packages/client/ui-settings-general/src/client/SettingsRoot.module.css,
+ * ui-conversation settings rows, ui-theme AppearanceRow, ui-settings-models),
+ * MIT License, Copyright (c) 2026 DeepSeek. DSH tokens are mapped onto the
+ * workbench tokens (--ink/--muted/--line/--sidebar/--white/--blue) so light and
+ * dark themes follow appearance.css.
+ *
+ * The panel deliberately avoids .sy-modal/.sy-overlay: those carry unlayered
+ * input/button/label rules that override Tailwind utilities.
+ */
+.settings-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center}
+.settings-mask{position:absolute;inset:0;background:rgba(0,0,0,.24);backdrop-filter:blur(2px)}
+:root[data-theme=dark] .settings-mask{background:rgba(0,0,0,.5)}
+
+.settings-panel{
+  --st-ink:var(--ink);--st-muted:var(--muted);--st-line:var(--line);--st-fill:var(--sidebar);--st-surface:var(--white);
+  --st-hover:color-mix(in srgb,var(--ink) 6%,transparent);--st-active:color-mix(in srgb,var(--ink) 9%,transparent);
+  --st-brand:var(--blue);--st-danger:#d92d20;
+  position:relative;z-index:1;display:flex;box-sizing:border-box;width:800px;height:min(800px,calc(100dvh - 48px));max-width:calc(100vw - 48px);
+  border-radius:24px;overflow:hidden;background:var(--st-surface);color:var(--st-ink);
+  box-shadow:0 0 1px 0 rgba(0,0,0,.2),0 0 4px 0 rgba(0,0,0,.02),0 12px 32px 0 rgba(0,0,0,.08);
+  font-size:14px;line-height:22px;text-align:left
+}
+:root[data-theme=dark] .settings-panel{--st-danger:#f97066;box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.4)}
+.settings-panel *{box-sizing:border-box}
+
+/* Nav rail: 188 wide, 22px top padding, 40px cells with 16px icons. */
+.settings-panel .settings-nav{flex:none;display:flex;flex-direction:column;gap:18px;width:188px;padding:22px 12px 0}
+.settings-panel .settings-nav-title{margin:0;padding:0 12px;font-size:16px;line-height:24px;font-weight:500;color:var(--st-ink)}
+.settings-panel .settings-nav-list{display:flex;flex-direction:column;gap:4px}
+.settings-panel .settings-nav-cell{display:flex;align-items:center;gap:8px;height:40px;padding:9px 16px 9px 12px;border:0;border-radius:12px;background:transparent;color:var(--st-ink);font:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}
+.settings-panel .settings-nav-cell>svg{flex:none;color:var(--st-muted)}
+.settings-panel .settings-nav-cell>span{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.settings-panel .settings-nav-cell:hover{background:var(--st-hover)}
+.settings-panel .settings-nav-cell.active{background:var(--st-active);font-weight:500}
+.settings-panel .settings-nav-cell.active>svg{color:var(--st-brand)}
+
+/* Content column: 54px header with a 28px round close, scrolling options. */
+.settings-panel .settings-content{flex:1;min-width:0;display:flex;flex-direction:column}
+.settings-panel .settings-header{flex:none;display:flex;justify-content:flex-end;height:54px;padding:20px 14px 8px 10px}
+.settings-panel .settings-close{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:28px;background:transparent;color:var(--st-ink);cursor:pointer}
+.settings-panel .settings-close:hover{background:var(--st-hover)}
+.settings-panel .settings-options{flex:1;min-height:0;padding:0 24px 24px;overflow-y:auto;scrollbar-gutter:stable}
+
+/* Section: 16/24 title, 14/22 tertiary intro, 12px rhythm. */
+.settings-panel .settings-section{display:flex;flex-direction:column;gap:12px;max-width:720px;margin:0}
+.settings-panel .settings-section-head{display:flex;flex-direction:column;gap:4px}
+.settings-panel .settings-section-head h3{margin:0;font-size:16px;line-height:24px;font-weight:500;color:var(--st-ink)}
+.settings-panel .settings-section-head p{margin:0;font-size:14px;line-height:22px;color:var(--st-muted)}
+
+/* Rows: title/description left, control right, hairline between rows. */
+.settings-panel .settings-group{display:flex;flex-direction:column}
+.settings-panel .settings-row{display:flex;align-items:center;gap:8px;padding:16px 0;border-bottom:1px solid var(--st-line);margin:0;color:var(--st-ink);font-size:14px}
+.settings-panel .settings-group>.settings-row:last-child{border-bottom:0}
+.settings-panel .settings-row-stack{flex-direction:column;align-items:stretch}
+.settings-panel .settings-row-check{cursor:pointer}
+.settings-panel .settings-row-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;padding-right:48px}
+.settings-panel .settings-row-title{font-size:14px;line-height:22px;font-weight:400;color:var(--st-ink)}
+.settings-panel .settings-row-desc{font-size:12px;line-height:18px;color:var(--st-muted)}
+.settings-panel .settings-value{flex:none;font-size:14px;color:var(--st-muted);font-variant-numeric:tabular-nums}
+
+/* Fields: h32 r8 hairline, brand border on focus. */
+.settings-panel .settings-input{flex:none;width:220px;height:32px;margin:0;padding:0 10px;border:1px solid var(--st-line);border-radius:8px;background:var(--st-surface);color:var(--st-ink);font:inherit;font-size:14px;line-height:22px;outline:none}
+.settings-panel .settings-input:focus{border-color:var(--st-brand)}
+.settings-panel .settings-input-unit{flex:none;display:inline-flex;align-items:center;gap:8px;color:var(--st-muted);font-size:13px}
+.settings-panel .settings-input-unit .settings-input{width:96px;text-align:right}
+
+/* Switch built on a native checkbox so labels and forms keep working. */
+.restored-workbench .settings-panel input.settings-switch{appearance:none;flex:none;position:relative;width:36px;height:20px;margin:0;border-radius:10px;background:color-mix(in srgb,var(--st-ink) 18%,transparent);cursor:pointer;transition:background .15s}
+.restored-workbench .settings-panel input.settings-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
+.restored-workbench .settings-panel input.settings-switch:checked{background:var(--st-brand)}
+.restored-workbench .settings-panel input.settings-switch:checked::after{transform:translateX(16px)}
+.restored-workbench .settings-panel input.settings-switch:focus-visible{outline:2px solid var(--st-brand);outline-offset:2px}
+
+/* Appearance cubes. */
+.settings-panel .settings-cubes{display:flex;gap:8px;flex-wrap:wrap}
+.settings-panel .settings-cube{flex:1 1 180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:20px 32px;border:1px solid var(--st-line);border-radius:16px;background:transparent;color:var(--st-ink);font:inherit;font-size:14px;line-height:22px;cursor:pointer}
+.settings-panel .settings-cube:hover:not(.selected){background:var(--st-hover)}
+.settings-panel .settings-cube.selected{background:var(--st-fill);border-color:var(--st-brand);color:var(--st-brand)}
+
+/* Capsule buttons: h36 r18, dense h28 r14. */
+.settings-panel .settings-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:4px}
+.settings-panel .settings-actions.start{justify-content:flex-start}
+.settings-panel .settings-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border:1px solid var(--st-line);border-radius:18px;background:transparent;color:var(--st-ink);font:inherit;font-size:14px;line-height:22px;white-space:nowrap;cursor:pointer}
+.settings-panel .settings-btn:hover:not(:disabled){background:var(--st-hover)}
+.settings-panel .settings-btn.primary{border-color:var(--st-brand);background:var(--st-brand);color:#fff}
+.settings-panel .settings-btn.primary:hover:not(:disabled){background:var(--blue-deep,var(--st-brand));border-color:var(--blue-deep,var(--st-brand))}
+:root[data-theme=dark] .settings-panel .settings-btn.primary{color:#0f1726}
+.settings-panel .settings-btn.danger{border-color:transparent;color:var(--st-danger)}
+.settings-panel .settings-btn.danger:hover:not(:disabled){background:color-mix(in srgb,var(--st-danger) 10%,transparent)}
+.settings-panel .settings-btn.sm{height:28px;padding:0 10px;border-radius:14px;font-size:12px}
+.settings-panel .settings-btn:disabled{opacity:.4;cursor:not-allowed}
+.settings-panel .settings-btn:focus-visible,.settings-panel .settings-cube:focus-visible,.settings-panel .settings-nav-cell:focus-visible,.settings-panel .settings-close:focus-visible{outline:2px solid var(--st-brand);outline-offset:2px}
+
+/* List cards: icon / title + caption / actions, vertically centered. */
+.settings-panel .settings-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.settings-panel .settings-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--st-line);border-radius:12px}
+.settings-panel .settings-card-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:var(--st-fill);color:var(--st-muted)}
+.settings-panel .settings-card-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.settings-panel .settings-card-text strong{font-size:14px;line-height:22px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settings-panel .settings-card-text small{font-size:12px;line-height:18px;color:var(--st-muted)}
+.settings-panel .settings-card-actions{flex:none;display:inline-flex;gap:4px}
+.settings-panel .settings-empty{margin:4px 0 0;padding:20px;border:1px dashed var(--st-line);border-radius:12px;font-size:13px;line-height:20px;color:var(--st-muted);text-align:center}
+.settings-panel .settings-note{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0;font-size:12px;line-height:18px;color:var(--st-muted)}
+.settings-panel .settings-note.error{color:var(--st-danger)}
+
+/*
+ * Model configuration comes from the Console as Tailwind utilities. Bridge its
+ * tokens to the workbench palette, and revert unlayered workbench element rules
+ * (button{border:0}, h1–p{margin:0}, label colors) so the utilities apply again.
+ */
+.settings-panel .sy-settings-models{
+  --color-text-primary:var(--ink);--color-text-muted:var(--muted);--color-text-faint:var(--muted);--color-text-caption:color-mix(in srgb,var(--muted) 70%,transparent);
+  --color-bg-panel:var(--white);--color-bg-card:var(--sidebar);--color-bg-root:var(--white);
+  --color-border-line:var(--line);--color-border-faint:var(--line);--color-border-strong:var(--line);
+  --color-accent-focus:var(--blue);--color-accent-focus-hover:var(--blue-deep,var(--blue));
+  color:var(--ink)
+}
+.restored-workbench .settings-panel .sy-settings-models :is(button,button:hover,button:disabled,input,select,textarea,label,small,h1,h2,h3,h4,p,a,ul,ol,li,pre,code,details,summary){all:revert-layer}
+.restored-workbench .settings-panel .sy-settings-models>section>div:first-child h3{font-size:16px;line-height:24px;font-weight:500}
+.restored-workbench .settings-panel .sy-settings-models>section>div:first-child p{font-size:14px;line-height:22px}
+
+/* Narrow screens: full-width sheet, nav becomes a scrolling tab strip. */
+@media(max-width:760px){
+  .settings-panel{flex-direction:column;width:100vw;max-width:100vw;height:100dvh;border-radius:0}
+  .settings-panel .settings-nav{width:auto;flex-direction:row;align-items:center;gap:8px;padding:12px 56px 8px 12px;overflow-x:auto;border-bottom:1px solid var(--st-line)}
+  .settings-panel .settings-nav-title{display:none}
+  .settings-panel .settings-nav-list{flex-direction:row}
+  .settings-panel .settings-nav-cell{height:36px;padding:7px 12px;white-space:nowrap}
+  .settings-panel .settings-header{position:absolute;top:0;right:0;height:auto;padding:16px 12px 15px 8px;background:var(--st-surface);box-shadow:-16px 0 12px var(--st-surface);z-index:1}
+  .settings-panel .settings-options{padding:16px}
+  .settings-panel .settings-row:not(.settings-row-stack){flex-wrap:wrap}
+  .settings-panel .settings-row-text{padding-right:0;flex-basis:100%}
+  .settings-panel .settings-input{width:100%}
+  .settings-panel .settings-card{flex-wrap:wrap}
+}

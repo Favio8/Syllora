@@ -42,18 +42,6 @@
 .integrated-shell .sy-modal :is(input,textarea,select){background:var(--sidebar);color:var(--ink);border-color:var(--line);border-radius:6px}
 .integrated-shell .sy-modal button{color:var(--ink);border-color:var(--line)}
 .integrated-shell .sy-modal .sy-primary{color:white}
-.integrated-shell .sy-settings{width:min(860px,calc(100vw - 40px));height:620px;display:flex;flex-direction:column}
-.integrated-shell .sy-settings-cols{display:grid;grid-template-columns:170px minmax(0,1fr);min-height:0;flex:1}
-.integrated-shell .sy-settings-nav{background:var(--sidebar)}
-.integrated-shell .sy-settings-body{overflow:auto;min-height:0;padding:24px}
-.integrated-preferences{display:grid;gap:16px}
-.integrated-preferences label{display:grid;gap:6px}
-.integrated-preferences input{width:100%;padding:10px}
-.integrated-preferences p{font-size:12px;color:var(--muted)}
-.appearance-preview-grid{display:flex;gap:12px}
-.appearance-preview{width:160px;height:92px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#242630!important}
-.appearance-preview.dark{background:#171f2e;color:#dce5f3!important}
-.appearance-preview.selected{outline:2px solid var(--blue);outline-offset:3px}
 .integrated-shell .reader-layout{flex:1;min-height:0;height:auto;overflow:hidden}
 .integrated-shell .reading-search-results article{cursor:pointer}
 .integrated-shell .reading-source{padding:8px 0;line-height:2.15;overflow-wrap:anywhere}

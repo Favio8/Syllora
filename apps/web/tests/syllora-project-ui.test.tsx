@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LectureReader, MaterialInitialization, MaterialPreview, ProjectDialog } from '../src/components/syllora-project-ui';
 import type { CourseView } from '../src/types/syllora';
 vi.mock('../src/lib/api',()=>({api:{pickWorkspaceDirectory:vi.fn(),browseDirectory:vi.fn()}}));
+beforeAll(()=>{HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')}});
 afterEach(()=>vi.unstubAllGlobals());
 const course={id:'course',materials:[],folder:'D:/course',revision:'revision',archived:false} as unknown as CourseView;
 describe('course project UI',()=>{
@@ -19,8 +20,8 @@ describe('course project UI',()=>{
     expect(result.container.querySelector('img')).toBeNull();expect(result.container.querySelector('script')).toBeNull();expect(screen.getByText('原文依据')).toBeVisible();fireEvent.click(screen.getAllByRole('button',{name:'原文 1'})[0]!);expect(source).toHaveBeenCalledWith('s');
   });
   it('opens a chosen existing directory and reports an actionable folder error',async()=>{
-    const onOpen=vi.fn().mockRejectedValue(new Error('文件夹已不存在'));render(<ProjectDialog onClose={()=>{}} onOpen={onOpen}/>);fireEvent.change(screen.getByLabelText('课程文件夹路径'),{target:{value:'D:/course'}});expect(screen.getByRole('button',{name:'打开此课程'})).toBeDisabled();fireEvent.change(screen.getByLabelText('课程图标'),{target:{value:'math'}});fireEvent.click(screen.getByRole('button',{name:'打开此课程'}));
-    await waitFor(()=>expect(onOpen).toHaveBeenCalledWith('D:/course',undefined,'math'));expect(await screen.findByRole('alert')).toHaveTextContent('文件夹已不存在');
+    const onOpen=vi.fn().mockRejectedValue(new Error('文件夹已不存在'));render(<ProjectDialog onClose={()=>{}} onOpen={onOpen}/>);fireEvent.change(screen.getByLabelText('课程文件夹路径'),{target:{value:'D:/course'}});fireEvent.click(screen.getByRole('radio',{name:'数学'}));fireEvent.click(screen.getByRole('radio',{name:'紫色'}));expect(screen.getByRole('radio',{name:'数学'})).toBeChecked();fireEvent.click(screen.getByRole('button',{name:'打开此课程'}));
+    await waitFor(()=>expect(onOpen).toHaveBeenCalledWith('D:/course',undefined,'math','purple'));expect(await screen.findByRole('alert')).toHaveTextContent('文件夹已不存在');
   });
   it('loads an original with bearer authentication and revokes the local preview when closed',async()=>{
     Object.assign(window,{__SYLLORA__:{token:'fixture-token'}});const createObjectURL=vi.fn().mockReturnValue('blob:fixture'),revokeObjectURL=vi.fn();

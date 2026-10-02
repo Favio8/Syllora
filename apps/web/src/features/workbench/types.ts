@@ -43,7 +43,7 @@ export interface Course {
   symbol: string;
   icon?: CourseIconId;
   archived?: boolean;
-  color: 'blue' | 'green' | 'orange';
+  color: 'blue' | 'green' | 'orange' | 'purple' | 'rose' | 'slate';
   chapter: string;
   tasks: Task[];
   points: KnowledgePoint[];
