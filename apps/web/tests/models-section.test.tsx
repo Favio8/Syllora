@@ -368,6 +368,22 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(apiMocks.saveProvider.mock.calls[0][0].maxConcurrency).toBe(8);
   });
 
+  it("并发输入超出上限时归一，不把越界值发给宿主", async () => {
+    // HTML 的 max 只约束表单校验，宿主上限是 16（syllora-initialize / course.ts）。
+    // 锁住"界面提交的值落在宿主上限内"，避免界面显示一个值、运行时是另一个。
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    openManage();
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+    await openAdvancedFold();
+
+    fireEvent.change(screen.getByLabelText(/最大并发（maxConcurrency）/), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(apiMocks.saveProvider).toHaveBeenCalledTimes(1));
+    const sent = apiMocks.saveProvider.mock.calls[0][0].maxConcurrency;
+    expect(sent).toBeGreaterThanOrEqual(1);
+    expect(sent).toBeLessThanOrEqual(16);
+  });
+
   it("X3 恢复内置列表需二次确认：第一次只武装、确认后才覆盖手改", async () => {
     render(<ModelsSection initial={makePayload([])} />);
     await screen.findByText("选择供应商");

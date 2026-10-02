@@ -144,8 +144,7 @@ function ProviderEditorCard({
   const [temperature, setTemperature] = useState(draft?.temperature ?? provider?.temperature ?? 0.3);
   // 兜底必须与宿主默认值一致（config.ts / settings.ts 的 8）：这里是新建卡片的初值，
   // 保存时无条件发送，若用 4 会把运行时并发静默降回 4。
-  const [maxConcurrency, setMaxConcurrency] = useState(draft?.maxConcurrency ?? provider?.maxConcurrency ?? 8);
-  // 协议决定请求路径与鉴权头（openai: /chat/completions + Bearer；
+  const [maxConcurrency, setMaxConcurrency] = useState(draft?.maxConcurrency ?? provider?.maxConcurrency ?? 8);  // 协议决定请求路径与鉴权头（openai: /chat/completions + Bearer；
   // anthropic: /v1/messages + x-api-key）。目录条目自带默认，编辑态以已存值为准。
   const [protocol, setProtocol] = useState<ProviderProtocol>(
     draft?.protocol ?? provider?.protocol ?? entry?.protocol ?? "openai",
@@ -235,7 +234,7 @@ function ProviderEditorCard({
           model: model.trim(),
           baseUrl: baseUrl.trim() || null,
           temperature,
-          maxConcurrency,
+          maxConcurrency: normalizeMaxConcurrency(maxConcurrency),
           protocol,
           models: parsedRows.map((r) => ({
             id: r.id,
@@ -469,7 +468,7 @@ function ProviderEditorCard({
               <input
                 type="number"
                 min={1}
-                max={16}
+                max={MAX_CONCURRENCY_LIMIT}
                 step={1}
                 value={Number.isFinite(maxConcurrency) ? maxConcurrency : 8}
                 onChange={(e) => setMaxConcurrency(Number(e.target.value))}
@@ -732,6 +731,14 @@ function ProviderEditorCard({
     </form>
   );
 }
+
+/**
+ * 宿主并发上限（syllora-initialize / course.ts 都夹到 16）。HTML 的 `max` 只约束表单校验，
+ * 手输仍能越过，所以提交前必须自己归一：否则界面显示 40、运行时其实是 16。
+ */
+const MAX_CONCURRENCY_LIMIT = 16;
+const normalizeMaxConcurrency = (value: number): number =>
+  Number.isFinite(value) ? Math.min(Math.max(1, Math.trunc(value)), MAX_CONCURRENCY_LIMIT) : 8;
 
 export default function ModelsSection({ initial }: ModelsSectionProps) {
   const flashStatusBanner = useAppStore((s) => s.flashStatusBanner);

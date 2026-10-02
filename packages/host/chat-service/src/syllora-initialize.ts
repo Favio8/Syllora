@@ -94,8 +94,8 @@ export async function initializeFolder(options: {
     // 缓存命中时 parsed.material 还是首次解析时的 stat；文件内容没变但被 touch/重存过，
     // 旧 mtime 会让这个文件在之后每次扫描都整读重算——复用优化对它静默失效。用本次 candidate 刷新。
     material.size=candidate.size; material.mtimeMs=candidate.mtimeMs
-    // 解析缓存命中时该文件本轮没被读过，前面就没有字节校验：这里补一次。放在模型批次之前，
-    // 否则文件早就在扫描后变过、却要等整轮模型调用跑完才报"整理期间发生变化"。
+    // 解析缓存命中时该文件本轮没被读过，前面就没有字节校验：这里补一次（未命中时第 69 行已校验过）。
+    // 校验放在模型批次之前，否则文件早在扫描后就变过、却要等整轮模型调用跑完才报错。
     if(!parsedNow && sha(await readFile(await within(root,path)))!==fingerprint) throw new Error(`${path} 在检查后发生变化，请重新扫描`)
     material.revisionNumber=old?.fingerprint===fingerprint?(old.revisionNumber??(typeof old.version==='number'?old.version:1)):(old?.revisionNumber??(typeof old?.version==='number'?old.version:0))+1
     if (material.status==='partial') { failures.push(`${path}：部分页面没有正文（${material.pageIssues?.map(p=>`第 ${p.num} 页 ${p.reason==='blank-page'?'无文本':'未提取'}`).join('、')}）`); material.accepted=options.acceptPartial }
@@ -193,6 +193,8 @@ export async function initializeFolder(options: {
   }
   await options.progress({stage:'validating',done:groups.length,total:groups.length,failures,message:'检查全文覆盖、引用及资料版本'})
   await options.check()
+  // 这一遍不是重复：前面的字节校验都发生在模型批次之前，只有这里能发现"整理过程中资料被改动"。
+  // 缺了它，一次跑很久的整理会把与磁盘内容不符的来源发布成 revision。
   for(const [path,fingerprint] of Object.entries(fingerprints)) if(sha(await readFile(await within(root,path)))!==fingerprint) throw new Error(`${path} 在整理期间发生变化，请重新检查资料`)
   const revision=randomUUID()
   await atomicJson(join(stage,'sources.json'),sources)
