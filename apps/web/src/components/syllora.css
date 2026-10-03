@@ -252,3 +252,10 @@
 :root[data-theme=dark] .panel-tabs.segment button.active{background:var(--dark-raised);color:var(--blue)}
 :root[data-theme=dark] .study-panel .panel-body .button.primary,:root[data-theme=dark] .study-panel .panel-body .sy-primary{background:var(--blue);border-color:var(--blue);color:#15233c}
 :root[data-theme=dark] .study-panel .panel-body .sy-source-link{background:var(--dark-raised)}
+
+/* Slide deck view: read-only canvas with per-chapter navigation. */
+.sy-slides-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sy-slides-toolbar label{display:flex;align-items:center;gap:6px}
+.sy-slide-canvas{width:100%;max-width:900px;border:1px solid var(--sy-line);border-radius:8px;overflow:hidden;background:#fff}
+.sy-view-switch{display:flex;gap:6px;margin-bottom:12px}
+.sy-view-switch button.is-selected{background:var(--sy-blue);color:#fff;border-color:var(--sy-blue)}

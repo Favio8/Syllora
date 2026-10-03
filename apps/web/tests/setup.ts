@@ -1,6 +1,19 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
+
+// 幻灯片渲染器（@openmaic/renderer）依赖 ResizeObserver 量测画布；jsdom 不实现它。
+// 这里给所有 web 用例一个最小桩，避免只有挂载幻灯片视图的用例才失败。
+if (!("ResizeObserver" in globalThis)) {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+}
 
 afterEach(() => cleanup());
 
