@@ -43,6 +43,7 @@ import type {
   NoteMeta,
 } from "@/src/types/api";
 import type { HarnessTask, Syllabus } from "@/src/types";
+import { reviewFetch } from './review-transport';
 
 export class ApiError extends Error {
   code: string;
@@ -87,7 +88,7 @@ export function noteAssetUrl(courseId: string, name: string): string {
  * 业务错误走信封错误分支（HTTP 200），传输层错误（网络/404/5xx）抛 ApiError。
  */
 async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api/${method}`, {
+  const response = await reviewFetch(`/api/${method}`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -115,7 +116,7 @@ async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): 
  * 失败时返回 `{ error: { code, message } }`。课程文件夹相关的动作只走这条专线。
  */
 async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api/syllora/${action}`, {
+  const response = await reviewFetch(`/api/syllora/${action}`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -142,7 +143,7 @@ async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: Abo
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await reviewFetch(path, {
     ...init,
     // CR-16：/api/session 下发的 HttpOnly 会话 Cookie 必须让浏览器带上。
     credentials: "same-origin",
@@ -179,7 +180,7 @@ async function uploadFiles<T>(path: string, files: File[], signal?: AbortSignal)
     // 目录选择器会提供相对路径；它能让同名资料在归档后仍可辨识来源。
     form.append("files", file, file.webkitRelativePath || file.name);
   }
-  const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: { ...authHeaders() }, body: form, signal });
+  const response = await reviewFetch(path, { method: "POST", credentials: "same-origin", headers: { ...authHeaders() }, body: form, signal });
   const text = await response.text();
   // UI-25：同 request——非 JSON 响应转可读的 ApiError。
   let body: unknown = {};
@@ -208,7 +209,7 @@ export async function* streamSse<T extends { event: string }>(
   headers?: Record<string, string>,
   signal?: AbortSignal,
 ): AsyncGenerator<T> {
-  const response = await fetch(path, {
+  const response = await reviewFetch(path, {
     method: "POST",
     credentials: "same-origin",
     headers: {
@@ -302,7 +303,7 @@ export const api = {
   /** FL-22：宿主心跳（GET /api/health）。前端探测失败时展示全屏
    * "后端未启动"横幅，替代旧版三栏空壳零提示的死寂。 */
   health: async (signal?: AbortSignal): Promise<{ ok: boolean }> => {
-    const response = await fetch("/api/health", { signal });
+    const response = await reviewFetch("/api/health", { signal });
     if (!response.ok) throw new ApiError("HOST_UNREACHABLE", `HTTP ${response.status}`, response.status);
     return (await response.json()) as { ok: boolean };
   },

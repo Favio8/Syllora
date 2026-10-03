@@ -6,6 +6,7 @@ import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimite
 import IconPicker from '../features/workbench/components/IconPicker';
 import Dropdown from '../features/workbench/components/Dropdown';
 import { api } from '../lib/api';
+import { reviewFetch } from '../lib/review-transport';
 import type { CourseView } from '../types/syllora';
 import type { FileCandidate, Lecture } from '../../../../packages/host/chat-service/src/syllora-project-types';
 
@@ -21,7 +22,7 @@ export function MaterialPreview({url,name,version}:{url:string;name:string;versi
     const current=new AbortController();controller.current=current;setBusy(true);setError('');
     try {
       const token=(window as unknown as {__SYLLORA__?:{token?:string}}).__SYLLORA__?.token;
-      const response=await fetch(url,{headers:token?{Authorization:`Bearer ${token}`}:{},signal:current.signal});
+      const response=await reviewFetch(url,{headers:token?{Authorization:`Bearer ${token}`}:{},signal:current.signal});
       if(!response.ok){const body=await response.json();throw new Error(body.error?.message??'原文件读取失败')}
       const data=await response.blob();if(current.signal.aborted)return;
       if(held.current)URL.revokeObjectURL(held.current);held.current=URL.createObjectURL(data);setBlob(held.current);

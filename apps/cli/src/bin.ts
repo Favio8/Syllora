@@ -69,6 +69,7 @@ import { hostRpc, authHeaders, defaultClientDeps } from './lib/client.ts'
 import { UsageError } from './lib/args.ts'
 import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
 import { installHostFileLogging } from './lib/host-logger.ts'
+import { prepareReviewMode } from './lib/review-mode.ts'
 import { createStaticHost, sessionBootstrapPage, sessionHandshakeBootstrap } from './lib/static-host.ts'
 import type { StaticHost } from './lib/static-host.ts'
 import { quizCommand } from './commands/quiz.ts'
@@ -565,6 +566,8 @@ export interface ServeOptions {
 }
 
 async function serve(port: number, options: ServeOptions = {}): Promise<void> {
+  const review = await prepareReviewMode()
+  if (review && options.insecureNoToken) throw new Error('评审模式不能关闭访问验证')
   // FL-37：文件日志先于任何业务逻辑安装——启动期错误也要留痕。仅 serve 安装
   //（acp/quiz 等前台命令的 stdout 是协议/交互通道，不能被日志污染）。
   const hostLogger = await installHostFileLogging(hostHome())
@@ -597,12 +600,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
 
   const registry = ctx.workspaceRegistry
   if (process.env.SYLLORA_DATA_DIR) {
-    const workspace = resolve(process.env.SYLLORA_DATA_DIR)
+    const workspace = review?.coursesRoot ?? resolve(process.env.SYLLORA_DATA_DIR)
     await mkdir(workspace, { recursive: true })
     await registry.create(workspace, 'Syllora')
     await registry.setLastOpenedPath(workspace)
   }
   await healStartupRegistry(registry)
+  if (review) for (const item of registry.list()) await review.workspace(item.path)
   if (registry.lastOpenedPath !== '') await migrateLegacyLayout(registry.lastOpenedPath).catch(() => undefined)
   const agentRegistry = new AgentRegistry()
   const agentService = new LearningAgentService(agentRegistry)
@@ -623,6 +627,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
   const syllora = new SylloraProjects(settingsRoot, { managedCoursesRoot: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot,'.syllora'), pdf: extractPdfPages, registerProject: async path => {
+    if (review) await review.workspace(path)
     const workspace = await registry.create(path)
     await registry.setLastOpenedPath(workspace.workspace.path)
   } })
@@ -638,11 +643,12 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // B1：先按课程身份（状态文件里的 UUID）在已注册工作区里定位，再回落基名
       // ——同名文件夹的两门课不能共用同一个 chat 课程。
       for (const item of registry.list()) {
+        if (review) await review.workspace(item.path)
         const dir = await resolveCourseDir(item.path, target).catch(() => null)
         if (dir !== null) return dir
       }
     }
-    return registry.lastOpenedPath
+    return review ? review.workspace(registry.lastOpenedPath) : registry.lastOpenedPath
   }
 
   function wrapCourseService(): HostServices['courseService'] {
@@ -650,7 +656,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // courseId 解析课程根，理由与 sessionService/agentService 相同：工作台切课不会
     // 重新 openCourse，lastOpenedPath 可能仍停在上一门课，而 courseDirOf 要求
     // courseId === basename(workspaceRoot)，用错根会直接抛 CourseNotFoundError。
-    const activeRoot = (): string => registry.lastOpenedPath
+    const activeRoot = async (): Promise<string> => review ? review.workspace(registry.lastOpenedPath) : registry.lastOpenedPath
     const courseService = createCourseService(configFacts)
     return {
       syllabus: async courseId => courseService.syllabus(await workspaceForCourse(courseId), courseId),
@@ -659,7 +665,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       mastery: async courseId => courseService.mastery(await workspaceForCourse(courseId), courseId),
       quiz: async (courseId, mode, count, conceptId, dueOnly) => courseService.quiz(await workspaceForCourse(courseId), courseId, mode, count, conceptId, dueOnly),
       files: async courseId => courseService.files(await workspaceForCourse(courseId), courseId),
-      workspaceFiles: async () => courseService.workspaceFiles(activeRoot()),
+      workspaceFiles: async () => courseService.workspaceFiles(await activeRoot()),
       sync: async (courseId, sessionId) => courseService.sync(await workspaceForCourse(courseId), courseId, sessionId),
       ensureCourse: async courseId => courseService.ensureCourse(await workspaceForCourse(courseId), courseId),
       ingestUrl: async (courseId, url, title) => courseService.ingestUrl(await workspaceForCourse(courseId), courseId, url, title),
@@ -675,27 +681,33 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       })(),
       job: jobId => courseService.job(jobId) as Record<string, unknown> | undefined,
       tools: providerStatus => courseService.tools(providerStatus),
-      heatmap: async weeks => courseService.heatmap(activeRoot(), weeks),
-      heatmapDay: async date => courseService.heatmapDay(activeRoot(), date),
-      createCourse: async (courseName, importPaths) => courseService.createCourse(activeRoot(), courseName, importPaths),
+      heatmap: async weeks => courseService.heatmap(await activeRoot(), weeks),
+      heatmapDay: async date => courseService.heatmapDay(await activeRoot(), date),
+      createCourse: async (courseName, importPaths) => {
+        const root = await activeRoot()
+        if (review) for (const path of importPaths) await review.workspace(resolve(root, path))
+        return courseService.createCourse(root, courseName, importPaths)
+      },
     }
   }
 
   const services: HostServices = {
     registry: {
-      create: (path, title) => registry.create(path, title),
+      create: async (path, title) => registry.create(review ? await review.workspace(path) : path, title),
       list: () => registry.list(),
       get: id => registry.get(id),
       rename: (id, title) => registry.rename(id, title),
       delete: id => registry.delete(id),
       insertBefore: (id, beforeId) => registry.insertBefore(id, beforeId),
       setLastOpenedPath: async path => {
+        if (review && path !== '') await review.workspace(path)
         await registry.setLastOpenedPath(path)
         await agentService.recover(path)
       },
       getLastOpenedPath: () => registry.lastOpenedPath,
     },
     courseSummary: async root => {
+      if (review) await review.workspace(root)
       // v2 布局收拢：旧根目录产物一次性搬进 .syllora/（marker 守卫，幂等）。
       await migrateLegacyLayout(root).catch(() => undefined)
       return listCourseSummaries(root)
@@ -706,18 +718,19 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // FolderBrowserDialog spawned from this background host never surfaced;
     // see @syllora/directory-picker-native). Non-Windows resolves null and
     // the client falls back to the browse backend.
-    pickDirectory: () => pickNativeDirectory(),
-    browseDirectory: path => browseLocalDirectory(path, registry.lastOpenedPath),
+    pickDirectory: () => review ? Promise.resolve(null) : pickNativeDirectory(),
+    browseDirectory: path => review ? review.browse(path) : browseLocalDirectory(path, registry.lastOpenedPath),
     sessionService: {
       list: async courseId => listSessions(await workspaceForCourse(courseId), courseId),
       search: async (query, limit) => {
         const normalized = query.trim().toLowerCase()
         const matches: Array<SessionSearchResultView & { rank: number }> = []
         for (const workspace of registry.list()) {
-          const { courses, missing } = await listCourseSummaries(workspace.path).catch(() => ({ courses: [], missing: true }))
+          const root = review ? await review.workspace(workspace.path) : workspace.path
+          const { courses, missing } = await listCourseSummaries(root).catch(() => ({ courses: [], missing: true }))
           if (missing) continue
           for (const course of courses) {
-            const found = await searchSessions(workspace.path, course.id, query).catch(() => [])
+            const found = await searchSessions(root, course.id, query).catch(() => [])
             const included = new Set(found.map(session => session.sessionId))
             const contextMatch = workspace.title.toLowerCase().includes(normalized)
               || course.title.toLowerCase().includes(normalized)
@@ -738,7 +751,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
               })
             }
             if (!contextMatch) continue
-            for (const session of await listSessions(workspace.path, course.id).catch(() => [])) {
+            for (const session of await listSessions(root, course.id).catch(() => [])) {
               if (included.has(session.sessionId)) continue
               matches.push({
                 ...session,
@@ -995,6 +1008,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
 
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json; charset=utf-8')
+    if (review) review.cors(request, response)
     const url = new URL(request.url ?? '/', 'http://localhost')
     // 健康探针最先放行：标准 LB/容器探针用 GET/HEAD，不能被 POST 守卫拦成 405。
     if (url.pathname === '/api/health') {
@@ -1005,7 +1019,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // 本地源门禁：浏览器跨站请求必带 Origin 且页面脚本无法伪造，无 Origin 的
     // curl/CLI 不受限。dev 前端经 Next 代理透传 localhost Origin。去掉通配
     // CORS 后，恶意网页既无法预检通过也无法读取响应（drive-by 关闭，SEC-1）。
-    if (!isLoopbackOrigin(request.headers.origin)) {
+    if (!(review ? review.acceptsOrigin(request.headers.origin) : isLoopbackOrigin(request.headers.origin))) {
       response.writeHead(403)
       response.end(JSON.stringify({ error: { code: 'cross-origin-forbidden', message: 'cross-origin requests are not allowed', details: null } }))
       return
@@ -1015,6 +1029,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end()
       return
     }
+    if (url.pathname === '/api/session/logout' && request.method === 'POST') {
+      response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${review ? '; Secure' : ''}`, 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ ok: true }))
+      return
+    }
     // CR-16：凭据换票端点。本机进程（浏览器/桌面壳/CLI）把发现文件里的 token
     // 放在请求头里，换一枚 HttpOnly 会话 Cookie；此后 /api/* 可由 Cookie 授权。
     // 换票本身仍要求持有 token，且只回环可达（Origin 门禁已在前）。
@@ -1022,6 +1041,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (request.method !== 'POST') {
         response.writeHead(405)
         response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: 'method not allowed', details: null } }))
+        return
+      }
+      if (review?.publicAccess) {
+        response.writeHead(200, { 'Cache-Control': 'private, no-store' })
+        response.end(JSON.stringify({ ok: true, session: 'public' }))
         return
       }
       if (token === null) {
@@ -1034,7 +1058,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         response.end(JSON.stringify({ error: { code: 'unauthorized', message: '会话换票需要有效的访问令牌', details: null } }))
         return
       }
-      response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=${sessionSecret}; HttpOnly; SameSite=Strict; Path=/` })
+      response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=${sessionSecret}; HttpOnly; SameSite=Strict; Path=/${review ? '; Secure' : ''}`, 'Cache-Control': 'private, no-store' })
       response.end(JSON.stringify({ ok: true, session: 'granted' }))
       return
     }
@@ -1043,7 +1067,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // 下发的 HttpOnly 会话 Cookie（旧版把 token 内嵌进静态 HTML，任意本机进程
     // curl / 即可提取 token 并调用全部 /api/*；现在 HTML 不含任何凭据）。
     // 静态资源（UI 资产）不设门禁，公开可读。
-    if (url.pathname.startsWith('/api/') && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
+    if (url.pathname.startsWith('/api/') && !review?.publicAccess && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
       response.writeHead(401)
       response.end(JSON.stringify({ error: { code: 'unauthorized', message: `缺少或错误的访问令牌（token 记录于 ${join(hostHome(), 'host.json')}，请求头 Authorization: Bearer <token>）`, details: null } }))
       return
@@ -1093,7 +1117,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         void (async()=>{
           try {
             const {contentType,data}=await syllora.readNoteAsset(url.searchParams.get('courseId')??'',url.searchParams.get('name')??'')
-            response.writeHead(200,{'Content-Type':contentType,'Content-Length':String(data.length),'Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            response.writeHead(200,{'Content-Type':contentType,'Content-Length':String(data.length),'Cache-Control':review?'private, no-store':'private, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
             response.end(request.method==='HEAD'?undefined:data)
           } catch(error) {
             if(response.headersSent||response.writableEnded||response.destroyed)return
@@ -1188,6 +1212,14 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         }
         if (method.startsWith('syllora/')) {
           try {
+            if (review && (method === 'syllora/openCourse' || method === 'syllora/migrateCourse')) {
+              const path = (payload as { path?: unknown } | undefined)?.path
+              if (method === 'syllora/openCourse' && typeof path !== 'string') throw new SylloraError('INVALID_REQUEST', '请选择评审课程目录')
+              if (path !== undefined) {
+                if (typeof path !== 'string') throw new SylloraError('INVALID_REQUEST', '请选择评审课程目录')
+                await review.workspace(path)
+              }
+            }
             const result = await syllora.handle(method.slice('syllora/'.length), payload)
             response.writeHead(200)
             response.end(JSON.stringify({ result }))

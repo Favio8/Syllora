@@ -1,5 +1,6 @@
 import Syllora from "@/src/components/Syllora";
+import ReviewAccess from "@/src/components/ReviewAccess";
 
 export default function Home() {
-  return <Syllora />;
+  return <ReviewAccess><Syllora /></ReviewAccess>;
 }

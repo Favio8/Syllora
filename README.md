@@ -8,6 +8,8 @@ Syllora 是基于 StudyClaw 直接复用开发的本机 AI 学习工作台。首
 
 ## 启动
 
+评审公网部署采用 Vercel 静态前端、本机独立 Host 与 ngrok，运行和恢复步骤见 [评审部署说明](docs/REVIEW_DEPLOYMENT.md)。普通本机启动与评审实例的数据相互独立。
+
 使用 Node.js 22.19+（或 24+）与 pnpm 11。
 
 ```powershell

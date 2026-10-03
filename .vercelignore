@@ -1,0 +1,13 @@
+.syllora-review
+.syllora-home
+.syllora-data
+.syllora
+.studyclaw
+.env*
+node_modules
+apps/*/node_modules
+apps/web/.next
+apps/web/out
+apps/desktop
+tmp
+**/*.log
