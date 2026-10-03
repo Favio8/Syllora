@@ -766,7 +766,17 @@ export function handlerGetProgressReport(ctx: ToolContext, args: Record<string, 
 async function assertSafeWriteTarget(boundary: string, target: string, label: string): Promise<string> {
   const realBoundary = await realpath(boundary).catch(() => boundary)
   const info = await lstat(target).catch(() => null)
-  if (info?.isSymbolicLink()) throw new ToolRejected(`${label}不允许是符号链接（防越界写入）`)
+  if (info?.isSymbolicLink()) {
+    // 指向边界内的符号链接：解析到真实目标后照常写（加固不误伤——Linux 上
+    // 这是常见工作区形态，一刀切拒绝会把正常写入也挡掉）。悬空链接、解析后
+    // 越界、目标非普通文件一律拒绝。
+    const resolved = await realpath(target).catch(() => null)
+    if (resolved === null) throw new ToolRejected(`${label}是悬空符号链接`)
+    if (resolved !== realBoundary && !isWithin(realBoundary, resolved)) throw new ToolRejected(`${label}不能通过符号链接越界`)
+    const resolvedInfo = await stat(resolved).catch(() => null)
+    if (resolvedInfo === null || !resolvedInfo.isFile()) throw new ToolRejected(`${label}被占用（非文件）`)
+    return resolved
+  }
   if (info !== null && !info.isFile()) throw new ToolRejected(`${label}被占用（非文件）`)
   const parent = await realpath(dirname(target)).catch(() => null)
   if (parent === null) throw new ToolRejected(`${label}的父目录不存在`)
