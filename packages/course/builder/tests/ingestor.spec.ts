@@ -209,4 +209,34 @@ describe('MarkdownIngestor', () => {
     const idC = ingestor.parseText(doc, 'c.md', 'c1').syllabus.chapters[0]!.concepts[0]!.id
     expect(idC).toBe(`${idA}_3`)
   })
+
+  it('标题里的强调标记与 HTML 标签只从展示名去掉，id 仍按原始标题推导', () => {
+    // 导出资料的实际形态：`## **1、电路(circuit)**`、`## <strong>电流</strong>`。
+    // 旧实现把原始标题直接当展示名，图谱节点与大纲会显示成 `**1、电路(circuit)**`。
+    // 同时锁死 id 口径：清洗只落到展示名，否则存量课程重建时 id 变化会被
+    // mergeSyllabus 当成新章节重复并入。
+    const doc = [
+      '# **电路**',
+      '',
+      '本章整理电路的基本规律。',
+      '',
+      '## <strong>1、电流</strong>',
+      '',
+      '导体中的电荷定向移动形成电流。',
+      '',
+      '## *2、电压*',
+      '',
+      '两点之间的电势差称为电压。',
+      '',
+    ].join('\n')
+    const artifact = new MarkdownIngestor().parseText(doc, 'lecture.md', 'c1')
+    const chapter = artifact.syllabus.chapters[0]!
+    expect(chapter.title).toBe('电路')
+    // 章节前言段也会成为一个概念（标题取自章节标题），随后才是各小节。
+    expect(chapter.concepts.map(concept => concept.name)).toEqual(['电路', '1、电流', '2、电压'])
+    const current = chapter.concepts.find(concept => concept.name === '1、电流')!
+    const seen = new Set<string>()
+    // id 只跟原始标题有关：与直接按带标签的原文调用 slug 一致。
+    expect(current.id).toBe(slug('<strong>1、电流</strong>', 'c_', seen))
+  })
 })
