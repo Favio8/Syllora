@@ -6,8 +6,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStaticHost, sessionBootstrapPage } from '../src/lib/static-host.ts'
+
+// stat 需要可注入：下面有一条用例要确定性地模拟「读到内容之后文件被并发删除」。
+// `{ spy: true }` 让 vitest 用 spy 替换该内置模块的导出，源码模块导入到的是同一个 spy。
+vi.mock('node:fs/promises', { spy: true })
 
 const roots: string[] = []
 afterEach(async () => {
@@ -52,6 +56,36 @@ describe('createStaticHost', () => {
     const root = await makeDist({ 'index.html': 'x' })
     const host = (await createStaticHost({ root }))!
     expect(await host.respond('/missing.png')).toBeNull()
+  })
+
+  it('读到 HTML 之后文件被并发删除（缓存用的 stat 失败）不得让 respond 抛异常', async () => {
+    // 回归：index.html 的 tap 注入缓存键要读一次 mtime，旧实现直接 await stat，
+    // 文件在 readFile 与 stat 之间被删/被重建（Next export 覆盖 dist）时该
+    // rejection 会逃逸成未处理的 rejection——宿主进程被 Node 直接终止。
+    const root = await makeDist({ 'index.html': '<html><head></head><body>ok</body></html>' })
+    const host = (await createStaticHost({ root }))!
+    const fs = await import('node:fs/promises')
+    const mocked = vi.mocked(fs.stat)
+    const real = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).stat
+    // 按目标路径注入，而不是按调用次序：对 index.html 的第一次 stat 是「文件是否存在」，
+    // 第二次才是 tap 注入缓存键要的 mtime——只让第二次失败。
+    let indexStats = 0
+    mocked.mockImplementation((async (...args: Parameters<typeof fs.stat>) => {
+      const target = String(args[0]).replaceAll('\\', '/').toLowerCase()
+      if (target.endsWith('/index.html')) {
+        indexStats += 1
+        if (indexStats >= 2) throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
+      }
+      return real(...args)
+    }) as typeof fs.stat)
+    try {
+      const hit = await host.respond('/index.html')
+      expect(indexStats).toBeGreaterThanOrEqual(2)
+      expect(hit?.status).toBe(200)
+      expect(String(hit?.body)).toContain('<body>ok</body>')
+    } finally {
+      mocked.mockReset()
+    }
   })
 
   it('目录穿越 → 403，不解码后再穿越', async () => {

@@ -59,6 +59,10 @@ export default defineConfig({
           environment: 'jsdom',
           globals: true,
           setupFiles: ['apps/web/tests/setup.ts'],
+          // 与 node 集群同口径：Node 22.4+ 的进程级 Web Storage（Node 24/25 默认开启）
+          // 会盖掉 jsdom 的 localStorage/sessionStorage，`localStorage.clear` 之类直接
+          // 变成 undefined——整个 jsdom 集群假红。守卫必须两个集群都挂。
+          execArgv: vitestExecArgv,
           // 与 node 集群/CI 同口径：jsdom 用例在慢机上不因默认 5s 假红。
           testTimeout: 60_000,
           hookTimeout: 60_000,

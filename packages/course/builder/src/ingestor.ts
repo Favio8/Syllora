@@ -20,6 +20,22 @@ const ASCII_WORD_RE = /[A-Za-z0-9]+/g
 const PRACTICE_KEYWORDS = ['练习', '实践', '实操', '案例', '习题', '实战']
 const SCENARIO_KEYWORDS = ['场景', '情景', '故障', '排错', 'debug', '边界', '辨析']
 
+/**
+ * 展示用标题清洗：PDF/DocMind 导出的 Markdown 常把强调标记与 HTML 标签留在
+ * 标题里（`## **1、电路(circuit)**`、`## <strong>电流</strong>`），图谱节点与
+ * 大纲直接照搬就会显示成 `**1、电路(circuit)**`。
+ * 只清洗展示名：id 仍由原始标题推导（见 parseText），否则存量课程重建时
+ * chapter/concept id 变化，mergeSyllabus 会当作新章节重复并入。
+ */
+export function cleanHeadingTitle(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, '')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(\*|_)([^*_`]+?)\1/g, '$2')
+    .replace(/`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 export class IngestError extends Error {
   constructor(message: string) {
     super(message)
@@ -374,28 +390,32 @@ export class MarkdownIngestor {
     const lines = processed.split(/\r?\n/)
     const [meta, bodyStart] = extractFrontmatter(lines)
     const headings = scanHeadings(lines, bodyStart)
-    const title = typeof meta['title'] === 'string' && meta['title'] !== ''
+    const rawTitle = typeof meta['title'] === 'string' && meta['title'] !== ''
       ? meta['title']
       : firstH1(headings) ?? sourceName.replace(/\.[^.]+$/, '')
+    const title = cleanHeadingTitle(rawTitle)
 
     const chapters: Syllabus['chapters'] = []
     const chunks: ConceptChunk[] = []
     let chunkSeq = 0
 
-    for (const draft of this.chapterDrafts(title, lines, headings, bodyStart)) {
+    // 注意：slug 一律吃 draft/section 的**原始**标题（rawTitle 传下去），
+    // 只有落进 syllabus 的展示名做清洗——id 稳定性优先于显示美观。
+    for (const draft of this.chapterDrafts(rawTitle, lines, headings, bodyStart)) {
       const chapterId = slug(draft.title, 'chap_', this.seenIds)
       const concepts: Syllabus['chapters'][number]['concepts'] = []
       const sections = this.absorbCodeLabelSections(this.conceptSections(draft, lines, headings), lines, draft.title, labelAbsorbEnabled)
       for (const section of sections) {
         const conceptId = slug(section.title, 'c_', this.seenIds)
+        const name = cleanHeadingTitle(section.title)
         const [sectionChunks, nextSeq] = this.chunkSection(lines, section, sourceName, conceptId, chapterId, chunkSeq)
         chunkSeq = nextSeq
         if (sectionChunks.length === 0) continue
         chunks.push(...sectionChunks)
-        concepts.push({ id: conceptId, name: section.title, type: conceptTypeOf(section.title), prerequisites: [], mastery_score: 0 })
+        concepts.push({ id: conceptId, name, type: conceptTypeOf(name), prerequisites: [], mastery_score: 0 })
       }
       if (concepts.length > 0) {
-        chapters.push({ id: chapterId, title: draft.title, description: '', dependencies: [], concepts })
+        chapters.push({ id: chapterId, title: cleanHeadingTitle(draft.title), description: '', dependencies: [], concepts })
       }
     }
 

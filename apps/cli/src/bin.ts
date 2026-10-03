@@ -887,6 +887,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const mode = input['mode'] === 'quick' || input['mode'] === 'feynman' || input['mode'] === 'debug' ? input['mode'] : 'quick'
     const streaming = input['stream'] === true
     const requestedAfterSeq = typeof input['afterSeq'] === 'number' && Number.isInteger(input['afterSeq']) && input['afterSeq'] >= 0 ? input['afterSeq'] : 0
+    // 课程作用域端点必须按 courseId 解析课程根（与 wrapCourseService / handleChatStream 同口径）：
+    // 旧实现拿 lastOpenedPath 当根，切课后等于用另一门课的目录去校验 courseId——
+    // ACP prompt 会对一门确实存在的课报 COURSE_NOT_FOUND，而 session.replay 走
+    // dispatch（已按 courseId 解析）却正常，两者行为自相矛盾。
+    const workspaceRoot = await workspaceForCourse(courseId)
     const config = await configFacts()
     let resolvedSessionId = sessionId
     // Streaming clients already receive visible chat events as updates. Capture
@@ -895,13 +900,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // Aggregate requests keep the full replay contract and use afterSeq.
     let replayAfterSeq = requestedAfterSeq
     if (streaming && resolvedSessionId !== null) {
-      replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, 0)).lastSeq)
+      replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(workspaceRoot, courseId, resolvedSessionId, 0)).lastSeq)
     }
     let capturedNewSessionBoundary = false
     const emitFrame = (update: Record<string, unknown>): void => {
       emit?.({ sessionId: resolvedSessionId, kind: String(update['kind'] ?? 'sync'), ...update })
     }
-    for await (const frame of chatStream(registry.lastOpenedPath, courseId, {
+    for await (const frame of chatStream(workspaceRoot, courseId, {
       ...(resolvedSessionId === null ? {} : { sessionId: resolvedSessionId }),
       message,
       mode,
@@ -914,7 +919,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (frame.kind === 'meta') {
         resolvedSessionId = String(frame.payload['sessionId'] ?? resolvedSessionId ?? '') || null
         if (streaming && sessionId === null && !capturedNewSessionBoundary && resolvedSessionId !== null) {
-          replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, 0)).lastSeq)
+          replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(workspaceRoot, courseId, resolvedSessionId, 0)).lastSeq)
           capturedNewSessionBoundary = true
         }
       }
@@ -929,7 +934,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     const replay = resolvedSessionId === null
       ? { events: [], lastSeq: 0 }
-      : await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, streaming ? replayAfterSeq : requestedAfterSeq)
+      : await sessionEvents(workspaceRoot, courseId, resolvedSessionId, streaming ? replayAfterSeq : requestedAfterSeq)
     // These durable rows already correspond to ordered `session/update`
     // frames. Replaying them after a streaming request would duplicate message
     // content and ToolRows in ACP clients. Keep lifecycle/usage rows available
@@ -1052,23 +1057,33 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
-          // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
-          // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
-          // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
-          // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
-          const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
-          const hit = await staticHost.respond(url.pathname, { sessionCookie })
-          if (hit === null) {
-            response.writeHead(404)
-            response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
-            return
+          try {
+            // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
+            // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
+            // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
+            // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
+            const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
+            const hit = await staticHost.respond(url.pathname, { sessionCookie })
+            if (hit === null) {
+              response.writeHead(404)
+              response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
+              return
+            }
+            response.setHeader('Content-Type', hit.contentType)
+            // C-12：透出静态托管的缓存/安全响应头（no-cache HTML / immutable
+            // hash 资产 / nosniff）。
+            for (const [name, value] of Object.entries(hit.headers ?? {})) response.setHeader(name, value)
+            response.writeHead(hit.status)
+            response.end(request.method === 'HEAD' ? undefined : hit.body)
+          } catch (error) {
+            // 与相邻两个静态端点同口径：这条路径是 fire-and-forget 的，异常一旦
+            // 逃逸就是未处理的 rejection——Node ≥15 会直接终止宿主进程（用户正在
+            // 学习时整个应用消失），而不是返回一个 5xx。
+            if (response.headersSent || response.writableEnded || response.destroyed) return
+            console.error('[syllora] 静态资源交付失败:', error instanceof Error ? error.message : String(error))
+            response.writeHead(500)
+            response.end(JSON.stringify({ error: { code: 'static-host-failed', message: '静态资源交付失败', details: null } }))
           }
-          response.setHeader('Content-Type', hit.contentType)
-          // C-12：透出静态托管的缓存/安全响应头（no-cache HTML / immutable
-          // hash 资产 / nosniff）。
-          for (const [name, value] of Object.entries(hit.headers ?? {})) response.setHeader(name, value)
-          response.writeHead(hit.status)
-          response.end(request.method === 'HEAD' ? undefined : hit.body)
         })()
         return
       }
@@ -1297,7 +1312,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const { mkdir, rename, rm } = await import('node:fs/promises')
     const { createWriteStream } = await import('node:fs')
     const { randomUUID } = await import('node:crypto')
-    const root = registry.lastOpenedPath
+    // 课程作用域端点必须按 courseId 解析课程根（与 wrapCourseService 同口径）：
+    // 工作台切课不会重新 openCourse，lastOpenedPath 可能仍停在共享工作区或上一门
+    // 课——旧实现按 lastOpenedPath 落盘，文件写进了另一处 sources/，而下方
+    // sync(courseId) 又按 courseId 触发课程构建，于是「上传成功但课程里什么都没有」。
+    const root = await workspaceForCourse(courseId)
     if (root === '') {
       response.writeHead(409)
       response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))

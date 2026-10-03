@@ -492,6 +492,86 @@ describe("serve HTTP 边界（集成）", () => {
     });
     expect(res.status).toBe(409);
   }, 15_000);
+
+  it("上传落盘按 courseId 解析课程根，不写进 lastOpenedPath 指向的别处", async () => {
+    // 回归：工作台先开课程 A、再开另一个工作区 B 后，lastOpenedPath 停在 B。
+    // 旧实现按 lastOpenedPath 落盘——文件写进 B/sources，而落盘后触发的
+    // sync(courseId) 又按 courseId 在 A 上构建，于是「上传成功但课程里没有东西」。
+    const uploadHost = await startHost();
+    const uploadBase = `http://127.0.0.1:${uploadHost.port}`;
+    const uploadRpc = async (method: string, payload: unknown): Promise<any> => {
+      const response = await fetch(`${uploadBase}/api/${method}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${uploadHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const body = (await response.json()) as any;
+      expect(body.error).toBeUndefined();
+      return body.result;
+    };
+    try {
+      const courseFolder = join(uploadHost.home, "upload-course");
+      const otherWorkspace = join(uploadHost.home, "upload-other-workspace");
+      mkdirSync(courseFolder);
+      mkdirSync(otherWorkspace);
+      const course = await uploadRpc("syllora/openCourse", { path: courseFolder });
+      // 把 lastOpenedPath 移到别处：此后所有「按 lastOpenedPath 落盘」的实现都会露馅。
+      await uploadRpc("syllora/openCourse", { path: otherWorkspace });
+      const form = new FormData();
+      form.append("file", new Blob(["upload probe"]), "probe.txt");
+      const response = await fetch(`${uploadBase}/api/courses/${course.id}/sources`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${uploadHost.token}` },
+        body: form,
+        signal: AbortSignal.timeout(20_000),
+      });
+      expect(response.status).toBe(200);
+      expect(existsSync(join(courseFolder, "sources", "probe.txt"))).toBe(true);
+      expect(existsSync(join(otherWorkspace, "sources", "probe.txt"))).toBe(false);
+    } finally {
+      stop(uploadHost);
+    }
+  }, 30_000);
+
+  it("ACP session.prompt 按 courseId 解析课程根，不因最后打开的是另一门课而报课程不存在", async () => {
+    // 回归：runAcpPrompt 曾用 registry.lastOpenedPath 当根——切换课程后等于拿另一门课
+    // 的目录去校验 courseId，ACP prompt 会对一门确实存在的课报 COURSE_NOT_FOUND，
+    // 而 session.replay 走 dispatch（已按 courseId 解析）却正常，行为自相矛盾。
+    const acpHost = await startHost();
+    const acpBase = `http://127.0.0.1:${acpHost.port}`;
+    const acpRpc = async (method: string, payload: unknown): Promise<any> => {
+      const response = await fetch(`${acpBase}/api/${method}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${acpHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      return (await response.json()) as any;
+    };
+    try {
+      const firstFolder = join(acpHost.home, "acp-course-a");
+      const secondFolder = join(acpHost.home, "acp-course-b");
+      mkdirSync(firstFolder);
+      mkdirSync(secondFolder);
+      // 课程作用域端点的 courseId = 课程文件夹名（courseDirOf 的等值校验），
+      // 与 openCourse 返回的工作区注册表 id 不是一回事。
+      const courseId = basename(firstFolder);
+      await acpRpc("syllora/openCourse", { path: firstFolder });
+      // 把 lastOpenedPath 移到另一门课：此后按 lastOpenedPath 解析根的实现必然用错目录。
+      await acpRpc("syllora/openCourse", { path: secondFolder });
+      const response = await fetch(`${acpBase}/api/acp`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${acpHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session.prompt", params: { courseId, message: "ping" } }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.stringify(await response.json())).not.toContain("COURSE_NOT_FOUND");
+    } finally {
+      stop(acpHost);
+    }
+  }, 30_000);
 });
 
 describe("serve 关停与实例锁", () => {
