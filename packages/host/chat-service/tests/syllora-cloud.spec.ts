@@ -179,6 +179,42 @@ describe('OpenMaicCloud 生成与轮询', () => {
       .rejects.toThrowError('CANCELLED')
     expect(polls).toBe(0)
   })
+
+  it('轮询期间遇到瞬时故障会重试，不把长任务判死', async () => {
+    // 真实场景：一次生成要 13–20 分钟，中途抖动一次不应终止任务。
+    // 用 503 模拟（服务端短暂不可用），它属于可重试的瞬时错误。
+    let polls = 0
+    const base = await startCloud((req, res) => {
+      if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
+      if (req.url === '/api/generate-classroom') { json(res, 202, { jobId: 'job4', status: 'queued' }); return }
+      polls += 1
+      if (polls === 2) { json(res, 503, { error: 'temporarily unavailable' }); return }
+      if (polls < 4) { json(res, 200, { jobId: 'job4', status: 'running', step: 'scenes', progress: 50, done: false }); return }
+      json(res, 200, { jobId: 'job4', status: 'succeeded', step: 'completed', done: true, result: { classroomId: 'cls_4', scenesCount: 2 } })
+    })
+    const cloud = new OpenMaicCloud(config(base))
+    await cloud.generateClassroom('x', ['mat'])
+    const status = await cloud.waitForJob('job4', { intervalMs: 10, timeoutMs: 30_000 })
+    expect(status.status).toBe('succeeded')
+    expect(status.classroomId).toBe('cls_4')
+    expect(polls).toBeGreaterThanOrEqual(4)
+  })
+
+  it('持续不可达时不会无限重试', async () => {
+    let polls = 0
+    const base = await startCloud((req, res) => {
+      if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
+      if (req.url === '/api/generate-classroom') { json(res, 202, { jobId: 'job5', status: 'queued' }); return }
+      polls += 1
+      json(res, 503, { error: 'still unavailable' })
+    })
+    const cloud = new OpenMaicCloud(config(base))
+    await cloud.generateClassroom('x', ['mat'])
+    await expect(cloud.waitForJob('job5', { intervalMs: 1, timeoutMs: 60_000 }))
+      .rejects.toBeInstanceOf(CloudError)
+    // 重试有上限，不是无限循环
+    expect(polls).toBeLessThanOrEqual(12)
+  })
 })
 
 describe('OpenMaicCloud 取回场景', () => {

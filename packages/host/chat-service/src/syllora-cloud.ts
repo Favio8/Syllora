@@ -149,9 +149,27 @@ export class OpenMaicCloud {
     await this.connect()
     const deadline = Date.now() + (options.timeoutMs ?? 30 * 60_000)
     const interval = options.intervalMs ?? POLL_INTERVAL_MS
+    // 一次真实生成要 13–20 分钟，期间可能发生若干次瞬时网络故障（实测遇到过一次
+    // `fetch failed`，直接把已经跑了 13 分钟的任务判死）。轮询对这类错误必须容忍：
+    // 累计失败超过上限才放弃，单次抖动只是重试。
+    const maxTransientFailures = 10
+    let transientFailures = 0
     for (;;) {
       await options.check?.()
-      const response = await this.fetchJson(`/api/generate-classroom/${encodeURIComponent(jobId)}`)
+      let response: Awaited<ReturnType<OpenMaicCloud['fetchJson']>>
+      try {
+        response = await this.fetchJson(`/api/generate-classroom/${encodeURIComponent(jobId)}`)
+        transientFailures = 0
+      } catch (error) {
+        const transient = error instanceof CloudError
+          && (error.code === 'UNREACHABLE' || error.status === undefined || (error.status ?? 0) >= 500)
+        if (!transient) throw error
+        transientFailures += 1
+        if (transientFailures > maxTransientFailures) throw error
+        if (Date.now() > deadline) throw new CloudError('云端生成超时', undefined, 'TIMEOUT')
+        await new Promise(resolve => setTimeout(resolve, interval))
+        continue
+      }
       const raw = (response.json ?? {}) as Partial<CloudJobStatus> & {
         success?: boolean
         // 云端把产物放在 `result` 下（见上游 classroom-job-store 的成功分支）：
