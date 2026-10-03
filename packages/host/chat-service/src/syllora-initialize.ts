@@ -6,6 +6,8 @@ import { mapWithConcurrency } from '@syllora/course-builder'
 import type { Course, Material, Point, Source } from './syllora-domain.ts'
 import type { Lecture } from './syllora-project-types.ts'
 export type { Lecture } from './syllora-project-types.ts'
+import { slideArtifactMarkdown, slideFailureMessage, validateSlideArtifact, type SlideArtifact } from './syllora-slides.ts'
+export type { SlideArtifact } from './syllora-slides.ts'
 import { atomicJson, jsonFile, managedDirectory, pdfPageIssues, scanFiles, sha, stableId, stateDirectory, structuredSources, within } from './syllora-files.ts'
 import { generationFailure } from './syllora-jobs.ts'
 
@@ -17,8 +19,8 @@ export const lectureSchema = z.object({
   examples: z.array(section.extend({ title: z.string().min(1).max(80), quote: z.string().trim().min(4) })),
   connections: z.array(section), analogies: z.array(section).default([]),
 })
-export interface InitProgress { stage: 'scanning' | 'parsing' | 'organizing' | 'validating'; done: number; total: number; failures: string[]; message: string }
-export interface InitializationResult { revision: string; materials: Material[]; points: Point[]; lectures: Lecture[]; fingerprints: Record<string,string>; path: string }
+export interface InitProgress { stage: 'scanning' | 'parsing' | 'organizing' | 'slides' | 'validating'; done: number; total: number; failures: string[]; message: string }
+export interface InitializationResult { revision: string; materials: Material[]; points: Point[]; lectures: Lecture[]; slides: SlideArtifact[]; fingerprints: Record<string,string>; path: string }
 export function validateLecture(value: z.infer<typeof lectureSchema>, sources: Source[]) {
   const supported = new Map(sources.map(s => [s.id,s.text])), used = new Set<string>()
   for (const item of [value.intro,...value.concepts,...value.examples,...value.connections,...value.analogies]) {
@@ -41,6 +43,12 @@ export async function initializeFolder(options: {
   concurrency?: number;
   pdf?: (data:Uint8Array)=>Promise<{pages:Array<{text:string;num:number}>;total:number}>;
   call: (sources:Source[], prompt:string)=>Promise<z.infer<typeof lectureSchema>>;
+  /**
+   * 幻灯片生成回调：交给调用方去调云端 OpenMAIC（本模块不关心 HTTP 细节），
+   * 返回归一化后的产物。**可选**：不给就完全跳过幻灯片，不产生任何云端请求。
+   * 给了但某一章失败时只记录失败，不影响讲义发布。
+   */
+  slides?: (sources:Source[], chapter:string)=>Promise<SlideArtifact>;
   progress: (progress:InitProgress)=>Promise<void>;
   check: ()=>Promise<void>;
 }): Promise<InitializationResult> {
@@ -175,6 +183,39 @@ export async function initializeFolder(options: {
     }
     await options.check(); await writeFile(join(stage,'lectures',`${lecture.id}.md`),lectureMarkdown(lecture),'utf8')
   }
+  /**
+   * 幻灯片讲义：每批在 Markdown 讲义之外再产出一次结构化幻灯片。
+   * 生成发生在**云端 OpenMAIC**（本模块不关心细节，只通过注入的回调拿到归一化产物），
+   * 渲染仍在本机。它是附加产物：某一批失败只记进 failures，绝不阻断讲义发布
+   * （下面的 acceptPartial 判定早在讲义阶段结束时就做过了，所以这里的失败不会把整次整理判成失败）。
+   */
+  const slides: SlideArtifact[] = []
+  if (options.slides) {
+    await managedDirectory(stage,'slides')
+    const slideFailures: string[] = []
+    for (const [i,group] of batches.entries()) {
+      await options.check()
+      const chapter=group[0]!.section ?? group[0]!.anchor
+      await options.progress({stage:'slides',done:i,total:batches.length,failures:[...failures],message:`生成章节幻灯片 ${i+1}/${batches.length}：${chapter}`})
+      // 缓存键含来源集合：资料变了才重新上云生成，未变的章节直接复用，避免重复计费。
+      const cachePath=join(cacheDir,`${sha('slides-v2:'+options.modelKey+':'+JSON.stringify(group.map(({version: _version,...source})=>source)))}.json`)
+      let artifact=await jsonFile<SlideArtifact>(cachePath)
+      if(artifact) { try {validateSlideArtifact(artifact,group)} catch {artifact=null} }
+      if(!artifact) {
+        let error:unknown
+        for(let attempt=0;attempt<2;attempt++) {
+          await options.check()
+          try { artifact=await options.slides(group,chapter); validateSlideArtifact(artifact,group); break }
+          catch(e) { error=e;artifact=null; if(attempt===0) await new Promise(r=>setTimeout(r,1500)) }
+        }
+        if(!artifact) { slideFailures.push(slideFailureMessage(chapter ?? group[0]!.anchor,error)); continue }
+        await options.check(); await atomicJson(cachePath,artifact)
+      }
+      slides.push(artifact)
+      await options.check(); await writeFile(join(stage,'slides',`${sha(chapter+':'+JSON.stringify(artifact.scenes.map(s=>s.id)))}.md`),slideArtifactMarkdown(artifact),'utf8')
+    }
+    failures.push(...slideFailures)
+  }
   await options.progress({stage:'validating',done:batches.length,total:batches.length,failures,message:'检查全文覆盖、引用及资料版本'})
   await options.check()
   for(const [path,fingerprint] of Object.entries(fingerprints)) if(sha(await readFile(await within(root,path)))!==fingerprint) throw new Error(`${path} 在整理期间发生变化，请重新检查资料`)
@@ -182,9 +223,10 @@ export async function initializeFolder(options: {
   await atomicJson(join(stage,'sources.json'),sources)
   await atomicJson(join(stage,'outline.json'),points)
   await atomicJson(join(stage,'lectures.json'),lectures)
-  await atomicJson(join(stage,'manifest.json'),{version:1,revision,courseId:course.id,fingerprints,failures,sourceCount:sources.length,coveredSourceCount:lectures.reduce((n,l)=>n+l.sourceIds.length,0),promptVersion:'lecture-v1',model:options.modelKey})
+  if(options.slides) await atomicJson(join(stage,'slides.json'),slides)
+  await atomicJson(join(stage,'manifest.json'),{version:1,revision,courseId:course.id,fingerprints,failures,sourceCount:sources.length,coveredSourceCount:lectures.reduce((n,l)=>n+l.sourceIds.length,0),...(options.slides?{slideCount:slides.length}:{}),promptVersion:'lecture-v1',model:options.modelKey})
   await options.check(); await managedDirectory(stateDir,'revisions')
   const publishedPath=join(stateDir,'revisions',revision)
   await rename(stage,publishedPath)
-  return {revision,materials,points,lectures,fingerprints,path:publishedPath}
+  return {revision,materials,points,lectures,slides,fingerprints,path:publishedPath}
 }
