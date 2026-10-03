@@ -8,6 +8,7 @@ import Dropdown from '../features/workbench/components/Dropdown';
 import { api } from '../lib/api';
 import type { CourseView } from '../types/syllora';
 import type { FileCandidate, Lecture } from '../../../../packages/host/chat-service/src/syllora-project-types';
+import SlideDeckReader from './syllora-slides';
 
 export { workbenchRpc as projectRpc } from '../features/workbench/services';
 import { workbenchRpc as projectRpc } from '../features/workbench/services';
@@ -70,12 +71,22 @@ export function CenteredErrorDialog({title,message,onClose}:{title:string;messag
 }
 const Markdown=({text}:{text:string})=><ReactMarkdown skipHtml remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:({alt})=><span>{alt?`[图片：${alt}]`:'[外部图片未加载]'}</span>,a:({children,href})=><a href={href} target="_blank" rel="noreferrer">{children}</a>}}>{normalizeMathDelimiters(text)}</ReactMarkdown>;
 export function LectureReader({course,onSource}:{course:CourseView;onSource:(id:string)=>void}) {
-  const [lectures,setLectures]=useState<Lecture[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState('');
+  const [lectures,setLectures]=useState<Lecture[]>([]),[selected,setSelected]=useState(''),[error,setError]=useState(''),[view,setView]=useState<'lecture'|'slides'>('lecture');
   useEffect(()=>{let disposed=false;setLectures([]);setError('');void projectRpc<{lectures:Lecture[]}>('lectures',{courseId:course.id}).then(result=>{if(!disposed){setLectures(result.lectures);setSelected(result.lectures[0]?.id??'')}}).catch(e=>{if(!disposed)setError(e instanceof Error?e.message:'讲义读取失败')});return()=>{disposed=true}},[course.id,course.revision]);
   const lecture=lectures.find(l=>l.id===selected);
   const citations=(ids:string[])=><div className="sy-citations">{ids.map((id,i)=><button key={id} onClick={()=>onSource(id)}><FileText size={13}/>原文 {i+1}</button>)}</div>;
+  // 幻灯片视图需要锚点表：把来源 id 映射回"资料 · 页码/行"的定位文案。
+  const sources=course.materials.flatMap(m=>[...m.sources,...(m.history??[])]).map(s=>({id:s.id,anchor:s.anchor}));
   return <section className="sy-lecture-reader" aria-label="课程讲义"><header><h2>课程讲义</h2><p>整理解释与原文依据并列，学习记录由实际作答形成。</p></header>{error&&<p role="alert">{error}</p>}{!course.revision&&<p>检查资料并点击初始化后，在这里阅读整理后的课程。</p>}
-    {lectures.length>0&&<div className="form-field"><span>选择章节</span><Dropdown label="选择章节" value={selected} onChange={setSelected} options={lectures.map((l,i)=>({value:l.id,label:`${i+1}. ${l.chapter}`}))}/></div>}
-    {lecture&&<article><h2>{lecture.chapter}</h2><h3>章节导读</h3><Markdown text={lecture.intro.text}/>{citations(lecture.intro.sourceIds)}{lecture.concepts.map((c,i)=><section className="sy-lecture-concept" key={i}><h3>{c.name}</h3><h4>整理解释</h4><Markdown text={c.text}/><details><summary>原文依据</summary><blockquote>{c.quote}</blockquote></details>{citations(c.sourceIds)}</section>)}{lecture.examples.map((e,i)=><section className="sy-lecture-concept" key={i}><h3>资料例子：{e.title}</h3><Markdown text={e.text}/><blockquote>{e.quote}</blockquote>{citations(e.sourceIds)}</section>)}{lecture.connections.length>0&&<h3>知识联系</h3>}{lecture.connections.map((c,i)=><section key={i}><Markdown text={c.text}/>{citations(c.sourceIds)}</section>)}{lecture.analogies.length>0&&<h3>教学类比（整理生成）</h3>}{lecture.analogies.map((c,i)=><section key={i}><Markdown text={c.text}/>{citations(c.sourceIds)}</section>)}</article>}
+    {course.revision&&<div className="sy-view-switch" role="tablist" aria-label="讲义视图">
+      <button role="tab" aria-selected={view==='lecture'} className={view==='lecture'?'is-selected':''} onClick={()=>setView('lecture')}>文字讲义</button>
+      <button role="tab" aria-selected={view==='slides'} className={view==='slides'?'is-selected':''} onClick={()=>setView('slides')}>幻灯片</button>
+    </div>}
+    {view==='slides'
+      ? course.revision ? <SlideDeckReader courseId={course.id} sources={sources}/> : null
+      : <>
+        {lectures.length>0&&<div className="form-field"><span>选择章节</span><Dropdown label="选择章节" value={selected} onChange={setSelected} options={lectures.map((l,i)=>({value:l.id,label:`${i+1}. ${l.chapter}`}))}/></div>}
+        {lecture&&<article><h2>{lecture.chapter}</h2><h3>章节导读</h3><Markdown text={lecture.intro.text}/>{citations(lecture.intro.sourceIds)}{lecture.concepts.map((c,i)=><section className="sy-lecture-concept" key={i}><h3>{c.name}</h3><h4>整理解释</h4><Markdown text={c.text}/><details><summary>原文依据</summary><blockquote>{c.quote}</blockquote></details>{citations(c.sourceIds)}</section>)}{lecture.examples.map((e,i)=><section className="sy-lecture-concept" key={i}><h3>资料例子：{e.title}</h3><Markdown text={e.text}/><blockquote>{e.quote}</blockquote>{citations(e.sourceIds)}</section>)}{lecture.connections.length>0&&<h3>知识联系</h3>}{lecture.connections.map((c,i)=><section key={i}><Markdown text={c.text}/>{citations(c.sourceIds)}</section>)}{lecture.analogies.length>0&&<h3>教学类比（整理生成）</h3>}{lecture.analogies.map((c,i)=><section key={i}><Markdown text={c.text}/>{citations(c.sourceIds)}</section>)}</article>}
+      </>}
   </section>;
 }
