@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto'
+﻿import { randomUUID, createHash } from 'node:crypto'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -750,14 +750,31 @@ export class SylloraService {
         course.materials=[...result.materials,...course.materials.filter(m=>!materialIds.has(m.id)).map(m=>({...m,active:false}))]
         // 合并顺序：旧点的历史字段打底、**本次结果覆盖**章节名与概念名（否则章节名永远停在旧值，
         // 解析口径修好也刷不掉脏章节）；来源 id 与身份键以本次结果为准。
+        // 任务开始时的点快照：用来区分「并发编辑」与「上一轮遗留」。
+        const startedWith=new Map(snapshot.points.map(p=>[p.id,p]))
         const liveSourceIds=new Set(course.materials.flatMap(m=>m.sources.map(s=>s.id)))
         const publishedSourceIds=new Set(result.materials.flatMap(m=>m.sources.map(s=>s.id)))
-        const merged=[...course.points.map(old=>{const next=incoming.get(old.id);return next?{...old,...next,sourceIds:next.sourceIds,originKey:next.originKey!}:old}),...result.points.filter(p=>!existingPointIds.has(p.id))]
+        const merged=[...course.points.map(old=>{
+          const next=incoming.get(old.id)
+          if(!next)return old
+          // 用户在本任务运行期间改过这个点（名字/章节与任务开始时的快照不同）：保留用户的改动，
+          // 只把本次结果的来源并进来；否则以本次结果为准，好让解析口径修好后脏章节名能被刷掉。
+          const before=startedWith.get(old.id)
+          const untouched=before!==undefined&&before.name===old.name&&before.chapter===old.chapter
+          return untouched
+            ?{...old,...next,sourceIds:next.sourceIds,originKey:next.originKey!}
+            :{...old,sourceIds:[...new Set([...old.sourceIds,...next.sourceIds])],originKey:next.originKey!}
+        }),...result.points.filter(p=>!existingPointIds.has(p.id))]
           // 本次覆盖的资料以**本次结果**为准确概念集合：模型每次整理产出的概念名并不完全一致，
           // 上一轮留下的同名外概念若不清理，图谱里就会永远堆着一串几个点的小章节。
           // 其他资料的点只要来源片段仍在（liveSourceIds）就原样保留。
           .filter(p=>{
             if(incoming.has(p.id))return true
+            // 运行期间被并发编辑或新增的点一律保留：任务开始时的快照里没有它，或它的名字/章节/来源
+            // 与快照不同，说明它是在本任务跑的过程中被用户改动的——清理陈旧点绝不能把这些改动吃掉。
+            const before=startedWith.get(p.id)
+            if(before===undefined||before.name!==p.name||before.chapter!==p.chapter||JSON.stringify(before.sourceIds)!==JSON.stringify(p.sourceIds))return true
+            // 与快照一致、又没被本次结果认领，且来源属于本次重跑的资料：它是上一轮留下的概念，由本次结果取代。
             if(p.sourceIds.some(sourceId=>publishedSourceIds.has(sourceId)))return false
             return p.sourceIds.some(sourceId=>liveSourceIds.has(sourceId))
           })

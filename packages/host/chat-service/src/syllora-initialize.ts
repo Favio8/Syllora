@@ -177,11 +177,18 @@ export async function initializeFolder(options: {
   // ——导出资料开头的目录页正好会形成这种批次。把它们并入上一批，让标题跟着正文一起被整理。
   // 判据是"正文句字符数"：标题行只有含句末标点或超过 30 字时才折算为正文，
   // 这样既能认出目录页（整批短标题），又不会把"整行加粗的例题/公式"误判成目录。
-  const headingOnly=(group:Source[])=>group.reduce((n,source)=>{
+  const proseChars=(group:Source[])=>group.reduce((n,source)=>{
     const text=source.text.trim()
     if(source.kind==='heading'&&text.length<=30&&!/[。；]/.test(text))return n
     return n+text.length
-  },0)<150
+  },0)
+  const totalChars=(group:Source[])=>group.reduce((n,source)=>n+source.text.trim().length,0)
+  // 目录批的判据是"标题占比"而非绝对字数：小资料（几行正文）不该被当成目录整体并掉，
+  // 只有正文极少（<150 字）且占比很低（<35%）的那一批才并入上一批。
+  const headingOnly=(group:Source[])=>{
+    const total=totalChars(group),prose=proseChars(group)
+    return total>0&&prose<150&&prose/total<0.35
+  }
   const mergedBatches:Source[][]=[]
   for(const group of batches){
     if(batches.length>1&&mergedBatches.length>0&&headingOnly(group)){ mergedBatches[mergedBatches.length-1]!.push(...group); continue }
