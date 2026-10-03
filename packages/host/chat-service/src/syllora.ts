@@ -775,6 +775,9 @@ export class SylloraService {
             )
             const status = await cloud.waitForJob(jobId, {
               check,
+              // 单章生成耗时随云端配置差异极大（实测 12 秒/页 到 135 秒/页），
+              // 因此等待上限可由 `cloud.wait_timeout_minutes` 调大；未配置时用客户端默认。
+              ...(config.cloud?.waitTimeoutMs ? { timeoutMs: config.cloud.waitTimeoutMs } : {}),
               onProgress: async current => {
                 // 把云端进度透传给作业进度，长任务时用户能看到"正在生成"而不是卡住。
                 await check()
