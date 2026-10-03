@@ -46,6 +46,9 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   const [toolbar, setToolbar] = useState<{ text: string; x: number; y: number } | null>(null);
   const [result, setResult] = useState<ReadingAssistance | null>(null);
   const [pending, setPending] = useState<{ text: string; mode: 'explain' | 'search' } | null>(null);
+  /** 需求六：AI 直答（不参考知识库、不标注来源）的提示词草稿与流式回答状态。 */
+  const [askDraft, setAskDraft] = useState('');
+  const [ask, setAsk] = useState<{ prompt: string; selection: string; text: string; streaming: boolean; cancelled: boolean; error: string } | null>(null);
   const jumpTarget=useRef<string|null>(null);
   const [highlight,setHighlight]=useState('');
   const articleRef = useRef<HTMLElement>(null);
@@ -56,7 +59,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   const loadDocument = useCallback(async () => {
     controller.current?.abort();
     const version = ++requestVersion.current;
-    setToolbar(null); setResult(null); setPending(null);setHighlight(''); setError(''); setWaitingNote(''); setReadingDoc(null); setRetrySelection(null);
+    setToolbar(null); setResult(null); setPending(null);setHighlight(''); setError(''); setWaitingNote(''); setReadingDoc(null); setRetrySelection(null); setAsk(null);
     if (!material) { setLoading(false); return; }
     setLoading(true);
     try {
@@ -71,6 +74,9 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     function captureSelection() {
+      // 需求六：工具栏内的提示词输入框获得焦点会让页面选区塌缩，此时不能关闭
+      // 工具栏——否则用户刚点进输入框，工具条就消失了。
+      if (toolsRef.current?.contains(document.activeElement)) return;
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.rangeCount) { setToolbar(null); return; }
       const range = selection.getRangeAt(0);
@@ -106,7 +112,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     if (!text || !readingDoc) return;
     onExpandAssistant();
     const version = ++requestVersion.current;
-    setToolbar(null); setResult(null); setError(''); setWaitingNote(''); setRetrySelection(null); setPending({ text, mode });
+    setToolbar(null); setResult(null); setError(''); setWaitingNote(''); setRetrySelection(null); setPending({ text, mode }); setAsk(null);
     try {
       controller.current?.abort();controller.current=new AbortController();
       const answer = await readingService.assist(readingDoc, text, mode,controller.current.signal,{onWaiting:message=>{if(version===requestVersion.current)setWaitingNote(message);}});
@@ -115,11 +121,35 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     finally { if (version === requestVersion.current) setPending(null); }
   }
 
+  /** 需求六：选中文字 + 自定义提示词的流式直答。不走知识库检索、不落任何记录，
+   *  回答里也不给来源；失败时保留提示词与选区，就地重试。 */
+  async function runAsk(prompt: string, selection: string) {
+    const question = prompt.trim();
+    if (question === '' || !readingDoc) return;
+    onExpandAssistant();
+    const version = ++requestVersion.current;
+    setToolbar(null); setResult(null); setPending(null); setError(''); setWaitingNote(''); setRetrySelection(null); setAskDraft('');
+    setAsk({ prompt: question, selection, text: '', streaming: true, cancelled: false, error: '' });
+    try {
+      controller.current?.abort();controller.current=new AbortController();
+      const answer = await readingService.ask(readingDoc, selection, question, controller.current.signal, { onDelta: delta => { if (version === requestVersion.current) setAsk(current => current === null ? current : { ...current, text: current.text + delta }); } });
+      if (version === requestVersion.current) { setAsk(current => current === null ? current : { ...current, text: answer.text, streaming: false }); onActivity(); }
+    } catch (e) {
+      if (version !== requestVersion.current) return;
+      // 用户点「取消直答」时信号已中止：保留半截回答、只标记已取消，不算错误。
+      const cancelled = controller.current?.signal.aborted === true;
+      setAsk(current => current === null ? current : { ...current, streaming: false, cancelled, error: cancelled ? '' : (e instanceof Error ? e.message : 'AI 直答未完成，请重试。') });
+    }
+  }
+
+  /** 直答进行中时禁用再次发送（解释/搜索仍可发起，会先清掉直答视图）。 */
+  const askBusy = ask?.streaming === true || pending !== null;
+
   return <div className={`reader-layout ${assistantOpen ? 'assistant-open' : 'assistant-collapsed'}`}><section className="reader-document-column" aria-label="资料阅读区"><div className="reader-toolbar"><div><FileText size={16} /><Dropdown label="选择阅读资料" value={material?.id ?? ''} onChange={value => { window.getSelection()?.removeAllRanges(); setSelectedId(value); }} disabled={!course.materials.length} placeholder="暂无资料" options={course.materials.map(m => ({ value: m.id, label: m.name, description: m.name.toLowerCase().endsWith('.pdf') ? 'PDF 学习资料' : '文本学习资料' }))} /></div><button className="button small" onClick={onUpload}><Plus size={14} /><span>上传资料</span></button>{readingDoc?.previewUrl&&<MaterialPreview url={readingDoc.previewUrl} name={readingDoc.name} version={readingDoc.revision??'unpublished'}/>} {!assistantOpen && <button className="icon-button reader-mobile-expand" aria-label="展开阅读助手" onClick={onToggleAssistant}><PanelRightOpen size={18} /></button>}</div><div className={`reader-scroll ${!readingDoc?.content ? 'reader-empty-scroll' : ''}`}>{readingDoc?.content&&<div className="reading-intro"><span className="blue-eyebrow"><BookOpen size={14} />辅助阅读</span><p>选中不理解的文字，让思路在这里展开。</p></div>}
       {loading ? <div className="reader-empty" role="status"><LoaderCircle className="spin" size={25} /><p>正在打开资料…</p></div> : readingDoc?.content ? <article className="reading-paper" ref={articleRef} aria-label="资料正文"><header className="paper-meta"><span>{course.name}</span><span>{'已发布正文'}</span></header>{readingDoc.sources.map(source=><div data-source-id={source.id} className={highlight===source.id?'reading-source highlighted':'reading-source'} key={source.id}>{source.kind==='heading'?<h2>{source.text.replace(/^#+\s*/, '')}</h2>:<SourceBody text={source.text} kind={source.kind}/>}</div>)}<footer className="paper-end"><span />读到这里，不妨用自己的话再说一遍。<span /></footer></article> : <div className="reader-empty"><FileText size={35} /><h2>{!material ? '添加一份资料，开始阅读' : readingDoc?.source === 'unavailable' ? '这份资料还没有可阅读的正文' : '这份资料的正文为空'}</h2><p>{!material ? '你可以添加 TXT、Markdown，或文本 PDF。' : material.name.toLowerCase().endsWith('.pdf') ? '请先在资料面板检查文件并初始化课程。' : '资料初始化后可读取已发布的版本。'}</p><button className="button" onClick={onUpload}><Plus size={15} />添加资料</button></div>}
       {error && <div className="reading-error" role="alert">{error}{retrySelection&&<button className="text-button" onClick={()=>void assist(retrySelection.mode,retrySelection.text)}>重试阅读任务</button>}<button className="text-button" onClick={() => void loadDocument()}>重新打开资料</button></div>}
-    </div>{readingDoc?.content&&<footer className="reader-bottom-hint"><MousePointer2 size={13} />选中文字，即可使用 AI解释、AI搜索</footer>}</section>
-    {assistantOpen ? <aside className={`reader-assistant is-open ${pending || result ? 'has-answer' : ''}`} aria-label="阅读助手"><header><span><Sparkles size={16} />阅读助手</span><button className="icon-button" aria-label="收起阅读助手" title="收起阅读助手" onClick={onToggleAssistant}><X size={17} /></button></header><div className="reading-assistant-content">{!result && !pending ? <div className="reading-assistant-empty"><span><MousePointer2 size={25} /></span><h3>从一个疑问开始</h3><p>在正文中选中一个概念或一段话，选择你需要的帮助。</p><div><Sparkles size={16} /><span><strong>AI解释</strong><small>换一种方式理解选中的内容</small></span></div><div><Search size={16} /><span><strong>AI搜索</strong><small>找到资料中相关的段落</small></span></div></div> : <><span className="reading-result-label">{(pending?.mode ?? result?.mode) === 'explain' ? 'AI解释' : 'AI搜索'}<small>课程资料</small></span><blockquote className="reading-quote"><Quote size={15} /><p>{pending?.text ?? result?.selection}</p></blockquote>{pending ? <div className="reading-pending" role="status"><LoaderCircle size={16} className="spin" />{waitingNote || (pending.mode === 'explain' ? '正在准备解释…' : '正在查找相关段落…')}<button className="text-button" onClick={()=>controller.current?.abort()}>取消阅读任务</button></div> : result?.mode === 'explain' ? <div className="reading-explanation"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{normalizeMathDelimiters(result.explanation)}</ReactMarkdown>{result.matches.map(match=><button className="text-button" key={match.sourceId} onClick={()=>onSource(match.sourceId)}>来源：{match.title}</button>)}</div> : <div className="reading-search-results"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{normalizeMathDelimiters(result?.explanation??'')}</ReactMarkdown><p>在课程资料中找到 {result?.matches.length ?? 0} 个相关段落</p>{result?.matches.map((match, i) => <article key={i} id={match.sourceId}><button className="text-button" onClick={()=>onSource(match.sourceId)}>查看资料来源</button><button className="text-button" onClick={()=>locate(match)}>定位段落</button><h3>{match.title}<ArrowUpRight size={13} /></h3><p>{match.excerpt}</p></article>)}</div>}</> }</div><footer>回答基于当前课程资料；点击来源可核对原文。</footer></aside> : <aside className="panel-rail reader-rail" aria-label="阅读助手已收起"><button className="icon-button" aria-label="展开阅读助手" onClick={onToggleAssistant}><PanelRightOpen size={18} /></button></aside>}
-    {toolbar && createPortal(<div ref={toolsRef} className="selection-tools" role="toolbar" aria-label="选中文字操作" style={{ left: toolbar.x, top: toolbar.y }} onPointerDown={e => e.preventDefault()}><button onClick={() => void assist('explain')}><Sparkles size={15} />AI解释</button><span /><button onClick={() => void assist('search')}><Search size={15} />AI搜索</button></div>, document.body)}
+    </div>{readingDoc?.content&&<footer className="reader-bottom-hint"><MousePointer2 size={13} />选中文字，即可使用 AI解释、AI搜索，或输入提示词直答</footer>}</section>
+    {assistantOpen ? <aside className={`reader-assistant is-open ${ask || pending || result ? 'has-answer' : ''}`} aria-label="阅读助手"><header><span><Sparkles size={16} />阅读助手</span><button className="icon-button" aria-label="收起阅读助手" title="收起阅读助手" onClick={onToggleAssistant}><X size={17} /></button></header><div className="reading-assistant-content">{!ask && !result && !pending ? <div className="reading-assistant-empty"><span><MousePointer2 size={25} /></span><h3>从一个疑问开始</h3><p>在正文中选中一个概念或一段话，选择你需要的帮助。</p><div><Sparkles size={16} /><span><strong>AI解释</strong><small>换一种方式理解选中的内容</small></span></div><div><Search size={16} /><span><strong>AI搜索</strong><small>找到资料中相关的段落</small></span></div></div> : ask ? <><span className="reading-result-label">AI 直答<small>不引用课程资料</small></span>{ask.selection !== '' && <blockquote className="reading-quote"><Quote size={15} /><p>{ask.selection}</p></blockquote>}{ask.error !== '' ? <div className="reading-error" role="alert">{ask.error}<button className="text-button" onClick={() => void runAsk(ask.prompt, ask.selection)}>重试直答</button></div> : <div className="reading-explanation"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{normalizeMathDelimiters(ask.text)}</ReactMarkdown></div>}{ask.streaming ? <div className="reading-pending" role="status"><LoaderCircle size={16} className="spin" />正在生成…<button className="text-button" onClick={() => controller.current?.abort()}>取消直答</button></div> : ask.error === '' && <div className="reading-pending">{ask.cancelled ? '已取消生成。' : '内容由模型自身知识生成，未参考课程资料。'}<button className="text-button" onClick={() => void runAsk(ask.prompt, ask.selection)}>重试直答</button></div>}</> : <><span className="reading-result-label">{(pending?.mode ?? result?.mode) === 'explain' ? 'AI解释' : 'AI搜索'}<small>课程资料</small></span><blockquote className="reading-quote"><Quote size={15} /><p>{pending?.text ?? result?.selection}</p></blockquote>{pending ? <div className="reading-pending" role="status"><LoaderCircle size={16} className="spin" />{waitingNote || (pending.mode === 'explain' ? '正在准备解释…' : '正在查找相关段落…')}<button className="text-button" onClick={()=>controller.current?.abort()}>取消阅读任务</button></div> : result?.mode === 'explain' ? <div className="reading-explanation"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{normalizeMathDelimiters(result.explanation)}</ReactMarkdown>{result.matches.map(match=><button className="text-button" key={match.sourceId} onClick={()=>onSource(match.sourceId)}>来源：{match.title}</button>)}</div> : <div className="reading-search-results"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{normalizeMathDelimiters(result?.explanation??'')}</ReactMarkdown><p>在课程资料中找到 {result?.matches.length ?? 0} 个相关段落</p>{result?.matches.map((match, i) => <article key={i} id={match.sourceId}><button className="text-button" onClick={()=>onSource(match.sourceId)}>查看资料来源</button><button className="text-button" onClick={()=>locate(match)}>定位段落</button><h3>{match.title}<ArrowUpRight size={13} /></h3><p>{match.excerpt}</p></article>)}</div>}</> }</div><footer>{ask ? 'AI 直答由模型自身知识生成，未参考课程资料，重要结论请自行核对。' : '回答基于当前课程资料；点击来源可核对原文。'}</footer></aside> : <aside className="panel-rail reader-rail" aria-label="阅读助手已收起"><button className="icon-button" aria-label="展开阅读助手" onClick={onToggleAssistant}><PanelRightOpen size={18} /></button></aside>}
+    {toolbar && createPortal(<div ref={toolsRef} className="selection-tools" role="toolbar" aria-label="选中文字操作" style={{ left: toolbar.x, top: toolbar.y }} onPointerDown={e => e.preventDefault()}><div className="selection-tools-row"><button onClick={() => void assist('explain')}><Sparkles size={15} />AI解释</button><span /><button onClick={() => void assist('search')}><Search size={15} />AI搜索</button></div><div className="selection-ask" onPointerDown={e => e.stopPropagation()}><input value={askDraft} onChange={e => setAskDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void runAsk(askDraft, toolbar.text); } }} placeholder="输入提示词，例如：用生活中的例子解释这段话" aria-label="自定义提示词" disabled={askBusy} /><button type="button" onClick={() => void runAsk(askDraft, toolbar.text)} disabled={askBusy || askDraft.trim() === ''}>发送</button></div></div>, document.body)}
   </div>;
 }

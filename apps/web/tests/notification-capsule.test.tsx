@@ -115,9 +115,9 @@ describe('需求五：通知胶囊', () => {
     expect(capsule).toHaveFocus()
   })
 
-  it('carries the context-coverage note that used to be a mid-column bar', () => {
-    render(<NotificationCapsule jobs={[]} coverageNote="本次使用 3 / 10 个候选片段（900 / 4000 字符）。" courseName={courseName} onCancel={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /上下文覆盖提示/ }))
-    expect(screen.getByRole('dialog', { name: '通知面板' })).toHaveTextContent('本次使用 3 / 10 个候选片段')
+  it('需求：覆盖度提示已删除——没有任务时胶囊不出现', () => {
+    const { container } = render(<NotificationCapsule jobs={[]} courseName={courseName} onCancel={vi.fn()} />)
+    expect(container.querySelector('[data-notification-dock]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /覆盖提示|候选片段/ })).toBeNull()
   })
 })

@@ -18,6 +18,7 @@ import './syllora.css';
 import { courseIcons } from '../features/workbench/lib/courseIcons';
 import { logicalRequest, workbenchRpc as rpc } from '../features/workbench/services';
 import { projectWorkspace } from '../features/workbench/projection';
+import { installTypingGuard, isTextComposing } from '../lib/typingGuard';
 import Sidebar from '../features/workbench/components/Sidebar';
 import Home from '../features/workbench/components/Home';
 import Catalog from '../features/workbench/components/Catalog';
@@ -164,7 +165,10 @@ export default function Syllora() {
     catch(e){setError(e instanceof Error?e.message:'无法连接本地服务');}
     finally{pollInFlight.current=false;}
   },[]);
-  useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),1500);return()=>clearInterval(timer)},[refresh]);
+  useEffect(()=>{const uninstall=installTypingGuard();return uninstall},[]);
+  // 需求一：轮询每 1.5 秒 setState 一次会整体重渲染；若正好落在中文输入法的
+  // 组合窗口里，输入框的组合会被打断（表现为「字打不进去」）。组合期间跳过这一拍。
+  useEffect(()=>{void refresh();const timer=setInterval(()=>{if(isTextComposing())return;void refresh()},1500);return()=>clearInterval(timer)},[refresh]);
   useEffect(()=>{selectedRef.current=selected},[selected]);
   useEffect(()=>{dataRef.current=data},[data]);
   useEffect(()=>{
@@ -248,11 +252,6 @@ export default function Syllora() {
   };
   const generate = async(kind:string,extra:Record<string,unknown>={})=>{if(!(await flushDraft()))return null;return run('generate',{kind,...extra});};
   const running = data?.jobs.find(j=>j.courseId===selected&&j.state==='running');
-  const lastJob = data?.jobs.filter(j=>j.courseId===selected).at(-1);
-  const coverageNote=lastJob?.state==='succeeded'&&lastJob.coverage?(()=>{
-    const c=lastJob.coverage;
-    return `本次使用 ${c.sourcesUsed} / ${c.sourcesTotal} 个候选片段（${c.charsUsed} / ${c.charsTotal} 字符）${c.materialsWithOmitted.length?`；尚有片段未使用：${c.materialsWithOmitted.join('、')}。未选入片段不参与本次回答。`:'。'}`;
-  })():null;
   const task = course?.plan?.tasks.find(t=>t.id===activeTask) ?? course?.plan?.tasks.find(t=>t.status==='in_progress');
   const source = course?.materials.flatMap(m=>[...m.sources,...(m.history??[])]).find(s=>s.id===sourceId);
   const pointName = (id:string) => course?.points.find(p=>p.id===id)?.name??'知识点';
@@ -345,7 +344,9 @@ export default function Syllora() {
   const DiscussionShell: 'details'|'div' = archiveDiscussion ? 'details' : 'div';
   // 笔记整页工作区：接管整个应用视图（三栏），带返回。
   // 笔记页是整页替换；套一层 desktop-shell 让原生窗口按钮的留白与拖动区与工作台一致。
-  if(notesMode&&course) return <div className={desktop?'desktop-shell':''}><NotesWorkspace courseId={course.id} courseName={course.name} onClose={()=>setNotesMode(false)}  onSwitchMode={mode=>{setNotesMode(false);setView('workspace');setLearningMode(mode);}}/></div>;
+  /** 需求七：笔记页内切课——留在笔记模式，只换课程（未保存的修改由笔记页自己确认）。 */
+  const switchNotesCourse = async(id:string)=>{ if(!(await selectCourse(id)))return; setView('workspace'); setNotesMode(true); };
+  if(notesMode&&course) return <div className={desktop?'desktop-shell':''}><NotesWorkspace courseId={course.id} courseName={course.name} courses={(uiData?.courses??[]).filter(item=>!item.archived).map(item=>({id:item.id,name:item.name}))} onSwitchCourse={switchNotesCourse} onClose={()=>setNotesMode(false)}  onSwitchMode={mode=>{setNotesMode(false);setView('workspace');setLearningMode(mode);}}/></div>;
   return <div onClickCapture={event=>{const target=event.target as HTMLElement;const label=target.closest('label');if(label&&!label.querySelector('input,textarea,select')&&!target.closest('input,textarea,select,button,a'))event.preventDefault();}} className={`sy-app app-shell integrated-shell ${desktop?'desktop-shell':''} ${view==='workspace'&&learningMode==='chat'?(showRight?'':'task-collapsed'):'sy-no-right without-panel'}`}>
     <input ref={fileInput} type="file" accept=".pdf,.md,.txt" aria-label="上传课程资料" style={{display:'none'}} disabled={!course||busy||course.archived} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value=''}}/>
     <Sidebar courses={uiData?.courses.filter(item=>!item.archived)??[]} selected={selected} view={view} mobileOpen={mobileNav} onClose={()=>setMobileNav(false)} onView={value=>{setViewStack([]);setView(value);setMobileNav(false);}} onCourse={id=>void openUiCourse(id)} onCreate={()=>{setMigration(null);setCreating(true)}} onReorder={reorderCourses} onUserAction={action=>{
@@ -404,7 +405,7 @@ export default function Syllora() {
     {!showRight&&view==='workspace'&&learningMode==='chat'&&<aside className="panel-rail task-rail" aria-label="学习看板已收起"><button className="icon-button" aria-label="展开学习看板" onClick={()=>setShowRight(true)}><PanelRightOpen size={18}/></button></aside>}
     {/* 需求五：任务通知收进右下角胶囊（中栏不再有 sy-job / sy-init-failures 横条）；
         初始化失败仍由 MaterialInitialization 自己的居中弹窗承接。 */}
-    <NotificationCapsule jobs={data?.jobs??[]} courseName={id=>data?.courses.find(item=>item.id===id)?.name??'课程'} coverageNote={coverageNote} onCancel={jobId=>{const job=data?.jobs.find(item=>item.id===jobId);void rpc('cancel',{courseId:job?.courseId??selected,jobId}).then(()=>refresh()).catch(error=>setError(error instanceof Error?error.message:'取消任务失败'));}} onOpenFailures={courseId=>{void openUiCourse(courseId).then(ok=>{if(ok){setTab('materials');setShowRight(true)}})}}/>
+    <NotificationCapsule jobs={data?.jobs??[]} courseName={id=>data?.courses.find(item=>item.id===id)?.name??'课程'} onCancel={jobId=>{const job=data?.jobs.find(item=>item.id===jobId);void rpc('cancel',{courseId:job?.courseId??selected,jobId}).then(()=>refresh()).catch(error=>setError(error instanceof Error?error.message:'取消任务失败'));}} onOpenFailures={courseId=>{void openUiCourse(courseId).then(ok=>{if(ok){setTab('materials');setShowRight(true)}})}}/>
     {coursePicker&&<CoursePicker courses={uiData?.courses.filter(item=>!item.archived)??[]} selected={selected} onClose={()=>setCoursePicker(false)} onChoose={id=>{void openUiCourse(id,learningMode).then(ok=>{if(ok)setCoursePicker(false)})}}/>}
     {pointRename&&<Modal title="重命名知识点" onClose={()=>setPointRename(null)}><form onSubmit={async e=>{e.preventDefault();if(await run('point',{pointId:pointRename.id,name:pointRename.name.trim()}))setPointRename(null)}}><div className="form-field"><span id="point-rename-label">知识点名称</span><input aria-labelledby="point-rename-label" autoFocus required value={pointRename.name} onChange={e=>setPointRename({...pointRename,name:e.target.value})}/></div><div className="modal-actions"><button type="button" className="button" onClick={()=>setPointRename(null)}>取消</button><button className="button primary" disabled={busy||!pointRename.name.trim()}>保存</button></div></form></Modal>}
     {confirmation&&<ConfirmDialog request={confirmation} onClose={()=>setConfirmation(null)}/>}

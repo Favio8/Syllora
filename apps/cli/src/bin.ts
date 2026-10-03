@@ -50,6 +50,7 @@ import {
   setCredential,
   setSharedConfigRoot,
   settingsPayload,
+  streamReadingAsk,
   updateSettings,
   testConnection,
   reorderProviders,
@@ -1051,7 +1052,12 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
-          const hit = await staticHost.respond(url.pathname, { sessionCookie: sessionCookieOf(request) })
+          // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
+          // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
+          // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
+          // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
+          const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
+          const hit = await staticHost.respond(url.pathname, { sessionCookie })
           if (hit === null) {
             response.writeHead(404)
             response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
@@ -1152,6 +1158,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         }
         if (method === 'agents/answer/stream') {
           await handleAgentAnswerStream(request, response, body)
+          return
+        }
+        // 需求六：辅助阅读「直接提问」——不检索知识库、不标注来源的流式回答。
+        // 放在 syllora/ 通用分发之前：通用分发只认已注册动作表，且它的载荷
+        // 由 syllora.handle 消费，这条路由自己解包、自己写 SSE。
+        if (method === 'syllora/reading-ask') {
+          await handleReadingAsk(request, response, body)
           return
         }
         // 评测提交：Web 客户端用斜杠 `eval/submit`，CLI 自带命令用点号 `eval.submit`，
@@ -1650,6 +1663,77 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       }
     }
     writeFrame('done', { usage: {}, turnId: answeredTurnId })
+    response.end()
+  }
+
+  /**
+   * `POST /api/syllora/reading-ask` (SSE)：辅助阅读「直接提问」。
+   *
+   * 与 chat/stream 的区别：不检索课程知识库、不落盘任何记录、不标注来源——
+   * 帧形制仍与 chat/stream 同一套（meta / token / error / done），token 帧
+   * 携带 `{ delta }`，客户端边收边追加。请求体形如
+   * `{ payload: { courseId, prompt, selection?, documentTitle? } }`（同其余
+   * `/api/syllora/*` 端点）。
+   */
+  async function handleReadingAsk(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
+    const abortController = new AbortController()
+    // CR-15：断连监听必须在 handler 入口立即注册（理由同 handleChatStream）。
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
+    let input: { courseId?: unknown; prompt?: unknown; selection?: unknown; documentTitle?: unknown }
+    try {
+      const parsed = JSON.parse(body === '' ? '{}' : body) as { payload?: unknown }
+      // 其余 /api/syllora/* 端点都走 { payload } 信封；这里同样解包，仅在缺
+      // 信封时容忍顶层直传（老客户端/手工 curl 不至于 400）。
+      input = (typeof parsed.payload === 'object' && parsed.payload !== null ? parsed.payload : parsed) as typeof input
+    } catch {
+      response.writeHead(400)
+      response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'request body is not valid JSON', details: null } }))
+      return
+    }
+    const courseId = typeof input.courseId === 'string' ? input.courseId.trim() : ''
+    const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : ''
+    const selection = typeof input.selection === 'string' ? input.selection.trim() : ''
+    const documentTitle = typeof input.documentTitle === 'string' ? input.documentTitle.trim() : ''
+    if (courseId === '' || prompt === '' || prompt.length > 4000 || selection.length > 4000) {
+      response.writeHead(400)
+      response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'courseId 与 prompt 必填，prompt/selection 各不超过 4000 字符', details: null } }))
+      return
+    }
+    // 与 chat/stream 同一解析：工作台切课不会重新 openCourse，按 courseId 定位
+    // 课程根；模型配置通常写在共享设置目录，由 loadChatConfig 内部回落。
+    const workspaceRoot = await workspaceForCourse(courseId)
+    if (workspaceRoot === '') {
+      response.writeHead(409)
+      response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))
+      return
+    }
+    const config = await loadChatConfig(workspaceRoot).catch(() => null)
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    })
+    // 与 chat/stream 一致：先 flush 响应头，首个 token 之前客户端就能拿到流。
+    response.flushHeaders?.()
+    const writeFrame = (event: string, data: unknown): void => {
+      if (response.writableEnded || response.destroyed) return
+      response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    }
+    writeFrame('meta', { courseId, mode: 'reading-ask', documentTitle })
+    try {
+      for await (const chunk of streamReadingAsk(config, { prompt, selection, documentTitle }, abortController.signal)) {
+        if (abortController.signal.aborted) break
+        if (chunk.kind === 'token') writeFrame('token', { delta: chunk.delta ?? '' })
+        else if (chunk.kind === 'error') writeFrame('error', { code: 'READING_ASK_FAILED', message: chunk.message ?? 'AI 直答未完成，请重试。' })
+      }
+    } catch (error) {
+      if (abortController.signal.aborted) { response.end(); return }
+      // BUG-005：错误帧同样可能携带上游凭据回显，出帧前净化。
+      const message = sanitizeErrorMessage(error instanceof Error ? error.message : String(error))
+      console.error('[syllora] syllora/reading-ask 失败:', message)
+      writeFrame('error', { code: 'READING_ASK_FAILED', message })
+    }
+    writeFrame('done', { usage: {}, turnId: null })
     response.end()
   }
 

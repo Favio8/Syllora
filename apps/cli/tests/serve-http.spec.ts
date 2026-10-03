@@ -396,6 +396,17 @@ describe("serve HTTP 边界（集成）", () => {
     expect(js.headers.get("content-type")).toContain("javascript");
   }, 15_000);
 
+  it("失效的会话 Cookie 回落到票据页（宿主重启换密钥后自愈）", async () => {
+    // Cookie 不区分端口：宿主重启换了会话密钥后，浏览器仍会带上旧 Cookie。
+    // 旧实现只看"Cookie 非空"就交付真 SPA，于是页面加载成功但所有 /api/* 401，
+    // 用户卡在"缺少或错误的访问令牌"且没有恢复入口。
+    const stale = await fetch(`${base()}/`, { headers: { cookie: "syllora_session=deadbeef" }, signal: AbortSignal.timeout(8_000) });
+    expect(stale.status).toBe(200);
+    const html = await stale.text();
+    expect(html).toContain("/api/session");
+    expect(html).not.toContain("sc-ui");
+  }, 15_000);
+
   it("SPA 回落：无扩展名路由返回票据页（未持会话）", async () => {
     const spa = await fetch(`${base()}/some/deep/route`, { signal: AbortSignal.timeout(8_000) });
     expect(spa.status).toBe(200);

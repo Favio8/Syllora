@@ -19,6 +19,7 @@ import NotesEditor from "./NotesEditor";
 import NotesGraph from "./NotesGraph";
 import ModelSeat from "./chat/ModelSeat";
 import LearningModeSwitch from "../features/workbench/components/LearningModeSwitch";
+import Dropdown from "../features/workbench/components/Dropdown";
 
 interface Props {
   courseId: string;
@@ -26,6 +27,9 @@ interface Props {
   onClose: () => void;
   /** 切到对话学习 / 辅助阅读：由外壳负责离开笔记页并设置学习模式。 */
   onSwitchMode: (mode: 'chat' | 'reading') => void;
+  /** 需求七：笔记页内直接切换课程（左栏下拉）。未归档课程全量。 */
+  courses?: Array<{ id: string; name: string }>;
+  onSwitchCourse?: (courseId: string) => void | Promise<void>;
 }
 
 /** 输入框左侧的功能键：点一下就用当前上下文执行。 */
@@ -63,7 +67,7 @@ function textToContent(text: string): Array<Record<string, unknown>> {
 
 const formatUpdated = (at: number) => new Date(at).toLocaleString("zh-CN", { hour12: false });
 
-export default function NotesWorkspace({ courseId, courseName, onClose, onSwitchMode }: Props) {
+export default function NotesWorkspace({ courseId, courseName, onClose, onSwitchMode, courses = [], onSwitchCourse }: Props) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -85,6 +89,10 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
   const [editor, setEditor] = useState<Editor | null>(null);
   // 图谱刷新用：保存/新建/删除后自增
   const [graphEpoch, setGraphEpoch] = useState(0);
+  /** 需求一：原先用 window.confirm —— 原生阻塞框会冻住整个渲染进程（轮询、
+   *  输入法组合全部停摆），弹窗被 Esc 划掉后焦点还会掉到 body 上，表现为
+   *  「怎么打字都没反应」。改成应用内非阻塞确认框。 */
+  const [confirmAsk, setConfirmAsk] = useState<{ message: string; confirmLabel: string; danger?: boolean; run: () => void } | null>(null);
 
   const aiInputRef = useRef<HTMLTextAreaElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
@@ -110,6 +118,13 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
   }, [load]);
 
   useEffect(() => { if (creating) newTitleRef.current?.focus(); }, [creating]);
+
+  // 需求七：笔记页内切换课程后，编辑器要回到"空选择"状态（同一组件实例换课）。
+  useEffect(() => {
+    setEditingId(null); setTitle(""); setContent(""); setSavedLinks([]);
+    setAiResult(null); setAiPrompt(""); setSelection(null); setPendingLink(null); setLinking(false);
+    loadedRef.current = null;
+  }, [courseId]);
 
   // 输入框自动增高：下边界固定（在编辑器列底部），内容多只向上长。
   useEffect(() => {
@@ -143,16 +158,16 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
 
   const dirty = editingId !== null && loadedRef.current !== null && (title !== loadedRef.current.title || content !== loadedRef.current.content);
   /** 未保存修改的守卫；返回 true 表示可以离开。 */
-  const confirmLeave = () => !dirty || window.confirm("这篇笔记有未保存的修改，确定放弃并返回？");
+  const confirmLeave = () => !dirty;
   const closeWithGuard = () => {
-    if (!confirmLeave()) return;
-    onClose();
+    if (confirmLeave()) { onClose(); return; }
+    setConfirmAsk({ message: "这篇笔记有未保存的修改，确定放弃并返回？", confirmLabel: "放弃修改并返回", run: onClose });
   };
   /** 切模式前走同一条守卫，避免静默丢掉未保存的修改。 */
   const switchMode = (surface: 'chat' | 'reading' | 'notes') => {
     if (surface === 'notes') return;
-    if (!confirmLeave()) return;
-    onSwitchMode(surface);
+    if (confirmLeave()) { onSwitchMode(surface); return; }
+    setConfirmAsk({ message: "这篇笔记有未保存的修改，确定放弃并切换？", confirmLabel: "放弃修改并切换", run: () => onSwitchMode(surface) });
   };
 
   const create = async () => {
@@ -194,7 +209,12 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
 
   const remove = async (noteId: string) => {
     if (busy) return;
-    if (!window.confirm("删除这篇笔记？正文与其中的图片会一并删除，无法撤销。")) return;
+    setConfirmAsk({ message: "删除这篇笔记？正文与其中的图片会一并删除，无法撤销。", confirmLabel: "删除笔记", danger: true, run: () => void removeNote(noteId) });
+    return;
+  };
+
+  const removeNote = async (noteId: string) => {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -341,6 +361,22 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
       <div className="sy-nw-body">
         {/* 左：笔记列表 + 图片树 */}
         <aside className="sy-nw-list">
+          {/* 需求七：笔记页内直接切换课程——未保存的修改先走应用内确认。 */}
+          {courses.length > 0 && (
+            <div className="sy-nw-course">
+              <Dropdown
+                label="选择课程"
+                value={courseId}
+                options={courses.map(item => ({ value: item.id, label: item.name }))}
+                onChange={value => {
+                  if (value === courseId || !onSwitchCourse) return;
+                  const go = () => { void onSwitchCourse(value); };
+                  if (!confirmLeave()) { setConfirmAsk({ message: "这篇笔记有未保存的修改，切课将放弃，确定？", confirmLabel: "放弃修改并切换课程", run: go }); return; }
+                  go();
+                }}
+              />
+            </div>
+          )}
           <div className="sy-nw-list-head">
             <span>本课程笔记 <small>{notes.length}</small></span>
             <button aria-label="新建笔记" title="新建笔记" onClick={() => { setCreating(true); setNewTitle(""); }}><Plus size={15} /></button>
@@ -361,7 +397,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
             return (
               <div className="sy-nw-group" key={note.id}>
                 <div className={`sy-nw-item ${isSelected ? "is-selected" : ""}`}>
-                  <button type="button" className="sy-nw-item-btn" aria-label={`打开笔记 ${note.title}`} onClick={() => { if (dirty && !window.confirm("有未保存的修改，切换将放弃，确定？")) return; void open(note.id); }}>
+                  <button type="button" className="sy-nw-item-btn" aria-label={`打开笔记 ${note.title}`} onClick={() => { if (dirty) { setConfirmAsk({ message: "有未保存的修改，切换将放弃，确定？", confirmLabel: "放弃修改并切换", run: () => { void open(note.id); } }); return; } void open(note.id); }}>
                     <strong>{note.title}</strong>
                     <small>{formatUpdated(note.updatedAt)}{hasImages ? ` · ${note.images.length} 图` : ""}</small>
                   </button>
@@ -470,6 +506,20 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
           <NotesGraph courseId={courseId} refreshKey={graphEpoch} fill />
         </aside>
       </div>
+
+      {/* 需求一：应用内确认框（替代 window.confirm，不阻塞渲染进程） */}
+      {confirmAsk && (
+        <div className="sy-overlay" onClick={() => setConfirmAsk(null)}>
+          <section className="sy-modal sy-confirm-inline" role="alertdialog" aria-modal="true" aria-label="需要确认" onClick={event => event.stopPropagation()}>
+            <header><h2>需要确认</h2><button aria-label="关闭确认" onClick={() => setConfirmAsk(null)}><X size={19} /></button></header>
+            <p>{confirmAsk.message}</p>
+            <div className="sy-row">
+              <button className={confirmAsk.danger ? "sy-danger" : "sy-primary"} type="button" autoFocus onClick={() => { const ask = confirmAsk; setConfirmAsk(null); ask.run(); }}>{confirmAsk.confirmLabel}</button>
+              <button type="button" onClick={() => setConfirmAsk(null)}>取消</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* 关联选择浮层 */}
       {linking && (

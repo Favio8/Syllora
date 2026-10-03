@@ -1,4 +1,4 @@
-import { ApiError } from '@/src/lib/api';
+import { ApiError, streamSse } from '@/src/lib/api';
 import type { SylloraState } from '@/src/types/syllora';
 import type { ReadingDocument, ReadingService } from './types';
 
@@ -39,6 +39,13 @@ export async function logicalRequest<T=unknown>(action:string,payload:Record<str
     throw error;
   }
 }
+/** 需求六：reading-ask 的 SSE 帧（宿主 bin.ts 的 handleReadingAsk，形制同 chat/stream）。 */
+type ReadingAskFrame=
+  | {event:'meta';data:{courseId:string;mode:string;documentTitle:string}}
+  | {event:'token';data:{delta:string}}
+  | {event:'done';data:{usage:Record<string,unknown>;turnId:string|null}}
+  | {event:'error';data:{code:string;message:string}};
+
 export const readingService:ReadingService={
   async document(courseId,materialId) {
     const result=await workbenchRpc<Omit<ReadingDocument,'courseId'>>('readingDocument',{courseId,materialId});
@@ -89,5 +96,26 @@ export const readingService:ReadingService={
       if(signal?.aborted){cancel();throw new Error('阅读请求已取消');}
       throw error;
     } finally {signal?.removeEventListener('abort',cancel);}
+  },
+  /**
+   * 需求六：辅助阅读「直接提问」——不参考课程知识库、不标注来源、逐 token 流式。
+   * `onDelta` 每收到一个 token 帧就回调一次（调用方边收边渲染）；`error` 帧直接
+   * 抛错交由界面进入重试态；`done` 帧后以累计文本 resolve。取消走传入的 signal
+   * （宿主侧 onClientDisconnect 会中止上游请求，不落盘任何记录）。
+   */
+  async ask(document,selection,prompt,signal,options) {
+    const question=prompt.trim();
+    if(question==='')throw new Error('请输入提示词后再发送。');
+    if(signal?.aborted)throw new Error('阅读请求已取消');
+    let text='';
+    for await (const frame of streamSse<ReadingAskFrame>('/api/syllora/reading-ask',{payload:{courseId:document?.courseId??'',prompt:question,selection,documentTitle:document?.title||document?.name||''}},undefined,signal)) {
+      if(frame.event==='token') {
+        const delta=typeof frame.data?.delta==='string'?frame.data.delta:'';
+        if(delta!==''){text+=delta;options?.onDelta?.(delta);}
+      } else if(frame.event==='error') {
+        throw new Error(frame.data?.message||'AI 直答未完成，请重试。');
+      }
+    }
+    return {text};
   },
 };

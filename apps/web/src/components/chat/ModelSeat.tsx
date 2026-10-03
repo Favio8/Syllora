@@ -125,7 +125,7 @@ export default function ModelSeat({ onOpenSettings }: { onOpenSettings?: () => v
       aria-haspopup="menu"
       title={modelTitle}
       onClick={() => { setOpen((value) => !value); setPane("root"); }}
-      className="flex h-7 max-w-[260px] items-center gap-1.5 rounded-lg border border-border-faint bg-bg-card/60 px-2 text-[13px] font-medium leading-5 text-text-primary transition-colors hover:bg-bg-card"
+      className="composer-model-seat flex h-7 max-w-[260px] items-center gap-1.5 rounded-lg border border-border-faint bg-bg-card/60 px-2 text-[13px] font-medium leading-5 text-text-primary transition-colors"
     >
       <Sparkles size={13} strokeWidth={1.8} className="shrink-0 text-text-faint" aria-hidden />
       <span className="max-w-[168px] truncate">{caption}</span>

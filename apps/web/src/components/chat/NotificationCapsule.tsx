@@ -36,8 +36,6 @@ export interface NotificationCapsuleProps {
   onRetry?: (job: Job) => void;
   /** 失败页明细入口（跳到该课程的「资料」分组）。 */
   onOpenFailures?: (courseId: string) => void;
-  /** 上下文覆盖提示（旧实现是中栏横条之一，现在收进面板）。 */
-  coverageNote?: string | null;
 }
 
 /** 已读集合只存在本会话内存里：刷新后再次提示比静默丢掉更安全。 */
@@ -54,7 +52,7 @@ interface Entry {
   readonly: boolean;
 }
 
-export default function NotificationCapsule({ jobs, courseName, onCancel, onRetry, onOpenFailures, coverageNote }: NotificationCapsuleProps) {
+export default function NotificationCapsule({ jobs, courseName, onCancel, onRetry, onOpenFailures }: NotificationCapsuleProps) {
   const [open, setOpen] = useState(false);
   const [closedSuccesses, setClosedSuccesses] = useState<ReadonlySet<string>>(new Set());
   /** 成功条目进入停留计时；到点后从面板移出（胶囊随之消失）。 */
@@ -91,11 +89,10 @@ export default function NotificationCapsule({ jobs, courseName, onCancel, onRetr
     return () => document.removeEventListener('keydown', key);
   }, [open]);
 
-  // 只有覆盖提示时也显示胶囊（旧实现同样会显示横条）。
-  if (entries.length === 0 && !coverageNote) return null;
+  if (entries.length === 0) return null;
 
   const unread = needsAttention.length + running.length;
-  const summary = entries.length === 0 && coverageNote ? '上下文覆盖提示' : running.length > 0
+  const summary = running.length > 0
     ? `${running.length > 1 ? `${running.length} 个任务进行中` : '整理中'}${running[0]!.job.progress ? ` ${running[0]!.job.progress!.done}/${running[0]!.job.progress!.total}` : ''}`
     : needsAttention.length > 0
       ? `${needsAttention.length} 个任务失败`
@@ -117,7 +114,6 @@ export default function NotificationCapsule({ jobs, courseName, onCancel, onRetr
         <span>{running.length > 0 ? `${running.length} 进行中` : needsAttention.length > 0 ? `${needsAttention.length} 待处理` : '已结束'}</span>
         <button type="button" aria-label="收起通知面板" onClick={() => { setOpen(false); capsuleRef.current?.focus(); }}><X size={15} /></button>
       </header>
-      {coverageNote ? <p className="notification-coverage" role="status">{coverageNote}</p> : null}
       <div className="notification-list">
         {entries.map(entry => {
           const progress = entry.job.progress as JobProgress | undefined;

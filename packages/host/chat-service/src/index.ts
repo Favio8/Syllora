@@ -52,3 +52,5 @@ export {
 export type { SessionSummaryView, SessionSearchView, RestoredSessionView, SessionModelDirectory, SessionModelSelection, SessionModelGroup, LearningAgentOptions, AgentRuntimeConfig, SessionEventView, MaintenanceJobView } from './service.ts'
 export { createCourseService, CourseNotFoundError, JobManager, resolveCourseDir } from './course.ts'
 export type { CourseService, JobView } from './course.ts'
+export { streamReadingAsk, READING_ASK_MAX_CHARS } from './reading-ask.ts'
+export type { ReadingAskInput, ReadingAskChunk, ReadingAskClientFactory } from './reading-ask.ts'
