@@ -887,6 +887,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const mode = input['mode'] === 'quick' || input['mode'] === 'feynman' || input['mode'] === 'debug' ? input['mode'] : 'quick'
     const streaming = input['stream'] === true
     const requestedAfterSeq = typeof input['afterSeq'] === 'number' && Number.isInteger(input['afterSeq']) && input['afterSeq'] >= 0 ? input['afterSeq'] : 0
+    // 课程作用域端点必须按 courseId 解析课程根（与 wrapCourseService / handleChatStream 同口径）：
+    // 旧实现拿 lastOpenedPath 当根，切课后等于用另一门课的目录去校验 courseId——
+    // ACP prompt 会对一门确实存在的课报 COURSE_NOT_FOUND，而 session.replay 走
+    // dispatch（已按 courseId 解析）却正常，两者行为自相矛盾。
+    const workspaceRoot = await workspaceForCourse(courseId)
     const config = await configFacts()
     let resolvedSessionId = sessionId
     // Streaming clients already receive visible chat events as updates. Capture
@@ -895,13 +900,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // Aggregate requests keep the full replay contract and use afterSeq.
     let replayAfterSeq = requestedAfterSeq
     if (streaming && resolvedSessionId !== null) {
-      replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, 0)).lastSeq)
+      replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(workspaceRoot, courseId, resolvedSessionId, 0)).lastSeq)
     }
     let capturedNewSessionBoundary = false
     const emitFrame = (update: Record<string, unknown>): void => {
       emit?.({ sessionId: resolvedSessionId, kind: String(update['kind'] ?? 'sync'), ...update })
     }
-    for await (const frame of chatStream(registry.lastOpenedPath, courseId, {
+    for await (const frame of chatStream(workspaceRoot, courseId, {
       ...(resolvedSessionId === null ? {} : { sessionId: resolvedSessionId }),
       message,
       mode,
@@ -914,7 +919,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       if (frame.kind === 'meta') {
         resolvedSessionId = String(frame.payload['sessionId'] ?? resolvedSessionId ?? '') || null
         if (streaming && sessionId === null && !capturedNewSessionBoundary && resolvedSessionId !== null) {
-          replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, 0)).lastSeq)
+          replayAfterSeq = Math.max(replayAfterSeq, (await sessionEvents(workspaceRoot, courseId, resolvedSessionId, 0)).lastSeq)
           capturedNewSessionBoundary = true
         }
       }
@@ -929,7 +934,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     const replay = resolvedSessionId === null
       ? { events: [], lastSeq: 0 }
-      : await sessionEvents(registry.lastOpenedPath, courseId, resolvedSessionId, streaming ? replayAfterSeq : requestedAfterSeq)
+      : await sessionEvents(workspaceRoot, courseId, resolvedSessionId, streaming ? replayAfterSeq : requestedAfterSeq)
     // These durable rows already correspond to ordered `session/update`
     // frames. Replaying them after a streaming request would duplicate message
     // content and ToolRows in ACP clients. Keep lifecycle/usage rows available

@@ -533,6 +533,45 @@ describe("serve HTTP 边界（集成）", () => {
       stop(uploadHost);
     }
   }, 30_000);
+
+  it("ACP session.prompt 按 courseId 解析课程根，不因最后打开的是另一门课而报课程不存在", async () => {
+    // 回归：runAcpPrompt 曾用 registry.lastOpenedPath 当根——切换课程后等于拿另一门课
+    // 的目录去校验 courseId，ACP prompt 会对一门确实存在的课报 COURSE_NOT_FOUND，
+    // 而 session.replay 走 dispatch（已按 courseId 解析）却正常，行为自相矛盾。
+    const acpHost = await startHost();
+    const acpBase = `http://127.0.0.1:${acpHost.port}`;
+    const acpRpc = async (method: string, payload: unknown): Promise<any> => {
+      const response = await fetch(`${acpBase}/api/${method}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${acpHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      return (await response.json()) as any;
+    };
+    try {
+      const firstFolder = join(acpHost.home, "acp-course-a");
+      const secondFolder = join(acpHost.home, "acp-course-b");
+      mkdirSync(firstFolder);
+      mkdirSync(secondFolder);
+      // 课程作用域端点的 courseId = 课程文件夹名（courseDirOf 的等值校验），
+      // 与 openCourse 返回的工作区注册表 id 不是一回事。
+      const courseId = basename(firstFolder);
+      await acpRpc("syllora/openCourse", { path: firstFolder });
+      // 把 lastOpenedPath 移到另一门课：此后按 lastOpenedPath 解析根的实现必然用错目录。
+      await acpRpc("syllora/openCourse", { path: secondFolder });
+      const response = await fetch(`${acpBase}/api/acp`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${acpHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session.prompt", params: { courseId, message: "ping" } }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.stringify(await response.json())).not.toContain("COURSE_NOT_FOUND");
+    } finally {
+      stop(acpHost);
+    }
+  }, 30_000);
 });
 
 describe("serve 关停与实例锁", () => {
