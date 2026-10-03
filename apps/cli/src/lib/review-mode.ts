@@ -11,6 +11,7 @@ function inside(root: string, target: string): boolean {
 export interface ReviewMode {
   readonly root: string
   readonly coursesRoot: string
+  readonly publicAccess: boolean
   acceptsOrigin(origin: string | undefined): boolean
   cors(request: IncomingMessage, response: ServerResponse): void
   workspace(path: string): Promise<string>
@@ -46,7 +47,7 @@ export async function prepareReviewMode(env: NodeJS.ProcessEnv = process.env): P
     return canonical
   }
   return {
-    root, coursesRoot, workspace,
+    root, coursesRoot, workspace, publicAccess: env.SYLLORA_REVIEW_PUBLIC === '1',
     acceptsOrigin: origin => isLoopbackOrigin(origin) || (origin !== undefined && origins.has(origin)),
     cors(request, response) {
       response.setHeader('Cache-Control', 'private, no-store')

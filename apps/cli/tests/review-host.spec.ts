@@ -9,10 +9,10 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const origin = 'https://syllora-review.vercel.app'
 let root: string, child: ChildProcess, base: string, token: string
-async function start() {
+async function start(publicAccess = false) {
   child = spawn(process.execPath, ['--import', 'tsx', 'apps/cli/src/bin.ts', 'serve', '--port', '0'], {
     cwd: repo, windowsHide: true, stdio: 'ignore',
-    env: { ...process.env, TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_ALLOWED_ORIGINS: origin },
+    env: { ...process.env, TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_REVIEW_PUBLIC: publicAccess ? '1' : '0', SYLLORA_ALLOWED_ORIGINS: origin },
   })
   for (let n = 0; n < 200; n++) {
     const state = await readFile(join(root, 'home', 'host.json'), 'utf8').then(JSON.parse).catch(() => null)
@@ -79,4 +79,28 @@ it('does not cache authenticated review note assets', async () => {
   const image = await fetch(`${base}/api/syllora/notes/asset?courseId=${courseId}&name=${uploaded.result.name}`, { headers: { Authorization: `Bearer ${token}`, Origin: origin } })
   expect(image.status).toBe(200)
   expect(image.headers.get('Cache-Control')).toContain('no-store')
+})
+it('explicitly opens business and supplier management without credentials while preserving boundaries', async () => {
+  await stop(); await start(true)
+  const session = await fetch(`${base}/api/session`, { method: 'POST', headers: { Origin: origin } })
+  expect(await session.json()).toEqual({ ok: true, session: 'public' })
+  expect(session.headers.get('Set-Cookie')).toBeNull()
+  const state = await post('syllora/state', {}, '').then(r => r.json()) as any
+  expect(state.error).toBeUndefined()
+  expect(state.result.courses.some((course: { name: string }) => course.name === 'Persisted review course')).toBe(true)
+  for (const [method, payload] of [['settings.get', {}], ['settings.update', {}], ['settings.exportProviders', {}]] as const) {
+    const response = await post(method, payload, '')
+    expect(response.status, method).toBe(200)
+    expect((await response.json() as any).error, method).toBeUndefined()
+  }
+  const denied = await fetch(`${base}/api/syllora/state`, { method: 'OPTIONS', headers: { Origin: 'https://attacker.example' } })
+  expect(denied.status).toBe(403)
+  const outside = await post('syllora/openCourse', { path: root }, '').then(r => r.json()) as any
+  expect(outside.error).toBeDefined()
+  const image = await fetch(`${base}/api/syllora/notes/asset?courseId=8c7b8f6d-0487-403d-a951-0160f0b905ab&name=nonexistent.png`)
+  expect(image.status).not.toBe(401)
+  await stop(); await start(true)
+  expect((await post('syllora/state', {}, '')).status).toBe(200)
+  await stop(); await start()
+  expect((await post('syllora/state', {}, '')).status).toBe(401)
 })

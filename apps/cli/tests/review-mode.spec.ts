@@ -10,12 +10,14 @@ afterEach(async () => { for (const value of roots.splice(0)) await rm(value, { r
 describe('review filesystem and origin boundaries', () => {
   it('preserves ordinary startup and requires an explicit isolated root', async () => {
     expect(await prepareReviewMode({})).toBeNull()
+    expect(await prepareReviewMode({ SYLLORA_REVIEW_PUBLIC: '1' })).toBeNull()
     await expect(prepareReviewMode({ SYLLORA_REVIEW_MODE: '1' })).rejects.toThrow('ROOT')
   })
   it('isolates settings and courses and accepts only exact production or local origins', async () => {
     const value = await root()
     const env = { SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: value, SYLLORA_ALLOWED_ORIGINS: 'https://syllora.vercel.app', SYLLORA_DATA_DIR: 'outside' }
     const review = (await prepareReviewMode(env))!
+    expect(review.publicAccess).toBe(false)
     expect(env.SYLLORA_DATA_DIR).toBe(join(value, 'data'))
     expect(review.acceptsOrigin('https://syllora.vercel.app')).toBe(true)
     expect(review.acceptsOrigin('https://preview-syllora.vercel.app')).toBe(false)
@@ -24,6 +26,11 @@ describe('review filesystem and origin boundaries', () => {
     expect(review.acceptsOrigin('null')).toBe(false)
     await expect(review.workspace(join(value, 'data'))).rejects.toThrow('课程目录')
     await expect(review.browse('..')).rejects.toThrow('课程目录')
+  })
+  it('opens public access only with an explicit review flag', async () => {
+    const value = await root()
+    expect((await prepareReviewMode({ SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: value, SYLLORA_REVIEW_PUBLIC: 'true' }))!.publicAccess).toBe(false)
+    expect((await prepareReviewMode({ SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: value, SYLLORA_REVIEW_PUBLIC: '1' }))!.publicAccess).toBe(true)
   })
   it('hides outside junctions, files and dangling links while allowing course directories', async () => {
     const value = await root()

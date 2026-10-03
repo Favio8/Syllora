@@ -5,7 +5,8 @@
   "outputDirectory": "apps/web/out",
   "build": {
     "env": {
-      "NEXT_PUBLIC_SYLLORA_API_URL": "https://casually-clarify-trapdoor.ngrok-free.dev"
+      "NEXT_PUBLIC_SYLLORA_API_URL": "https://casually-clarify-trapdoor.ngrok-free.dev",
+      "NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC": "1"
     }
   },
   "routes": [

@@ -1043,6 +1043,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: 'method not allowed', details: null } }))
         return
       }
+      if (review?.publicAccess) {
+        response.writeHead(200, { 'Cache-Control': 'private, no-store' })
+        response.end(JSON.stringify({ ok: true, session: 'public' }))
+        return
+      }
       if (token === null) {
         response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=none; HttpOnly; SameSite=Strict; Path=/` })
         response.end(JSON.stringify({ ok: true, session: 'disabled' }))
@@ -1062,7 +1067,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // 下发的 HttpOnly 会话 Cookie（旧版把 token 内嵌进静态 HTML，任意本机进程
     // curl / 即可提取 token 并调用全部 /api/*；现在 HTML 不含任何凭据）。
     // 静态资源（UI 资产）不设门禁，公开可读。
-    if (url.pathname.startsWith('/api/') && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
+    if (url.pathname.startsWith('/api/') && !review?.publicAccess && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
       response.writeHead(401)
       response.end(JSON.stringify({ error: { code: 'unauthorized', message: `缺少或错误的访问令牌（token 记录于 ${join(hostHome(), 'host.json')}，请求头 Authorization: Bearer <token>）`, details: null } }))
       return

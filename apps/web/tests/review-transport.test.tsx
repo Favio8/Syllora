@@ -5,7 +5,7 @@ import ReviewAccess from '../src/components/ReviewAccess';
 import { authenticateReview, reviewFetch, reviewToken, setReviewToken } from '../src/lib/review-transport';
 
 const request = vi.fn();
-beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_SYLLORA_API_URL', 'https://review.ngrok-free.app'); vi.stubGlobal('fetch', request); sessionStorage.clear(); request.mockReset(); setReviewToken(null); });
+beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_SYLLORA_API_URL', 'https://review.ngrok-free.app'); vi.stubEnv('NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC', '0'); vi.stubGlobal('fetch', request); sessionStorage.clear(); request.mockReset(); setReviewToken(null); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 describe('review browser transport', () => {
   it('sends REST, uploads and SSE directly with a tab-scoped bearer and no cross-site cookie', async () => {
@@ -61,5 +61,20 @@ describe('review browser transport', () => {
     expect(request).toHaveBeenCalledWith('/api/syllora/state', init);
     render(<ReviewAccess><div>local workbench</div></ReviewAccess>);
     expect(screen.getByText('local workbench')).toBeTruthy();
+  });
+  it('opens a public workbench without a code and discards credentials from previous private sessions', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC', '1');
+    setReviewToken('old-private-code');
+    request.mockResolvedValue(new Response('{}'));
+    render(<ReviewAccess><div>public workbench</div></ReviewAccess>);
+    expect(screen.getByText('public workbench')).toBeTruthy();
+    expect(screen.queryByLabelText('访问码')).toBeNull();
+    expect(screen.queryByText('退出评审')).toBeNull();
+    expect(request).not.toHaveBeenCalled();
+    expect(reviewToken()).toBeNull();
+    await reviewFetch('/api/settings.get', { method: 'POST', headers: { Authorization: 'Bearer stale' } });
+    expect(request.mock.calls[0]![1].headers.has('Authorization')).toBe(false);
+    await reviewFetch('/api/syllora/material-file?courseId=c&sourceId=s');
+    expect(request.mock.calls[1]![0]).toBe('/api/syllora/material-file?courseId=c&sourceId=s');
   });
 });

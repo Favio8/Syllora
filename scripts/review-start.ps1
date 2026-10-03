@@ -2,13 +2,18 @@ param(
     [string]$FrontendOrigin,
     [string]$NgrokExe = 'ngrok',
     [int]$Port = 8081,
-    [switch]$BackendOnly
+    [switch]$BackendOnly,
+    [switch]$PublicAccess
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $reviewRoot = Join-Path $repoRoot '.syllora-review'
 New-Item -ItemType Directory -Path $reviewRoot -Force | Out-Null
 $configPath = Join-Path $reviewRoot 'runtime.json'
+if (-not $PSBoundParameters.ContainsKey('PublicAccess') -and (Test-Path -LiteralPath $configPath)) {
+    $savedAccess = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $PublicAccess = $savedAccess.publicAccess -eq $true
+}
 if (-not $FrontendOrigin -and (Test-Path -LiteralPath $configPath)) {
     $saved = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $FrontendOrigin = $saved.frontendOrigin
@@ -27,10 +32,11 @@ if (Test-Path -LiteralPath $statePath) {
 $nodeExe = (Get-Command node -ErrorAction Stop).Source
 $env:SYLLORA_REVIEW_MODE = '1'
 $env:SYLLORA_REVIEW_ROOT = $reviewRoot
+$env:SYLLORA_REVIEW_PUBLIC = if ($PublicAccess) { '1' } else { '0' }
 $env:SYLLORA_ALLOWED_ORIGINS = $FrontendOrigin
 $env:TSX_TSCONFIG_PATH = Join-Path $repoRoot 'tsconfig.base.json'
 $backend = Start-Process -FilePath $nodeExe -ArgumentList @('--import', 'tsx', 'apps/cli/src/bin.ts', 'serve', '--port', "$Port") -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $reviewRoot 'backend.stdout.log') -RedirectStandardError (Join-Path $reviewRoot 'backend.stderr.log') -PassThru
-$state = @{ backendPid = $backend.Id; tunnelPid = $null; keepawakePid = $null; port = $Port; frontendOrigin = $FrontendOrigin; startedAt = [DateTimeOffset]::Now.ToString('o') }
+$state = @{ backendPid = $backend.Id; tunnelPid = $null; keepawakePid = $null; port = $Port; frontendOrigin = $FrontendOrigin; publicAccess = [bool]$PublicAccess; startedAt = [DateTimeOffset]::Now.ToString('o') }
 $state | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
 try {
     $hostFile = Join-Path $reviewRoot 'home\host.json'
@@ -71,11 +77,12 @@ try {
             Start-Sleep -Milliseconds 300
         }
         if (-not $publicUrl) { throw 'Tunnel did not become ready within 30 seconds.' }
-        @{ frontendOrigin = $FrontendOrigin; apiUrl = $publicUrl; ngrokExe = $resolvedNgrok; port = $Port } | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding utf8
+        @{ frontendOrigin = $FrontendOrigin; apiUrl = $publicUrl; ngrokExe = $resolvedNgrok; port = $Port; publicAccess = [bool]$PublicAccess } | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding utf8
         Write-Host "Review API: $publicUrl"
     }
     Write-Host "Backend ready: http://127.0.0.1:$Port"
-    Write-Host 'The access code is stored locally in .syllora-review/home/host.json (token). Do not publish this file.'
+    if ($PublicAccess) { Write-Host 'Public review: no access code is required, including supplier management.' }
+    else { Write-Host 'The access code is stored locally in .syllora-review/home/host.json (token). Do not publish this file.' }
     Write-Host 'Keep this computer awake and online during review.'
 } catch {
     if ($state.tunnelPid) { Stop-Process -Id $state.tunnelPid -ErrorAction SilentlyContinue }

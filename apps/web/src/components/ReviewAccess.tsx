@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { BookOpen, LoaderCircle, LogOut } from 'lucide-react';
-import { authenticateReview, reviewApiOrigin, reviewToken, setReviewToken } from '../lib/review-transport';
+import { authenticateReview, reviewApiOrigin, reviewIsPublic, reviewToken, setReviewToken } from '../lib/review-transport';
 import './review-access.css';
 
 export default function ReviewAccess({ children }: { children: ReactNode }) {
   const remote = Boolean(reviewApiOrigin());
+  const publicAccess = reviewIsPublic();
   const [ready, setReady] = useState(!remote);
   const [checking, setChecking] = useState(remote);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    if (publicAccess) { setReviewToken(null); return; }
     if (!remote) return;
     const controller = new AbortController();
     const token = reviewToken();
@@ -23,14 +25,14 @@ export default function ReviewAccess({ children }: { children: ReactNode }) {
     const expired = () => { setReady(false); setReviewToken(null); setError('访问码已失效，请重新登录。'); };
     window.addEventListener('syllora-review-unauthorized', expired);
     return () => { controller.abort(); window.removeEventListener('syllora-review-unauthorized', expired); };
-  }, [remote]);
+  }, [remote, publicAccess]);
   async function login(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try { await authenticateReview(code.trim()); setCode(''); setReady(true); }
     catch (e) { setError(e instanceof Error ? e.message : '连接失败，请重试。'); }
     finally { setBusy(false); }
   }
-  if (!remote) return children;
+  if (!remote || publicAccess) return children;
   if (ready) return <div className="sy-review-session">{children}<button className="sy-review-logout" onClick={async () => {
     setReviewToken(null); setReady(false); setCode('');
     await fetch('/api/session/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined);
