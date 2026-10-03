@@ -71,3 +71,68 @@ describe('PPTX 组装', () => {
     await expect(exportDecksToPptx([])).rejects.toThrow('没有可导出的幻灯片');
   });
 });
+
+/**
+ * 非文本元素此前只用 stub 验证过"失败不影响其他元素"，没有在真实 pptxgenjs 上走过。
+ * 这些分支最可能藏 bug，因此逐个断言生成的包内容。
+ */
+describe('非文本元素的导出', () => {
+  const canvasWith = (elements: unknown[]) => ({
+    viewportSize: 1000,
+    viewportRatio: 0.5625,
+    theme: { backgroundColor: '#ffffff', fontColor: '#202128', fontName: 'Microsoft YaHei' },
+    elements,
+  });
+  const render = async (elements: unknown[]) => {
+    const pptx = buildPptx([{ chapter: 'C', scenes: [{ title: 'T', content: { canvas: canvasWith(elements) } }] }]);
+    const buffer = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
+    const zip = await JSZip.loadAsync(buffer);
+    return { zip, slideXml: await zip.file('ppt/slides/slide1.xml')!.async('string') };
+  };
+
+  it('图片写入媒体并建立引用关系', async () => {
+    // 1×1 透明 PNG。
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const { zip, slideXml } = await render([{ type: 'image', id: 'i1', left: 100, top: 100, width: 400, height: 300, src: png }]);
+    expect(slideXml).toContain('<p:pic>');
+    const rels = await zip.file('ppt/slides/_rels/slide1.xml.rels')!.async('string');
+    expect(rels).toContain('media/');
+    expect(Object.keys(zip.files).some(name => name.startsWith('ppt/media/'))).toBe(true);
+  });
+
+  it('形状按 SVG path 转成图片，保持外形', async () => {
+    const { slideXml } = await render([
+      { type: 'shape', id: 's1', left: 50, top: 50, width: 200, height: 100, viewBox: [200, 100], path: 'M0,0 L200,0 L200,100 Z', fill: '#002fa7', fixedRatio: false },
+    ]);
+    expect(slideXml).toContain('<p:pic>');
+  });
+
+  it('线元素映射为形状（而非图片），并带上颜色', async () => {
+    const { slideXml } = await render([
+      { type: 'line', id: 'l1', left: 100, top: 100, width: 300, height: 0, start: [0, 0], end: [300, 0], color: '#ff0000', style: 'solid', points: ['', ''] },
+    ]);
+    // 线段是带线型的形状：<a:prstGeom prst="line"> + <a:ln><a:solidFill>。
+    expect(slideXml).toContain('<p:sp>');
+    expect(slideXml).toContain('prst="line"');
+    // pptxgenjs 把颜色写成大写 srgbClr，断言不区分大小写。
+    expect(slideXml.toLowerCase()).toContain('ff0000');
+  });
+
+  it('表格映射为原生表格，单元格文本进入 XML', async () => {
+    const { slideXml } = await render([
+      { type: 'table', id: 'tb1', left: 50, top: 50, width: 400, height: 200, colWidths: [0.5, 0.5], data: [[{ text: '甲' }, { text: '乙' }], [{ text: '丙' }, { text: '丁' }]] },
+    ]);
+    expect(slideXml).toContain('a:tbl');
+    expect(slideXml).toContain('甲');
+    expect(slideXml).toContain('丁');
+  });
+
+  it('不支持的 chart 被跳过，其余元素照常写入', async () => {
+    const { slideXml } = await render([
+      { type: 'chart', id: 'c1', left: 0, top: 0, width: 300, height: 200, chartType: 'bar', data: { labels: ['a'], legends: ['x'], series: [[1]] } },
+      { type: 'text', id: 't9', left: 400, top: 400, width: 300, height: 80, content: '<p>仍然写入</p>', defaultColor: '#202128', defaultFontName: 'Microsoft YaHei' },
+    ]);
+    expect(slideXml).toContain('仍然写入');
+    expect(slideXml).not.toContain('<c:chart');
+  });
+});
