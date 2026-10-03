@@ -66,7 +66,7 @@ let queueOwner: { courseId: string | null; sessionId: string | null } = { course
  * 二元组——只绑 question 会让"失败后修改答案再提交"复用旧键，服务端 attach
  * 重放旧答案的回复，新答案被静默丢弃。answer 变化生成新键 → 服务端显式报
  * "没有待回答的问题"（旧回答已消费 pendingAsk），至少不静默。 */
-let lastAnswerAttempt: { question: string; answer: string; requestId: string } | null = null;
+let lastAnswerAttempt: { courseId: string | null; sessionId: string; question: string; answer: string; requestId: string } | null = null;
 
 /** drain 队列复用最新 send（跨实例共享，避免闭到旧实例）。 */
 const sendRef: { current: (text: string, opts?: { skipAppendUser?: boolean; queuedTurnId?: string; reuseRequestId?: string }) => Promise<void> } = {
@@ -99,6 +99,7 @@ export function useChatStream() {
   const toolsRef = useRef<ToolCallView[]>([]);
   const thinkingStartRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const answerOwnerRef = useRef<{ courseId: string | null; sessionId: string } | null>(null);
   /** FE-4：done 后延迟刷新的定时器句柄，卸载时统一清理。 */
   const deferredTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
@@ -141,9 +142,12 @@ export function useChatStream() {
     const state = useAppStore.getState();
     const next = state.shiftQueuedMessage();
     if (next === undefined) return;
-    const owner = queueOwner;
-    const sameOwner = (state.activeCourseId ?? null) === owner.courseId
-      && (state.activeSessionId ?? null) === owner.sessionId;
+    // CR-04：以「条目自带的归属」为准（而非模块级 queueOwner——它记的是最近
+    // 一次 send 的会话，会被新 send 刷新，导致陈旧条目通过守卫）。条目缺失
+    // 归属时回落到 queueOwner，兼容旧行为。
+    const owner = next.owner ?? queueOwner;
+    const sameOwner = (state.activeCourseId ?? null) === (owner.courseId ?? null)
+      && (state.activeSessionId ?? null) === (owner.sessionId ?? null);
     if (!sameOwner) {
       flashStatusBanner("已切换会话，丢弃旧队列消息");
       return;
@@ -192,6 +196,9 @@ export function useChatStream() {
 
   const flush = useCallback(() => {
     rafRef.current = null;
+    const owner = answerOwnerRef.current;
+    const state = useAppStore.getState();
+    if (owner && (state.activeCourseId !== owner.courseId || state.activeSessionId !== owner.sessionId)) return;
     const elapsed = thinkingStartRef.current
       ? Math.max(0, Math.round(performance.now() - thinkingStartRef.current))
       : 0;
@@ -378,14 +385,16 @@ export function useChatStream() {
         // 作为普通 LLM 回合跑一遍。命令只进本地队列（无 turnId，刷新丢失可接受），
         // 普通消息才建 durable 回合保刷新不丢。
         const commandOnly = parseCommand(trimmed) !== null;
+        // CR-04：入队即固化归属，drain 时按条目自身归属强校验。
+        const entryOwner = { courseId: state.activeCourseId ?? null, sessionId: state.activeSessionId ?? null };
         if (!commandOnly && state.activeSessionId) {
           try {
             const queued = await api.enqueueAgent(state.activeCourseId ?? "", state.activeSessionId, state.mode, trimmed);
-            state.enqueueQueuedMessage({ text: trimmed, turnId: queued.turnId });
+            state.enqueueQueuedMessage({ text: trimmed, turnId: queued.turnId, owner: entryOwner });
           } catch {
-            state.enqueueQueuedMessage({ text: trimmed });
+            state.enqueueQueuedMessage({ text: trimmed, owner: entryOwner });
           }
-        } else state.enqueueQueuedMessage({ text: trimmed });
+        } else state.enqueueQueuedMessage({ text: trimmed, owner: entryOwner });
         flashStatusBanner(`已加入队列 · ${useAppStore.getState().queuedMessages.length}`);
         return;
       }
@@ -495,6 +504,7 @@ export function useChatStream() {
       setStreaming(true);
       setSyncState("synced");
       setPendingAsk(null); // new send answers/clears pending ask
+      answerOwnerRef.current = null;
       contentRef.current = "";
       thinkingRef.current = "";
       thinkingStartRef.current = null;
@@ -506,6 +516,7 @@ export function useChatStream() {
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
         if (attempt > 0) {
           // 重试：占位先清空（重放或重流都会重新填充）
+          answerOwnerRef.current = null;
           contentRef.current = "";
           thinkingRef.current = "";
           thinkingStartRef.current = null;
@@ -626,7 +637,7 @@ export function useChatStream() {
   /** Answer the pending Agent ask without creating a second ordinary turn.
    * UI-14：answer 通道带 requestId 幂等——网络中断后用同一 requestId 重试，
    * 服务端 attach 已落盘 turn 重放，而不是报"没有待回答的问题"。 */
-  const answer = useCallback(async (text: string): Promise<boolean> => {
+  const answer = useCallback(async (text: string, opts?: { skipAppendUser?: boolean }): Promise<boolean> => {
     const trimmed = text.trim();
     const state = useAppStore.getState();
     const sessionId = state.activeSessionId;
@@ -647,16 +658,20 @@ export function useChatStream() {
     // UI-14 + A1：同问题同答案的重试复用同一 requestId（服务端 attach 重放）；
     // 答案变化生成新键，让服务端显式拒绝而不是静默重放旧答案。
     const reused = lastAnswerAttempt !== null
+      && lastAnswerAttempt.courseId === (state.activeCourseId ?? null)
+      && lastAnswerAttempt.sessionId === sessionId
       && lastAnswerAttempt.question === state.pendingAsk.question
       && lastAnswerAttempt.answer === trimmed;
     const requestId = reused
       ? lastAnswerAttempt!.requestId
       : `ans_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    lastAnswerAttempt = { question: state.pendingAsk.question, answer: trimmed, requestId };
+    lastAnswerAttempt = { courseId: state.activeCourseId ?? null, sessionId, question: state.pendingAsk.question, answer: trimmed, requestId };
     // FE-2：answer 同样要刷新队列归属快照——否则 drain 会拿上一次普通发送的
     // 旧归属比对，把本会话排队消息误判为跨会话而丢弃。
     queueOwner = { courseId: state.activeCourseId ?? null, sessionId };
-    appendMessage({ id: nextMessageId(), role: "user", content: trimmed, createdAt: new Date().toISOString() });
+    if (!opts?.skipAppendUser) {
+      appendMessage({ id: nextMessageId(), role: "user", content: trimmed, createdAt: new Date().toISOString() });
+    }
     appendMessage({ id: nextMessageId(), role: "agent", content: "", thinking: "", createdAt: new Date().toISOString(), streaming: true, mode: state.mode });
     const abort = new AbortController();
     registerActiveChat(abort);
@@ -668,9 +683,19 @@ export function useChatStream() {
     toolsRef.current = [];
     streamErrorRef.current = null;
     let accepted = false;
+    const answerOwner = { courseId: state.activeCourseId ?? null, sessionId };
+    answerOwnerRef.current = answerOwner;
+    /** CR-12：与 send/commitLastAgent 同样的归属守卫——answer 的终态写回
+     * 若发生在切课/切会话之后（窗口窄但屏障必须有），旧流的尾部帧不得写进
+     * 新恢复会话的最后一条 agent 消息。 */
+    const stillOwned = () => {
+      const now = useAppStore.getState();
+      return (now.activeCourseId ?? null) === answerOwner.courseId
+        && (now.activeSessionId ?? null) === answerOwner.sessionId;
+    };
     try {
       for await (const ev of streamAgentAnswer(`study-${sessionId}`, trimmed, abort.signal, requestId)) {
-        if (abort.signal.aborted) break;
+        if (abort.signal.aborted || !stillOwned()) break;
         if (ev.event === "meta") {
           accepted = true;
         }
@@ -678,29 +703,31 @@ export function useChatStream() {
         if (streamErrorRef.current !== null) break;
       }
       cancelPendingFlush();
+      unregisterActiveChat(abort);
+      if (!stillOwned()) return false;
       updateLastAgent({ content: contentRef.current, thinking: thinkingRef.current, ...(toolsRef.current.length ? { tools: toolsRef.current.slice() } : {}), streaming: false });
       setStreaming(false);
       setStreamPhase(null);
       useAppStore.setState({ toolRunning: 0 }); // 爪爪 searching 计数归零 // 爪爪退出流式姿态
-      unregisterActiveChat(abort);
       // UI-14：仅在流正常完成时清除 pendingAsk；中断/错误保留——用户可以
       // 用同一 requestId 重试，服务端 attach 重放而不是拒绝。
-      if (accepted && streamErrorRef.current === null) {
+      if (accepted && streamErrorRef.current === null && !abort.signal.aborted) {
         setPendingAsk(null);
         lastAnswerAttempt = null;
         drainQueueIfOwned();
       } else if (streamErrorRef.current !== null) {
         flashStatusBanner("✗ 回答未送达，可直接重试");
       }
-      return accepted && streamErrorRef.current === null;
+      return accepted && streamErrorRef.current === null && !abort.signal.aborted;
     } catch (exc) {
       cancelPendingFlush();
+      unregisterActiveChat(abort);
+      if (!stillOwned()) return false;
       updateLastAgent({ streaming: false, error: errorMessage(exc) });
       flashStatusBanner("✗ 回答未送达，可直接重试");
       setStreaming(false);
       setStreamPhase(null);
       useAppStore.setState({ toolRunning: 0 }); // 爪爪 searching 计数归零 // 爪爪退出流式姿态
-      unregisterActiveChat(abort);
       return false;
     }
   }, [appendMessage, cancelPendingFlush, clearStaleQueue, commitLastAgent, drainQueueIfOwned, flashStatusBanner, handleEvent, setPendingAsk, setStreamPhase, setStreaming, setSyncState, updateLastAgent]);
@@ -712,15 +739,28 @@ export function useChatStream() {
    * UI-1：仅当重发文本正是记录的失败文本时复用 requestId——
    * network 失败 → 服务端 attach 已落盘 turn 重放/跟随；
    * business 失败 → 服务端发现旧 turn 已终态失败，补写 input/voided 剔除
-   * 旧 user/input 后新开 turn（UI-15），历史不重复。 */
+   * 旧 user/input 后新开 turn（UI-15），历史不重复。
+   * CR-11：若失败的是「回答待回答的问题」（pendingAsk 仍在且答案与本次重发
+   * 文本一致），必须走 answer 通道——旧实现一律走 send，会清空 pendingAsk
+   * 并绕过 `ans_` requestId 的幂等，服务端只能新开普通回合。此时复用同一个
+   * `ans_` requestId（answer 内按 question+answer 命中 sameAttempt 重放），
+   * 且不再追加用户消息（那一轮已经追加过）。 */
   const retryLast = useCallback((text?: string) => {
     const requested = (text ?? "").trim() || lastSent;
+    const state = useAppStore.getState();
+    const answerRetry = state.pendingAsk !== null
+      && lastAnswerAttempt !== null
+      && lastAnswerAttempt.courseId === (state.activeCourseId ?? null)
+      && lastAnswerAttempt.sessionId === state.activeSessionId
+      && lastAnswerAttempt.question === state.pendingAsk.question
+      && lastAnswerAttempt.answer === requested;
+    if (answerRetry) return answer(requested, { skipAppendUser: true });
     const failure = lastFailure;
     const reuse = failure !== null && lastSent === requested
       ? failure.requestId
       : undefined;
     return send(requested, { skipAppendUser: true, ...(reuse !== undefined ? { reuseRequestId: reuse } : {}) });
-  }, [send]);
+  }, [answer, send]);
   sendRef.current = send;
 
   /** 停止当前流（DSH 发送钮运行中变停止钮）。

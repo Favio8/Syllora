@@ -144,11 +144,11 @@ function startHost() {
       // Host 以 --port 0 启动，每次重启都是新端口；崩溃时存活（或新开）的
       // 窗口必须跟随新端口，否则继续连已死的旧端口。pid 复核的 waitForHost
       // 保证读到的是本次重启写出的配置。
-      waitForHost().then(cfg => {
+      waitForHost().then(async cfg => {
         const target = `http://127.0.0.1:${cfg.port}/`
         const existing = BrowserWindow.getAllWindows()
         if (existing.length > 0) {
-          for (const w of existing) void w.loadURL(target)
+          for (const w of existing) { await authorizeHostWindow(w, cfg); void w.loadURL(target) }
         } else {
           void createMainWindow()
         }
@@ -213,12 +213,24 @@ function waitForHost() {
   })
 }
 
+// 主进程持有发现文件中的 token，换取 HttpOnly Cookie 后再加载窗口。
+// renderer/preload 和匿名 HTTP 响应都不获得访问 token。
+async function authorizeHostWindow(window, cfg) {
+  if (!cfg.token) return
+  const origin = `http://127.0.0.1:${cfg.port}`
+  const response = await fetch(`${origin}/api/session`, { method: 'POST', headers: { 'x-syllora-token': cfg.token }, signal: AbortSignal.timeout(15_000) })
+  const cookie = /^syllora_session=([^;]+)/.exec(response.headers.get('set-cookie') || '')
+  if (!response.ok || !cookie) throw new Error('host-session-handshake-failed')
+  await window.webContents.session.cookies.set({ url: origin, name: 'syllora_session', value: cookie[1], path: '/', httpOnly: true, sameSite: 'strict' })
+}
+
 async function createMainWindow() {
-  let url
+  let url, hostConfig
   if (isDev) {
     url = DEV_URL
   } else {
     const cfg = await waitForHost()
+    hostConfig = cfg
     url = `http://127.0.0.1:${cfg.port}/`
   }
   win = new BrowserWindow({
@@ -251,6 +263,7 @@ async function createMainWindow() {
     const allowed = isDev ? target.startsWith(DEV_URL) : (cfg !== null && target.startsWith(`http://127.0.0.1:${cfg.port}/`))
     if (!allowed) { e.preventDefault(); shell.openExternal(target) }
   })
+  if (hostConfig) await authorizeHostWindow(win, hostConfig)
   await win.loadURL(url)
   diagnostic('window loaded')
   win.on('closed', () => { win = null })

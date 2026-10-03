@@ -4,9 +4,10 @@
  * 工作台「对话学习」的 agent 聊天宿主。
  *
  * 自包含：不依赖独立的 Console 外壳，只把已提交的 ChatArea（含工具调用行、
- * ask 折叠、审批面板）挂到课程工作区里，并补齐两套 id 空间之间的桥接——
- * chat/agent 端点的 courseId 必须是「课程文件夹名」（courseDirOf 的等值
- * 校验），而工作台的课程 id 是 UUID，二者的换算只在这里发生。
+ * ask 折叠、审批面板）挂到课程工作区里，并补齐两套 id 空间之间的桥接。
+ * B1：chat/agent 端点的课程身份优先用课程 UUID（工作台 project.id）——宿主
+ * 按课程状态文件里的课程 id 解析目录，同名文件夹的两门课不再串会话；缺省
+ * 仍回落到「课程文件夹名」以兼容旧调用方。
  */
 
 import { useEffect, useMemo, type ReactNode } from "react";
@@ -23,6 +24,8 @@ export interface AgentChatProps {
   folder: string;
   /** 课程显示名（会话面板标题）。 */
   courseName: string;
+  /** 工作台课程 UUID（B1：chat 端点的课程身份，缺省回落到文件夹名）。 */
+  courseId?: string;
   /** 打开工作台自己的模型设置弹窗。 */
   onOpenSettings?: () => void;
   children?: ReactNode;
@@ -33,19 +36,31 @@ export interface AgentChatProps {
   disabled?: boolean;
 }
 
-/** 课程文件夹名 = chat/agent 端点的 courseId；Windows 分隔符也要切。 */
-export function chatCourseIdOf(folder: string): string {
+/**
+ * B1：chat/agent 端点的课程身份。历史契约是「课程文件夹名」，两门不同路径、
+ * 同名文件夹的课程会共用同一个 chat 课程，会话与消息互相串入。有课程 UUID
+ * 时以它为准；宿主的 workspaceForCourse 按课程状态文件解析目录，并对
+ * basename 形式兼容（升级前的历史会话仍可读取——会话日志按目录分片存储）。
+ */
+export function chatCourseIdOf(folder: string, courseId?: string | null): string {
+  const id = (courseId ?? "").trim();
+  if (id !== "") return id;
   return folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
-export default function AgentChat({ folder, courseName, onOpenSettings, children, onUpload = () => {}, onPractice = () => {}, onAgentManage, disabled }: AgentChatProps) {
+export default function AgentChat({ folder, courseName, courseId, onOpenSettings, children, onUpload = () => {}, onPractice = () => {}, onAgentManage, disabled }: AgentChatProps) {
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath);
   const setCourses = useAppStore((s) => s.setCourses);
   const setActiveCourse = useAppStore((s) => s.setActiveCourse);
   const paletteOpen = useAppStore((s) => s.paletteOpen);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
-  const chatCourseId = useMemo(() => chatCourseIdOf(folder), [folder]);
+  // 桥接以「已打开课程文件夹」为前提：没有 folder 就没有可桥接的工作区
+  // （此前的守卫语义不变），有 folder 时优先用课程 UUID 作为 chat 课程身份。
+  const chatCourseId = useMemo(
+    () => (folder === "" ? "" : chatCourseIdOf(folder, courseId)),
+    [folder, courseId],
+  );
   // 全局快捷键（Ctrl+K 命令面板、Ctrl+N 新建对话、Ctrl+B 右栏、Ctrl+1~4 面板 Tab、
   // Esc 兜底）。此前只有 Console 外壳挂了这个 hook，而 app 渲染的是工作台、
   // Console 已无入口，于是界面上写着的快捷键全部失效。

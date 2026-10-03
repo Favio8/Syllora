@@ -187,3 +187,61 @@
 .sy-nw-imglist{display:flex;flex-direction:column;padding:2px 0 6px}
 .sy-nw-imgrow{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:5px 10px 5px 22px;font-size:11.5px;color:var(--ink);text-align:left;cursor:pointer}
 .sy-nw-imgrow:hover{color:var(--sy-blue);background:var(--blue-light)}
+
+/* =====================================================================
+   需求三：学习面板视觉统一（DM Sans + 设计令牌 + 卡片化）
+   面板结构已迁到 components/panel/StudyPanel.tsx，类名仍沿用 sy-*，
+   这里把面板内的字号/字体/卡片落到与中栏一致的设计语言上。
+   规则：禁止 9–10px 正文字号；辅助信息 11px；正文 12px；区块标题 12–13px/600。
+   ===================================================================== */
+.study-panel{background:var(--white)}
+.study-panel .panel-caption{font-size:11px;color:var(--muted)}
+.study-panel :is(.sy-panel,.panel-body){font-family:var(--body-font);color:var(--ink)}
+.study-panel .panel-body :is(p,li,span,small,em,strong,label,summary,button,input,select,textarea,h2,h3,h4){font-family:var(--body-font)}
+.study-panel .panel-body :is(small,em){font-size:11px;line-height:1.75}
+.study-panel .panel-body p{font-size:12px;line-height:1.85;color:var(--muted)}
+.study-panel .panel-body h2,.study-panel .panel-body h3,.study-panel .panel-body h4{font-size:12px;font-weight:600;color:var(--ink)}
+.study-panel .panel-card-head h3{font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.01em}
+.study-panel .panel-body .sy-muted{font-size:11px;line-height:1.8;color:var(--muted)}
+/* 禁止 9–10px：面板内任何正文字号下限提到 11px（图标间距类不在此列）。 */
+.study-panel .panel-body :is(.sy-kicker,.sy-task small,.sy-task em,.sy-point small,.sy-point em,.sy-material small,.sy-review small,.sy-source-link,.sy-badge,.sy-action small,.sy-change,.sy-diff-item,.sy-diff-tag,.task-main small,.task-main strong,.outline-item small,.outline-item strong,.evidence,.panel-footnote,.panel-file small,.panel-file strong,.review-card p,.review-card h4,.upload-zone strong,.upload-zone span,.panel-empty p,.panel-empty h4,.panel-description,.sy-empty-metric,.sy-diff-summary,.sy-courses+.sy-section-title){font-size:11px}
+.study-panel .panel-body .sy-empty-metric{font-size:18px}
+.study-panel .panel-body .sy-badge{font-size:11px}
+/* 卡片化：1px 边框 + 圆角 10px + 内边距 18–20px，无重阴影；区块间距 18–22px。 */
+.panel-card{border:1px solid var(--line);border-radius:10px;padding:18px 20px;background:var(--white);margin-bottom:18px}
+.panel-card:last-child{margin-bottom:0}
+.panel-card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.panel-card-head>span{font-size:11px;color:var(--muted)}
+.panel-card h4{font-size:12px;font-weight:600;margin:0 0 8px}
+.panel-card-quiet{border-style:dashed;background:var(--sidebar)}
+.panel-inline-action{display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--ink);font-size:12px}
+.panel-inline-action:hover{border-color:var(--blue);color:var(--blue)}
+.panel-fold{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--sidebar);margin-bottom:18px}
+.panel-fold>summary{cursor:pointer;font-size:12px;font-weight:500;color:var(--ink)}
+.panel-fold[open]>summary{margin-bottom:12px}
+.panel-subsection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.panel-empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:26px 12px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;background:var(--sidebar)}
+.panel-empty-state strong{font-size:12px;font-weight:600;color:var(--ink)}
+.panel-empty-state p{font-size:11px;line-height:1.8;color:var(--muted)}
+.panel-plan-list{display:flex;flex-direction:column}
+.panel-tabs.segment{display:flex;gap:4px;padding:10px 16px;background:var(--sidebar);border-bottom:1px solid var(--line)}
+.panel-tabs.segment button{flex:1;border-radius:6px;padding:8px 10px;font-size:12px;color:var(--muted);background:transparent}
+.panel-tabs.segment button.active{background:var(--white);color:var(--blue);font-weight:600}
+.panel-tabs.segment button.active:after{display:none}
+/* 控件统一：输入/下拉 1px var(--line)、圆角 7px、内边距 9–11px。 */
+.study-panel .panel-body :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border:1px solid var(--line);border-radius:7px;padding:9px 11px;font-size:12px;background:var(--white);color:var(--ink)}
+.study-panel .panel-body button{border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-size:12px;background:var(--white);color:var(--ink)}
+.study-panel .panel-body button:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.study-panel .panel-body .button.primary,.study-panel .panel-body .sy-primary{background:var(--blue);border-color:var(--blue);color:white}
+.study-panel .panel-body .sy-source-link{border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin:4px 4px 0 0;color:var(--blue);background:var(--white)}
+.study-panel .panel-body .sy-estimate{width:64px;padding:6px 8px}
+/* 暗色：面板表面与卡片按暗色令牌分层；主按钮文字色 #15233c。 */
+:root[data-theme=dark] .study-panel{background:var(--dark-surface);border-color:var(--line)}
+:root[data-theme=dark] .study-panel .panel-card{background:var(--dark-raised);border-color:var(--line)}
+:root[data-theme=dark] .study-panel .panel-card-quiet,:root[data-theme=dark] .study-panel .panel-fold{background:var(--dark-soft);border-color:var(--line)}
+:root[data-theme=dark] .study-panel .panel-empty-state{background:var(--dark-soft);border-color:var(--line)}
+:root[data-theme=dark] .study-panel .panel-body :is(input:not([type=checkbox]):not([type=radio]),select,textarea),:root[data-theme=dark] .study-panel .panel-body button{background:var(--dark-surface);color:var(--ink);border-color:var(--line)}
+:root[data-theme=dark] .panel-tabs.segment{background:var(--dark-canvas);border-color:var(--line)}
+:root[data-theme=dark] .panel-tabs.segment button.active{background:var(--dark-raised);color:var(--blue)}
+:root[data-theme=dark] .study-panel .panel-body .button.primary,:root[data-theme=dark] .study-panel .panel-body .sy-primary{background:var(--blue);border-color:var(--blue);color:#15233c}
+:root[data-theme=dark] .study-panel .panel-body .sy-source-link{background:var(--dark-raised)}

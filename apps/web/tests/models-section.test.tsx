@@ -77,6 +77,7 @@ function makePayload(providers: SettingsPayload["providers"]): SettingsPayload {
   return {
     version: 1,
     activeProviderId: providers.find((p) => p.apiKeyConfigured)?.id ?? "",
+    providerOrder: ["default"],
     llm: {
       provider: "deepseek",
       model: "deepseek-reasoner",

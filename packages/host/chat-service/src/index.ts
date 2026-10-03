@@ -6,6 +6,7 @@
 
 export { loadChatConfig, providerFacts } from './config.ts'
 export { setSharedConfigRoot } from './shared-root.ts'
+export { verifyCredentialsReadable } from './secret-box.ts'
 export { AGENT_SKILLS, AGENT_SKILL_IDS, agentSkillPrompt } from './skills.ts'
 export type { AgentSkillPayload } from './skills.ts'
 export { SylloraService, SylloraError } from './syllora.ts'
@@ -20,10 +21,14 @@ export {
   activateProvider,
   setCredential,
   updateSettings,
+  testConnection,
+  reorderProviders,
+  exportProviders,
+  importProviders,
   deriveKeyRef,
   ProviderExistsError,
 } from './settings.ts'
-export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry } from './settings.ts'
+export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry, ConnectionTestResult, ConnectionFailureKind, ProviderExportEntry, ProviderExportPayload } from './settings.ts'
 export { createDeepSeekToolClient } from './adapter.ts'
 export {
   listSessions,
@@ -45,5 +50,5 @@ export {
   fileContextOf,
 } from './service.ts'
 export type { SessionSummaryView, SessionSearchView, RestoredSessionView, SessionModelDirectory, SessionModelSelection, SessionModelGroup, LearningAgentOptions, AgentRuntimeConfig, SessionEventView, MaintenanceJobView } from './service.ts'
-export { createCourseService, CourseNotFoundError, JobManager } from './course.ts'
+export { createCourseService, CourseNotFoundError, JobManager, resolveCourseDir } from './course.ts'
 export type { CourseService, JobView } from './course.ts'

@@ -7,7 +7,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createStaticHost } from '../src/lib/static-host.ts'
+import { createStaticHost, sessionBootstrapPage } from '../src/lib/static-host.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -70,6 +70,32 @@ describe('createStaticHost', () => {
     const host = (await createStaticHost({ root, bootstrap: { token: 'tk-123' } }))!
     const hit = await host.respond('/')
     expect(String(hit?.body)).toContain('window.__SYLLORA__={"token":"tk-123"}')
+  })
+
+  it('CR-16：未持会话时交付不含凭据的票据页，持会话才交付真正的 SPA', async () => {
+    const root = await makeDist({ 'index.html': '<html><head></head><body>real-spa</body></html>' })
+    const nonce = 'abc123'
+    const host = (await createStaticHost({
+      root,
+      bootstrap: { sessionUrl: '/api/session' },
+      bootstrapPage: sessionBootstrapPage(nonce),
+    }))!
+    const ticket = (await host.respond('/'))!
+    // 票据页不能含任何访问凭据，也不是真正的 SPA。
+    expect(String(ticket.body)).not.toContain('real-spa')
+    expect(String(ticket.body)).toContain('/api/session')
+    expect(ticket.headers?.['Cache-Control']).toBe('no-store')
+    expect(ticket.headers?.['Content-Security-Policy']).toContain(`'nonce-${nonce}'`)
+    // SPA 回落同样被拦在票据页之后（深链接未持会话也不下发真页面）。
+    expect(String((await host.respond('/deep/route'))?.body)).not.toContain('real-spa')
+
+    const spa = (await host.respond('/', { sessionCookie: 'granted' }))!
+    expect(String(spa.body)).toContain('real-spa')
+    expect(String(spa.body)).toContain('window.__SYLLORA__={"sessionUrl":"/api/session"}')
+    // 静态资源（非 HTML）不受门禁影响。
+    const js = await makeDist({ 'index.html': 'x', 'app.js': 'console.log(1)' })
+    const jsHost = (await createStaticHost({ root: js, bootstrapPage: sessionBootstrapPage(nonce) }))!
+    expect((await jsHost.respond('/app.js'))?.status).toBe(200)
   })
 
   it('bootstrap 为 null 时不注入', async () => {

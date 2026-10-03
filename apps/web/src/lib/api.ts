@@ -28,6 +28,8 @@ import type {
   ProviderModelPayload,
   ProviderCatalogEntry,
   ProviderProtocol,
+  ConnectionTestResult,
+  ProviderExportPayload,
   SessionModelDirectory,
   SessionModelSelection,
   WorkspaceRegistryPayload,
@@ -54,9 +56,12 @@ export class ApiError extends Error {
 }
 
 /**
- * FL-30：宿主启动参数（token 等）。两种注入来源：
+ * 宿主启动参数（token 等）。两种注入来源：
  * 1. `syllora serve` 托管静态 UI 时由 index tap 注入（同源，生产路径）；
  * 2. `next dev` 时由根布局从 host.json 读取注入（开发路径）。
+ * CR-16 之后生产路径不再注入 token（HTML 不含凭据），改用 `/api/session`
+ * 换来的 HttpOnly 会话 Cookie；这里的 bootstrap token 只服务 `next dev` 与
+ * 桌面壳注入的旧式启动参数。
  */
 function bootstrapToken(): string | null {
   const boot = (globalThis as unknown as { __SYLLORA__?: { token?: unknown } }).__SYLLORA__;
@@ -68,11 +73,12 @@ function authHeaders(): Record<string, string> {
   return token === null ? {} : { Authorization: `Bearer ${token}` };
 }
 
-/** 笔记图片的鉴权 URL。`<img>` 不能带 Authorization 头，所以 token 走 query（宿主支持 `?token=`）。 */
+/**
+ * 笔记图片 URL。`<img>` 不能带 Authorization 头——CR-16 之后改由浏览器自动
+ * 携带 `/api/session` 下发的会话 Cookie 授权，URL 里不再出现任何凭据。
+ */
 export function noteAssetUrl(courseId: string, name: string): string {
-  const base = `/api/syllora/notes/asset?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(name)}`;
-  const token = bootstrapToken();
-  return token === null ? base : `${base}&token=${encodeURIComponent(token)}`;
+  return `/api/syllora/notes/asset?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(name)}`;
 }
 
 /**
@@ -83,6 +89,7 @@ export function noteAssetUrl(courseId: string, name: string): string {
 async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/${method}`, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload === undefined ? {} : { payload }),
     signal,
@@ -110,6 +117,7 @@ async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): 
 async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/syllora/${action}`, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ payload }),
     signal,
@@ -136,6 +144,8 @@ async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: Abo
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    // CR-16：/api/session 下发的 HttpOnly 会话 Cookie 必须让浏览器带上。
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
   });
   const text = await response.text();
@@ -169,7 +179,7 @@ async function uploadFiles<T>(path: string, files: File[], signal?: AbortSignal)
     // 目录选择器会提供相对路径；它能让同名资料在归档后仍可辨识来源。
     form.append("files", file, file.webkitRelativePath || file.name);
   }
-  const response = await fetch(path, { method: "POST", headers: { ...authHeaders() }, body: form, signal });
+  const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: { ...authHeaders() }, body: form, signal });
   const text = await response.text();
   // UI-25：同 request——非 JSON 响应转可读的 ApiError。
   let body: unknown = {};
@@ -200,6 +210,7 @@ export async function* streamSse<T extends { event: string }>(
 ): AsyncGenerator<T> {
   const response = await fetch(path, {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
@@ -590,6 +601,27 @@ export const api = {
 
   activateProvider: (providerId: string) =>
     rpc<SettingsPayload>("settings.activateProvider", { providerId }),
+
+  /** 需求七：连接测试（表单当前值即可测，未保存也能用）。 */
+  testConnection: (payload: {
+    baseUrl: string;
+    protocol?: ProviderProtocol;
+    apiKey?: string;
+    apiKeyEnv?: string;
+    providerId?: string;
+    model?: string;
+  }) => rpc<ConnectionTestResult>("settings.testConnection", payload),
+
+  /** 需求七：供应商顺序（全序，服务端校验为已配置项的全排列）。 */
+  reorderProviders: (providerIds: string[]) =>
+    rpc<SettingsPayload>("settings.reorderProviders", { providerIds }),
+
+  /** 需求七：导出结构（不含明文密钥）。 */
+  exportProviders: () => rpc<ProviderExportPayload>("settings.exportProviders"),
+
+  /** 需求七：导入结构；密钥一律不导入，需逐项补 Key。 */
+  importProviders: (payload: unknown) =>
+    rpc<{ saved: SettingsPayload; imported: string[]; skipped: string[] }>("settings.importProviders", { payload }),
 
   // ---------------------------------------------------------------------------
   // 笔记（Notes）：宿主把 Markdown 存在 {课程文件夹}/notes/{id}.md + notes/index.json。

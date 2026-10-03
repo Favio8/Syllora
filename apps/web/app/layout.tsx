@@ -1,7 +1,4 @@
 import type { Metadata } from "next";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,44 +8,20 @@ export const metadata: Metadata = {
 };
 
 /**
- * FL-30：开发模式的 token 引导。生产路径由 `syllora serve` 在托管 index.html
- * 时通过 tap 注入（static-host.ts）；`next dev` 下浏览器与宿主跨端口，无法
- * 自行读取 host.json——这里在服务端渲染时读一次注入给客户端。仅在 dev 生效：
- * 静态导出（build）时 NODE_ENV=production，不会把任何 token 烧进产物。
+ * CR-16：不再向页面注入任何访问凭据（旧实现把宿主 token 写进
+ * `window.__SYLLORA__`，任意本机进程 `curl /` 即可提取 token 并调用全部
+ * `/api/*`）。生产路径由宿主静态托管交付票据页，页面用终端登录链接或用户填写的
+ * token 向 `/api/session` 换取 HttpOnly 会话 Cookie；开发模式（`next dev`）
+ * 跨端口，README 记录了带 token 的开发调用方式。
  */
-function devBootstrap(): { token?: string } | null {
-  if (process.env.NODE_ENV !== "development") return null;
-  try {
-    const override = process.env.SYLLORA_HOME?.trim() || process.env.STUDYCLAW_HOME?.trim();
-    const home = override ? resolve(override) : join(homedir(), ".syllora");
-    const parsed = JSON.parse(readFileSync(join(home, "host.json"), "utf8")) as {
-      token?: string | null;
-    };
-    return typeof parsed.token === "string" && parsed.token !== "" ? { token: parsed.token } : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * RV-8：`<script>` 上下文里 JSON.stringify 不转义 `</script>`/`<!--`，统一把
- * `<` 转义为 `\u003c`（与 static-host.ts 的 tap 注入同一加固），杜绝引导参数
- * 未来携带用户数据时的脚本逃逸。
- */
-function bootstrapScript(bootstrap: { token?: string }): string {
-  return `window.__SYLLORA__=${JSON.stringify(bootstrap).replace(/</g, "\\u003c")}`;
-}
+const BOOTSTRAP = 'window.__SYLLORA__={sessionUrl:"/api/session"};'
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  const bootstrap = devBootstrap();
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <head>
-        {bootstrap !== null ? (
-          <script
-            dangerouslySetInnerHTML={{ __html: bootstrapScript(bootstrap) }}
-          />
-        ) : null}
+        {/* 只放会话端点，不放凭据。 */}
+        <script dangerouslySetInnerHTML={{ __html: BOOTSTRAP }} />
       </head>
       <body className="h-full overflow-hidden">
         {children}

@@ -93,7 +93,7 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
   }
   async function walk(dir: string) {
     for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
-      if (entry.name.startsWith('.') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
+      if (entry.name.startsWith('.') || entry.name.startsWith('~$') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
       const path = join(dir, entry.name), name = relative(root, path).split(sep).join('/')
       if (entry.isDirectory()) { await walk(path); continue }
       if (!entry.isFile()) continue

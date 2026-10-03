@@ -89,6 +89,38 @@ async function collect(gen: AsyncGenerator<{ event: string; data: unknown }>): P
 }
 
 describe('UI-7：evalSubmit evalId 幂等', () => {
+  // CR-05：同一工作区、同一 evalId 的在途提交串行结算——等待者在前一个请求写完
+  // 完整账本后整体重放，既不会各自读到半份账本，也不会重复 settle。
+  it('CR-05：跨 service 实例并发提交同一 evalId 只结算一次，等待者重放完整帧', async () => {
+    const { ws, service, courseId, cleanup } = await setup()
+    try {
+      const otherService = createCourseService(async () => null)
+      const replies = await Promise.all([service, otherService, service].map(instance =>
+        collect(instance.evalSubmit(ws, courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_concurrent'))))
+      for (const reply of replies) {
+        expect(reply.filter(frame => frame.event === 'result')).toHaveLength(1)
+        expect(reply.at(-1)?.event).toBe('done')
+      }
+      expect(replies[1]).toEqual(replies[0])
+      expect(evalsOfCmcq(await readFile(join(ws, '.syllora', 'progress.md'), 'utf8'))).toBe(1)
+      // 全部结束后再重试：磁盘账本仍在 TTL 内，帧序列与首次完全一致。
+      const replay = await collect(otherService.evalSubmit(ws, courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_concurrent'))
+      expect(replay).toEqual(replies[0])
+    } finally { await cleanup() }
+  })
+
+  it('CR-05：同一 evalId 在两个工作区互不抑制（各自照常结算）', async () => {
+    const first = await setup(), second = await setup()
+    try {
+      const replies = await Promise.all([first, second].map(s =>
+        collect(s.service.evalSubmit(s.ws, s.courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null, 'ev_shared_id'))))
+      for (let index = 0; index < replies.length; index++) {
+        expect(replies[index]!.at(-1)?.event).toBe('done')
+        expect(evalsOfCmcq(await readFile(join([first, second][index]!.ws, '.syllora', 'progress.md'), 'utf8'))).toBe(1)
+      }
+    } finally { await first.cleanup(); await second.cleanup() }
+  })
+
   it('同一 evalId 的重复提交重放已结算帧，progress.evals 不重复累加', async () => {
     const { ws, service, courseId, cleanup } = await setup()
     const evalId = 'ev_test_eval_001'

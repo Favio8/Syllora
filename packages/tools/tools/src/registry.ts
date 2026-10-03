@@ -202,7 +202,7 @@ export class ToolRegistry {
       }))
   }
 
-  /** Execute one call: validate → approval → handler with timeout → result. */
+  /** Execute one call: mode policy → validate → approval → handler with timeout → result. */
   async execute(
     name: string,
     arguments_: Record<string, unknown> | null | undefined,
@@ -213,6 +213,16 @@ export class ToolRegistry {
     if (spec === undefined) {
       const result = ToolResult.rejected(`未知工具: ${name}`, 'TOOL_NOT_FOUND')
       this.auditAction(name, result)
+      return result
+    }
+    // CR-02：旧实现只查注册表，模型点名任意已注册工具即可执行——只读模式的会话
+    // 可调 write_note、quick 可调 run_command，审批豁免工具（run_quiz/plan 等）
+    // 零确认执行。模式白名单此前只用于投影给模型的 schema，属「注册即可达」。
+    // 现在在派发口按同一张表复核：声明了模式就必须命中白名单。
+    const mode = ctx.mode
+    if (mode !== undefined && !modeToolNames(mode).includes(name)) {
+      const result = ToolResult.rejected(`当前模式（${mode}）不允许调用工具 ${name}`, 'TOOL_NOT_ALLOWED_IN_MODE', spec.renderIntent)
+      this.auditAction(spec.name, result)
       return result
     }
     let clean: Record<string, unknown>

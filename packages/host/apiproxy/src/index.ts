@@ -154,6 +154,14 @@ export interface HostServices {
     remove(providerId: string): Promise<Record<string, unknown>>
     activate(providerId: string): Promise<Record<string, unknown>>
     credential(providerId: string, apiKey: string): Promise<Record<string, unknown>>
+    /** 需求七：连接测试（表单当前值，未保存也能测）。 */
+    test(input: { baseUrl: string; protocol?: 'openai' | 'anthropic'; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; model?: string | null }): Promise<Record<string, unknown>>
+    /** 需求七：供应商顺序持久化（全序）。 */
+    reorder(providerIds: string[]): Promise<Record<string, unknown>>
+    /** 需求七：导出（不含明文密钥）。 */
+    exportProviders(): Promise<Record<string, unknown>>
+    /** 需求七：导入（密钥一律不导入）。 */
+    importProviders(payload: unknown): Promise<Record<string, unknown>>
   }
   /**
    * Host-side diagnostics. Logs live under the host home (`logs/host-*.log`),
@@ -613,6 +621,40 @@ const handlers = {
     payload: z.object({ providerId: z.string().min(1), apiKey: z.string() }),
     async run(payload: { providerId: string; apiKey: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
       return ok(await services.settingsService.credential(payload.providerId, payload.apiKey))
+    },
+  },
+  // 需求七：供应商配置完备化——连接测试 / 排序 / 导入导出（无明文密钥）。
+  'settings.testConnection': {
+    payload: z.object({
+      baseUrl: z.string().min(1),
+      protocol: z.enum(['openai', 'anthropic']).optional(),
+      apiKey: z.string().nullish(),
+      apiKeyEnv: z.string().nullish(),
+      providerId: z.string().nullish(),
+      model: z.string().nullish(),
+    }),
+    async run(payload: { baseUrl: string; protocol?: 'openai' | 'anthropic'; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; model?: string | null }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.test(payload))
+    },
+  },
+  'settings.reorderProviders': {
+    payload: z.object({ providerIds: z.array(z.string().min(1)).min(1).max(200) }),
+    async run(payload: { providerIds: string[] }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.reorder(payload.providerIds))
+    },
+  },
+  'settings.exportProviders': {
+    payload: null,
+    async run(_payload: void, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.exportProviders())
+    },
+  },
+  'settings.importProviders': {
+    // 导入体由域层 schema 严格校验（版本号/字段/范围）；这里只限制总体大小，
+    // 防止超大 JSON 压垮宿主。密钥字段即便出现也会被域层丢弃。
+    payload: z.object({ payload: z.unknown() }),
+    async run(payload: { payload: unknown }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.importProviders(payload.payload))
     },
   },
   'courses.syllabus': {

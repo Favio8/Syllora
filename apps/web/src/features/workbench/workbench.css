@@ -24,7 +24,11 @@
 .rail-create{border:1px solid #dce3f1;background:white;color:var(--blue);margin-bottom:24px;height:41px;width:41px}
 .rail-nav{display:flex;flex-direction:column;gap:9px}
 .rail-divider{height:1px;width:28px;background:#dfe5ef;margin:25px 0 19px;flex-shrink:0}
-.rail-courses{display:flex;flex-direction:column;align-items:center;gap:9px;overflow:auto;min-height:0;flex:1;width:100%;padding-bottom:15px;scrollbar-width:thin}
+.rail-courses{display:flex;flex-direction:column;align-items:center;gap:9px;overflow:hidden;min-height:0;flex:1;width:100%;padding-bottom:15px}
+.rail-courses-more{font-size:17px;line-height:1;color:#8d97a8;letter-spacing:.06em;border:1px dashed #d9e0ec}
+.rail-courses-more:hover{border-color:var(--blue);color:var(--blue)}
+.rail-course[draggable=true]{cursor:grab}
+.rail-course.is-dragging{opacity:.45;cursor:grabbing;transform:scale(.94)}
 .rail-course.blue{color:#8298c7}.rail-course.green{color:#88a897}.rail-course.orange{color:#bb9a7e}
 .rail-course.selected{color:var(--blue)}
 .rail-current-dot{position:absolute;height:4px;width:4px;border-radius:50%;background:var(--blue);right:4px;top:6px}
@@ -434,6 +438,22 @@ input:not([type]),input:is([type=text],[type=password],[type=url],[type=number],
 .course-picker-list>button>svg{color:#9aaccc;flex-shrink:0}
 .course-picker-list>button:hover,.course-picker-list>button.selected{background:#f4f7ff;border-color:#becdec}
 .course-picker-list>p{padding:24px 10px;color:#a0afc4;font-size:11px;text-align:center}
+/* 需求一：浮层内每行包裹「选择 + 上移/下移」，行的观感与旧的整行按钮一致。 */
+.course-picker-row{display:flex;align-items:center;gap:8px}
+.course-picker-row.selected{background:#f2f6ff;border-radius:9px}
+.course-picker-choose{flex:1;min-width:0}
+.course-picker-move{display:flex;flex-direction:column;gap:2px;padding-right:6px}
+.course-picker-move button{width:26px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;color:var(--muted);background:var(--white)}
+.course-picker-move button:hover:not(:disabled){color:var(--blue);border-color:var(--blue)}
+.course-picker-move button:disabled{opacity:.4}
+.course-picker-list .course-picker-row{border:1px solid #e5ebf6;border-radius:9px}
+.course-picker-list .course-picker-row:hover,.course-picker-list .course-picker-row.selected{background:#f4f7ff;border-color:#becdec}
+.course-picker-list .course-picker-choose{display:flex;align-items:center;gap:12px;padding:14px 12px;text-align:left}
+.course-picker-list .course-picker-choose>span:nth-child(2){flex:1;min-width:0}
+.course-picker-list .course-picker-choose>svg{color:#9aaccc;flex-shrink:0}
+:root[data-theme=dark] .course-picker-list .course-picker-choose{background:var(--dark-surface);border-color:var(--line);color:#b5c6df}
+:root[data-theme=dark] .course-picker-list :is(.course-picker-row:hover,.course-picker-row.selected){background:#273b5d;border-color:#405e8d}
+@media(max-width:560px){.course-picker-list .course-picker-choose{padding:12px 10px}}
 .reader-mobile-expand,.mobile-task-expand{display:none}
 @media(max-width:1050px){.mobile-task-expand{display:flex;position:absolute;right:9px;top:17.5px;width:32px;height:32px;z-index:15;background:var(--white);border:1px solid var(--line);box-shadow:0 2px 8px #162e5806;color:#8a9fbe}.study-panel.panel-open,.panel-backdrop{top:70px}.panel-header{height:68px}}
 @media(max-width:850px){.reader-mobile-expand{display:inline-flex;width:32px;height:32px;flex-shrink:0;border:1px solid var(--line);color:#8a9fbe}}

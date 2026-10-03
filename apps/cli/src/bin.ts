@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { onClientDisconnect } from './lib/client-disconnect.ts'
 /**
  * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
@@ -12,7 +13,7 @@ import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { join, dirname, resolve, basename } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { mkdir, open, lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,6 +51,12 @@ import {
   setSharedConfigRoot,
   settingsPayload,
   updateSettings,
+  testConnection,
+  reorderProviders,
+  exportProviders,
+  importProviders,
+  verifyCredentialsReadable,
+  resolveCourseDir,
   agentEventToFrame,
   LearningAgentService,
 } from '@syllora/chat-service'
@@ -61,7 +68,7 @@ import { hostRpc, authHeaders, defaultClientDeps } from './lib/client.ts'
 import { UsageError } from './lib/args.ts'
 import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
 import { installHostFileLogging } from './lib/host-logger.ts'
-import { createStaticHost } from './lib/static-host.ts'
+import { createStaticHost, sessionBootstrapPage, sessionHandshakeBootstrap } from './lib/static-host.ts'
 import type { StaticHost } from './lib/static-host.ts'
 import { quizCommand } from './commands/quiz.ts'
 import { reviewCommand } from './commands/review.ts'
@@ -221,13 +228,37 @@ function tokenMatches(presented: string, expected: string): boolean {
   )
 }
 
-/** 从请求提取 token：`Authorization: Bearer` / `x-syllora-token` / `?token=`。 */
+/** 从请求提取 token：`Authorization: Bearer` / `x-syllora-token` / `?token=`（会话 Cookie 由 sessionCookieOf 单独解析）。 */
 function requestToken(request: import('node:http').IncomingMessage, url: URL): string {
   const auth = request.headers.authorization ?? ''
   if (auth.startsWith('Bearer ')) return auth.slice(7).trim()
   const header = request.headers['x-syllora-token']
   if (typeof header === 'string' && header.trim() !== '') return header.trim()
   return url.searchParams.get('token')?.trim() ?? ''
+}
+
+/** CR-16：会话 Cookie 名（每次启动轮换会话密钥，进程内有效）。 */
+const SESSION_COOKIE = 'syllora_session'
+
+/** 解析请求携带的会话 Cookie。 */
+function sessionCookieOf(request: import('node:http').IncomingMessage): string {
+  const raw = request.headers.cookie
+  if (typeof raw !== 'string' || raw === '') return ''
+  for (const part of raw.split(';')) {
+    const index = part.indexOf('=')
+    if (index < 0) continue
+    if (part.slice(0, index).trim() !== SESSION_COOKIE) continue
+    return part.slice(index + 1).trim()
+  }
+  return ''
+}
+
+/** 请求是否已授权：访问 token（头/查询参数）或 /api/session 换来的会话 Cookie。 */
+function authorizedBy(request: import('node:http').IncomingMessage, url: URL, token: string | null, session: string): boolean {
+  if (token === null) return true
+  if (tokenMatches(requestToken(request, url), token)) return true
+  const cookie = sessionCookieOf(request)
+  return cookie !== '' && tokenMatches(cookie, session)
 }
 
 /** H-1：agentEventToFrame 的产物 → SSE（帧名，data 负载）。chat/stream 的
@@ -544,11 +575,18 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   // Bearer 校验（同机进程不再可无凭据调用全部 RPC）。--insecure-no-token 为
   // 显式逃生口（host.json 的 token 记 null，便于排查）。
   const token = options.insecureNoToken === true ? null : randomBytes(24).toString('hex')
+  // CR-16：会话密钥（每次启动轮换）+ 票据页 nonce。票据页 HTML 里不含访问
+  // token，只带 nonce（CSP 白名单）与会话换票路径。
+  const sessionSecret = randomBytes(24).toString('hex')
+  const bootstrapNonce = randomBytes(16).toString('hex')
   // FL-21：同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
-  // 纯 API 行为。token 经 index tap 注入同源页面（window.__SYLLORA__）。
+  // 纯 API 行为。CR-16：index.html 不再注入访问 token（旧实现让任意本机进程
+  // `curl /` 就能提取 token 并调用全部 /api/*）；改为注入票据页回退与登录
+  // 链接，页面从终端登录链接取得凭据并换取 HttpOnly 会话 Cookie。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
-    bootstrap: token === null ? null : { token },
+    bootstrap: token === null ? null : sessionHandshakeBootstrap('/api/session'),
+    bootstrapPage: token === null ? null : sessionBootstrapPage(bootstrapNonce),
   })
   const ctx = new Context()
   await ctx.plugin(Storage)
@@ -575,6 +613,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
   await mkdir(settingsRoot, { recursive: true })
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
+  // CR-07：启动时校验凭据可解密（错配/损坏留明确告警，不等到第一次对话才炸）。
+  await verifyCredentialsReadable(join(settingsRoot, '.syllora', 'credentials.json'))
   // 设置页把供应商写在共享设置目录，对话/构课解析的是课程目录：登记共享根，
   // 让 chat-service 的所有配置解析路径都能回落（只补 chat/stream 一条会漏掉
   // 恢复重放、队列回合与会话内选过模型的分支）。
@@ -591,10 +631,14 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
    * （`courseDirOf` 的等值校验）。切课不会重新 openCourse，lastOpenedPath 可能
    * 仍停留在上一门课——按基名在已注册工作区里定位课程根，找不到才回落。
    */
-  async function workspaceForCourse(courseId: string): Promise<string> {    const target = courseId.trim()
+  async function workspaceForCourse(courseId: string): Promise<string> {
+    const target = courseId.trim()
     if (target !== '' && !target.includes('/') && !target.includes('\\') && !target.includes('..') && !target.startsWith('.')) {
+      // B1：先按课程身份（状态文件里的 UUID）在已注册工作区里定位，再回落基名
+      // ——同名文件夹的两门课不能共用同一个 chat 课程。
       for (const item of registry.list()) {
-        if (basename(item.path) === target) return item.path
+        const dir = await resolveCourseDir(item.path, target).catch(() => null)
+        if (dir !== null) return dir
       }
     }
     return registry.lastOpenedPath
@@ -790,6 +834,19 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       remove: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '删除模型供应商'); return deleteProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       activate: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '激活模型供应商'); return activateProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(settingsRoot, '保存 API Key'); return setCredential(settingsRoot, providerId, apiKey) as unknown as Record<string, unknown> },
+      // 需求七：连接测试按 discover 同一优先级解析密钥（表单新填 > 已加密存储 > 环境变量）。
+      test: async input => {
+        let apiKey = input.apiKey?.trim() ?? ''
+        const providerId = input.providerId?.trim() ?? ''
+        if (apiKey === '' && providerId !== '' && settingsRoot !== '') {
+          const resolved = await loadChatConfig(settingsRoot, { providerId }).catch(() => null)
+          apiKey = resolved?.apiKey ?? ''
+        }
+        return testConnection({ ...input, apiKey: apiKey === '' ? null : apiKey }) as unknown as Record<string, unknown>
+      },
+      reorder: async providerIds => { requireWorkspaceRootForSettings(settingsRoot, '调整供应商顺序'); return reorderProviders(settingsRoot, providerIds) as unknown as Record<string, unknown> },
+      exportProviders: async () => { requireWorkspaceRootForSettings(settingsRoot, '导出供应商配置'); return exportProviders(settingsRoot) as unknown as Record<string, unknown> },
+      importProviders: async payload => { requireWorkspaceRootForSettings(settingsRoot, '导入供应商配置'); return importProviders(settingsRoot, payload) as unknown as Record<string, unknown> },
     },
     diagnosticsService: {
       logs: () => readHostDiagnostics(),
@@ -957,9 +1014,35 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end()
       return
     }
-    // FL-30：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
-    // 持有宿主签发的 token；静态资源（UI 资产）不设 token，公开可读。
-    if (url.pathname.startsWith('/api/') && token !== null && !tokenMatches(requestToken(request, url), token)) {
+    // CR-16：凭据换票端点。本机进程（浏览器/桌面壳/CLI）把发现文件里的 token
+    // 放在请求头里，换一枚 HttpOnly 会话 Cookie；此后 /api/* 可由 Cookie 授权。
+    // 换票本身仍要求持有 token，且只回环可达（Origin 门禁已在前）。
+    if (url.pathname === '/api/session') {
+      if (request.method !== 'POST') {
+        response.writeHead(405)
+        response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: 'method not allowed', details: null } }))
+        return
+      }
+      if (token === null) {
+        response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=none; HttpOnly; SameSite=Strict; Path=/` })
+        response.end(JSON.stringify({ ok: true, session: 'disabled' }))
+        return
+      }
+      if (!tokenMatches(requestToken(request, url), token)) {
+        response.writeHead(401)
+        response.end(JSON.stringify({ error: { code: 'unauthorized', message: '会话换票需要有效的访问令牌', details: null } }))
+        return
+      }
+      response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=${sessionSecret}; HttpOnly; SameSite=Strict; Path=/` })
+      response.end(JSON.stringify({ ok: true, session: 'granted' }))
+      return
+    }
+    // FL-30/CR-16：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
+    // 宿主签发的凭据。凭据可以是 Authorization/x-syllora-token 头，或 /api/session
+    // 下发的 HttpOnly 会话 Cookie（旧版把 token 内嵌进静态 HTML，任意本机进程
+    // curl / 即可提取 token 并调用全部 /api/*；现在 HTML 不含任何凭据）。
+    // 静态资源（UI 资产）不设门禁，公开可读。
+    if (url.pathname.startsWith('/api/') && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
       response.writeHead(401)
       response.end(JSON.stringify({ error: { code: 'unauthorized', message: `缺少或错误的访问令牌（token 记录于 ${join(hostHome(), 'host.json')}，请求头 Authorization: Bearer <token>）`, details: null } }))
       return
@@ -968,7 +1051,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
-          const hit = await staticHost.respond(url.pathname)
+          const hit = await staticHost.respond(url.pathname, { sessionCookie: sessionCookieOf(request) })
           if (hit === null) {
             response.writeHead(404)
             response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
@@ -1139,8 +1222,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   /** Minimal DSH-compatible JSON-RPC/ACP bridge. It delegates every method to Host dispatch. */
   async function handleAcp(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    request.once('aborted', () => abortController.abort('client'))
-    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
+    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
+    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let rpcRequest: AcpRequest
     try { rpcRequest = parseAcpRequest(JSON.parse(body === '' ? '{}' : body) as unknown) } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : -32700
@@ -1287,9 +1371,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         abortPending(`上传中断: ${error.message}`)
       })
       busboy.on('close', () => settleBusboy())
-      request.once('close', () => {
-        // 客户端已消失：掐断 busboy 与在途写流后结算——响应无人接收，跳过后续
-        // 构建/响应（临时文件由下方收尾循环清理）。
+      // CR-01：旧实现用 `request.once('close')` 判定「客户端已消失」——现代
+      // Node（≥16）请求体完成即触发 'close'，正常上传也命中 clientGone：临时
+      // 文件被删、响应不发、后续构建不触发，整个上传端点对正常请求失效。
+      // 改用「请求体未完整送达」判定（同 CR-15 的 onClientDisconnect）。
+      onClientDisconnect(request, response, () => {
         clientGone = true
         abortPending('上传中断: 客户端断连')
         busboy.destroy()
@@ -1410,8 +1496,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
    */
   async function handleChatStream(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    request.once('aborted', () => abortController.abort('client'))
-    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
+    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
+    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { courseId?: unknown; message?: unknown; mode?: unknown; sessionId?: unknown; turnId?: unknown; conceptId?: unknown; fileRefs?: unknown; effort?: unknown; requestId?: unknown }
     try {
       const parsed = JSON.parse(body === '' ? '{}' : body) as typeof input
@@ -1512,8 +1599,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   /** `POST /api/agents/answer/stream` resumes one durable ask turn. */
   async function handleAgentAnswerStream(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    request.once('aborted', () => abortController.abort('client'))
-    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
+    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
+    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
+    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { agentId?: unknown; answer?: unknown; requestId?: unknown }
     try { input = JSON.parse(body === '' ? '{}' : body) as typeof input } catch {
       response.writeHead(400)
@@ -1582,7 +1670,10 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       instanceLock.noteActualPort(actualPort)
       void writeHostConfig(actualPort, token).then(() => {
         console.log(`[syllora] host listening on http://127.0.0.1:${actualPort} (home: ${hostHome()}, logs: ${hostLogger.logDir}${token === null ? ', auth: DISABLED' : ''})`)
-        if (options.open === true) void openBrowser(`http://127.0.0.1:${actualPort}`)
+        const loginUrl = `http://127.0.0.1:${actualPort}/${token ? `#token=${token}` : ''}`
+        // 登录链接只写终端，不经过文件日志；fragment 不会随 HTTP 请求发给服务器。
+        if (token) process.stdout.write(`[syllora] browser login: ${loginUrl}\n`)
+        if (options.open === true) void openBrowser(loginUrl)
         resolve()
       }).catch(reject)
     })
