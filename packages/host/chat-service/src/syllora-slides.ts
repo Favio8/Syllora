@@ -1,102 +1,99 @@
 /**
- * 幻灯片讲义：在 Markdown 讲义之外，按章节产出结构化幻灯片。
+ * 幻灯片讲义：把云端 OpenMAIC 生成的场景归一化成 Syllora 的幻灯片结构。
  *
- * 结构遵循 `@openmaic/dsl` 的 `Stage` / `Scene` 契约（`Scene.type==='slide'` 时 payload 是
- * `{ type:'slide', canvas: Slide }`），因此既可以用 `@openmaic/renderer` 的 `SlideCanvas`
- * 渲染，也能通过 DSL 的 `validateScene` 与 PPTX 导出链路复用。
+ * 职责边界（重做后）：
+ * - **云端负责生成**：调用 OpenMAIC 的 `/api/generate-classroom`，它返回的是成品场景，
+ *   其中的 canvas 已由 OpenMAIC 自己校验入库，Syllora 不重复校验 canvas 内部结构。
+ * - **本模块负责校验与归一化**：只校验 Syllora 自己依赖的字段（id/title/order/canvas 存在性），
+ *   产出渲染器可直接使用的结构，并记录「这一章用了哪些 Syllora 来源」。
+ * - **渲染仍在本机**：canvas 交给 `@openmaic/renderer`。渲染很轻，没必要上云。
  *
- * 本模块只做三件事：约束模型输出（zod）、校验引用与覆盖（与讲义同一套规则）、以及
- * 把幻灯片降级成 Markdown（导出与无渲染器时的兜底）。
+ * 关于引用的重要变化：云端**不返回** Syllora 的 sourceIds，因此原先"每页引用可回溯到原文"
+ * 无法逐页维持。改为**章节级溯源**：每份幻灯片记录本次生成上传了哪些 Syllora 来源，
+ * 保证「这份幻灯片基于哪些资料生成」可追溯，但不声称逐页对应。
  */
 import { z } from 'zod'
 import type { Source } from './syllora-domain.ts'
+import type { CloudScene } from './syllora-cloud.ts'
 
-/** 画布里允许的元素类型：只收渲染器确实支持的子集，避免模型产出无法渲染的东西。 */
-const ELEMENT_TYPES = ['text', 'image', 'shape', 'line', 'chart', 'table', 'video', 'audio', 'latex'] as const
-
-const baseElement = {
-  id: z.string().trim().min(1).max(80),
-  left: z.number().finite(),
-  top: z.number().finite(),
-  width: z.number().finite().positive(),
-  height: z.number().finite().positive(),
-  rotate: z.number().finite().default(0),
-}
-
-/**
- * 元素用 `catchall` 放行未知字段：DSL 的元素类型很多，而这里只需要保证"能被渲染器接受的
- * 骨架"。宽松放行的代价由 `validateScene` 兜底——它是契约自己的校验器，比我们手写的更准。
- */
-const slideElement = z.object({ type: z.enum(ELEMENT_TYPES), ...baseElement }).catchall(z.unknown())
-
-/** 与 DSL 的 `Slide` 对齐的最小画布；`viewportSize`/`viewportRatio` 决定渲染比例。 */
-const slideCanvas = z.object({
-  id: z.string().trim().min(1).max(80),
-  viewportSize: z.number().finite().positive(),
-  viewportRatio: z.number().finite().positive(),
-  theme: z.object({
-    backgroundColor: z.string().trim().min(1),
-    themeColors: z.array(z.string().trim().min(1)).min(1),
-    fontColor: z.string().trim().min(1),
-    fontName: z.string().trim().min(1),
-  }),
-  elements: z.array(slideElement),
-})
-
-/**
- * 一页幻灯片。`citations` 是本项目加的字段（DSL 用 `catchall`/额外属性放行）：每页必须声明
- * 它依据哪些来源片段，这样幻灯片与讲义共享同一套"引用可回溯"的保证。
- */
+/** 一页幻灯片。canvas 是不透明数据，原样交给渲染器。 */
 export const slideSceneSchema = z.object({
-  id: z.string().trim().min(1).max(80),
-  title: z.string().trim().min(1).max(80),
-  order: z.number().int().min(0),
-  citations: z.array(z.string().trim().min(1)).min(1),
-  content: z.object({ type: z.literal('slide'), canvas: slideCanvas }),
-})
+  id: z.string().trim().min(1).max(200),
+  title: z.string().trim().max(200).default(''),
+  order: z.number().int().min(0).default(0),
+}).passthrough()
 
+/** 一份章节幻灯片 = 云端一个课堂（Stage）的归一化结果。 */
 export const slideDeckSchema = z.object({
-  chapter: z.string().trim().min(1).max(60),
-  scenes: z.array(slideSceneSchema).min(1).max(12),
-})
+  chapter: z.string().trim().min(1).max(120),
+  scenes: z.array(slideSceneSchema).min(1),
+}).passthrough()
 
 export type SlideScene = z.infer<typeof slideSceneSchema>
 export type SlideDeck = z.infer<typeof slideDeckSchema>
 
+/** Syllora 侧持久化的幻灯片产物：除场景外还记录来源与云端标识，便于追溯与重取。 */
+export interface SlideArtifact {
+  /** 章节名，与讲义同粒度。 */
+  chapter: string
+  /** 云端课堂 id，可用于重新取回或排查。 */
+  classroomId: string
+  /** 本次生成上传的 Syllora 来源 id（章节级溯源）。 */
+  sourceIds: string[]
+  /** 归一化后的场景。 */
+  scenes: Array<SlideScene & { content: { type: string; canvas: unknown } }>
+}
+
 /**
- * 与 `validateLecture` 同一套规则：
- * - 引用的来源必须属于本批（防止跨批或编造 id）；
- * - 本批每个来源至少被一页引用（保证覆盖，不挑好写的讲）。
- * 单页 citation 为空、order 重复等结构问题由 schema 挡住。
+ * 把云端场景归一化成一节的场景。
+ * 云端形态随版本演进，因此这里做保守映射：认不出 canvas 的场景直接丢弃，
+ * 而不是让一份畸形数据把整个渲染器打挂。
  */
-export function validateSlideDeck(deck: SlideDeck, sources: Source[]) {
-  const supported = new Set(sources.map(source => source.id)), used = new Set<string>()
-  for (const scene of deck.scenes) for (const id of scene.citations) {
-    if (!supported.has(id)) throw new Error('幻灯片引用了未提供的来源')
-    used.add(id)
-  }
-  if (sources.some(source => !used.has(source.id))) throw new Error('本批资料没有完整关联到幻灯片，请重试')
-}
-
-/** 无渲染器 / 导出 / 纯文本阅读时使用：把幻灯片降级成 Markdown。 */
-export function slideDeckMarkdown(deck: SlideDeck) {
-  const cite = (ids: string[]) => `\n\n来源：${ids.join('、')}`
-  return `# ${deck.chapter}\n\n` + [...deck.scenes]
-    .sort((a, b) => a.order - b.order)
-    .map(scene => {
-      const lines = scene.content.canvas.elements.map(element => {
-        const text = (element as { content?: unknown }).content
-        if (typeof text !== 'string') return null
-        // 画布里的正文是 HTML 片段；Markdown 视图去掉标签，保留可读文本。
-        const plain = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-        return plain ? `- ${plain}` : null
-      }).filter((line): line is string => line !== null)
-      return `## ${scene.title}\n\n${lines.join('\n')}${cite(scene.citations)}`
+export function normalizeCloudScenes(scenes: CloudScene[]): SlideArtifact['scenes'] {
+  const out: SlideArtifact['scenes'] = []
+  scenes.forEach((scene, index) => {
+    const canvas = scene.content?.canvas
+    if (!canvas || typeof canvas !== 'object') return
+    const id = typeof scene.id === 'string' && scene.id ? scene.id : `scene-${index + 1}`
+    const title = typeof scene.title === 'string' ? scene.title : ''
+    const order = typeof scene.order === 'number' && Number.isFinite(scene.order) ? scene.order : index
+    const parsed = slideSceneSchema.safeParse({ id, title, order })
+    if (!parsed.success) return
+    out.push({
+      id: parsed.data.id,
+      title: parsed.data.title,
+      order: parsed.data.order,
+      content: { type: typeof scene.content?.type === 'string' ? scene.content.type : 'slide', canvas },
     })
-    .join('\n\n') + '\n'
+  })
+  return out.sort((a, b) => a.order - b.order)
 }
 
-/** 幻灯片相对讲义是"锦上添花"：它失败时只记录失败，不能让整次整理失败。 */
+/**
+ * 校验一份归一化产物是否可用。
+ * 只断言 Syllora 自己依赖的东西：有章节名、有至少一页可渲染内容、来源合法。
+ */
+export function validateSlideArtifact(artifact: SlideArtifact, sources: Source[]) {
+  if (artifact.scenes.length === 0) throw new Error('云端未返回任何可渲染的幻灯片页')
+  const supported = new Set(sources.map(source => source.id))
+  for (const id of artifact.sourceIds) if (!supported.has(id)) throw new Error('幻灯片记录了未提供的来源')
+}
+
+/** 纯文本阅读 / 无渲染器时的降级视图：从 canvas 元素里提取文字。 */
+export function slideArtifactMarkdown(artifact: SlideArtifact) {
+  return `# ${artifact.chapter}\n\n` + artifact.scenes.map(scene => {
+    const elements = (scene.content.canvas as { elements?: unknown[] } | null)?.elements ?? []
+    const lines = elements.map(element => {
+      const content = (element as { content?: unknown }).content
+      if (typeof content !== 'string') return null
+      const plain = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      return plain ? `- ${plain}` : null
+    }).filter((line): line is string => line !== null)
+    return `## ${scene.title || scene.id}\n\n${lines.join('\n')}`
+  }).join('\n\n') + '\n'
+}
+
+/** 幻灯片是附加产物：失败只记录，不让整次整理失败。 */
 export function slideFailureMessage(chapter: string, error: unknown) {
   return `${chapter}（幻灯片）：${error instanceof Error ? error.message : String(error)}`
 }

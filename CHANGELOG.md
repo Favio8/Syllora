@@ -5,11 +5,10 @@
 
 ## 未发布 — Syllora（2026-10-01）
 
-- 新增**幻灯片讲义**：接入 OpenMAIC 的 `@openmaic/dsl` 契约与 `@openmaic/renderer` 渲染器，
-  按章节在 Markdown 讲义之外产出结构化幻灯片，可在讲义阅读器切换查看，并导出单页 PNG 或整份 PPTX
-  （坐标按画布映射；文本、图片、形状、线、表格保真，公式以原文呈现）。
-  由 `config.yaml` 的 `ui.slides` 显式开启（默认关闭，不改变既有调用次数与成本）。
-  详见 [docs/OPENMAIC_SLIDES.md](docs/OPENMAIC_SLIDES.md)。
+- 新增**幻灯片讲义**：按章节调用**云端 OpenMAIC** 生成课堂幻灯片（访问口令换 cookie → 上传本章资料 →
+  发起生成 → 轮询任务 → 取回场景），在本地用 `@openmaic/renderer` 渲染，可切换查看并导出单页 PNG 或整份 PPTX。
+  需在 `config.yaml` 同时配置 `ui.slides` 与 `cloud`（默认关闭）；**开启后本章资料会上传到所配置的服务器**。
+  失败只记录、不阻断讲义发布；旧 revision 读作无幻灯片。详见 [docs/OPENMAIC_SLIDES.md](docs/OPENMAIC_SLIDES.md)。
 - 自有包名、CLI、环境变量、IPC、浏览器引导、桌面应用身份及发布源统一为 Syllora。
 - 旧运行目录整目录迁移并保留加密主密钥；新旧数据冲突时停止迁移，不覆盖历史。
 - 补充桌面启动诊断与严格窗口加载验证，失败 CI 保存不含 token 的诊断产物。

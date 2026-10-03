@@ -11,26 +11,30 @@ import { exportDecksToPptx } from '../features/workbench/slide-export';
  *
  * 设计取舍：
  * - 只读视图，编辑能力（`@openmaic/editor`）不在本轮范围；
- * - 读不到幻灯片（未开启该特性、创建于该特性之前的旧 revision、或该批整理失败）时，
+ * - 读不到幻灯片（未开启该特性、创建于该特性之前的旧 revision、或该章生成失败）时，
  *   显示一句说明而不是报错——幻灯片是讲义的附加产物，不该把阅读器变成错误页；
- * - 每页仍显示它依据的来源锚点，沿用与讲义同一套"引用可回溯"的规则。
+ * - 依据按**章节**展示：云端不返回 Syllora 的逐页来源，因此这里如实标注"本章依据"，
+ *   并给出云端课堂 id 便于追溯是哪次生成产出的。
  */
 
-export interface SlideDeckView {
+export interface SlideArtifactView {
   chapter: string;
+  /** 云端课堂 id，便于排查某一份幻灯片是哪次云端生成的。 */
+  classroomId: string;
+  /** 本次生成上传的 Syllora 来源（章节级溯源）。 */
+  sourceIds: string[];
   scenes: Array<{
     id: string;
     title: string;
     order: number;
-    citations: string[];
-    content: { type: 'slide'; canvas: unknown };
+    content: { type: string; canvas: unknown };
   }>;
 }
 
 interface SourceRef { id: string; anchor: string }
 
 export default function SlideDeckReader({ courseId, sources }: { courseId: string; sources: SourceRef[] }) {
-  const [decks, setDecks] = useState<SlideDeckView[] | null>(null);
+  const [decks, setDecks] = useState<SlideArtifactView[] | null>(null);
   const [error, setError] = useState('');
   const [deckIndex, setDeckIndex] = useState(0);
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -42,8 +46,8 @@ export default function SlideDeckReader({ courseId, sources }: { courseId: strin
     setDecks(null); setError(''); setDeckIndex(0); setSceneIndex(0);
     void (async () => {
       try {
-        const result = await workbenchRpc<{ revision: string | null; decks: SlideDeckView[] }>('slides', { courseId });
-        if (alive) setDecks(result.decks ?? []);
+        const result = await workbenchRpc<{ revision: string | null; slides: SlideArtifactView[] }>('slides', { courseId });
+        if (alive) setDecks(result.slides ?? []);
       } catch (cause) {
         if (alive) setError(cause instanceof Error ? cause.message : '读取幻灯片失败');
       }
@@ -95,10 +99,11 @@ export default function SlideDeckReader({ courseId, sources }: { courseId: strin
   if (decks === null) return <p className="sy-muted">正在读取幻灯片…</p>;
   if (decks.length === 0) {
     return (
-      <p className="sy-muted">
-        这一版没有幻灯片讲义。幻灯片需要在配置里显式开启（<code>ui.slides: true</code>）后重新初始化；
-        已有的 Markdown 讲义不受影响。
-      </p>
+        <p className="sy-muted">
+          这一版没有幻灯片讲义。幻灯片需要在 <code>config.yaml</code> 里同时配置
+          <code>ui.slides: true</code> 与 <code>cloud</code>（云端地址与访问口令）后重新初始化；
+          已有的 Markdown 讲义不受影响。
+        </p>
     );
   }
 
@@ -129,12 +134,15 @@ export default function SlideDeckReader({ courseId, sources }: { courseId: strin
       {scene ? (
         <>
           <div className="sy-slide-canvas" data-testid="slide-canvas">
-            {/* 画布由 DSL 契约约束（尺寸与元素坐标都在 1000×562 内），校验在写入 revision 前完成。 */}
+            {/* canvas 由云端 OpenMAIC 生成（它写库前已自行校验），本地只负责渲染 */}
             <SlideCanvas slide={scene.content.canvas as never} />
           </div>
           <p className="sy-muted">
-            原文依据：
-            {scene.citations.map(id => anchors.get(id) ?? id).join('、')}
+            本章依据：
+            {deck.sourceIds.length > 0
+              ? deck.sourceIds.map(id => anchors.get(id) ?? id).join('、')
+              : '（未记录来源）'}
+            {deck.classroomId ? <span className="sy-muted"> · 云端课堂 {deck.classroomId}</span> : null}
           </p>
         </>
       ) : <p className="sy-muted">这一章没有可用页面。</p>}

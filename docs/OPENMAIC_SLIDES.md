@@ -1,112 +1,129 @@
-# 幻灯片讲义（OpenMAIC 集成）
+# 幻灯片讲义（云端 OpenMAIC 集成）
 
-在 Markdown 讲义之外，按章节产出**结构化幻灯片**：用 [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)
-的 `@openmaic/dsl` 契约表达内容，用 `@openmaic/renderer` 渲染。两者都以 MIT 发布在 npm 上。
+Syllora 本地不运行 OpenMAIC：它是一个服务端 + PostgreSQL 的重型应用，因此部署在云上，
+Syllora 通过 HTTP 调用它生成课堂，再把场景取回本地渲染与导出。
 
-## 为什么这样集成
-
-OpenMAIC 与 Syllora 处理同一个问题的两端：都是「学习资料 → 可学习的课程内容」。差异在于形态——
-
-| | OpenMAIC | Syllora |
-|---|---|---|
-| 形态 | 一键生成多智能体互动课堂（幻灯片/测验/交互模拟/PBL + 语音白板） | 本地优先的学习工作台（资料→讲义→计划→复习证据） |
-| 数据 | 服务端 + PostgreSQL | 本地文件（用户目录 `.syllora/`） |
-| 依赖面 | AI SDK + CopilotKit + LangGraph + 8 个自研包 | 复用 DSH 的 host/agent 层 |
-
-直接嵌入它的主程序会与 Syllora「本地文件、无数据库」的架构冲突，因此只取其中**自包含**的两块：
-
-- **`@openmaic/dsl`**（零依赖）：`Stage`/`Scene`/`Slide` 契约 + `validateScene` 等校验器。
-  用它约束模型输出，比手写校验更准，也让内容可被它的渲染器与导出链路消费。
-- **`@openmaic/renderer`**（React 组件 `SlideCanvas`）：只读渲染 PPTist 风格幻灯片。
-  与 Syllora 的 React 19 / Tailwind 4 栈吻合；`echarts`/`shiki` 是可选 peer，本仓库未安装。
-
-不含：OpenMAIC 的数据库、多智能体课堂运行时、语音、白板、PBL 与它的主应用。
-
-## 开关与成本
-
-幻灯片是**每批多一次模型调用**，属于用户应显式选择的成本，因此**默认关闭**：升级到本版本不会
-让已有课程静默多出调用。
-
-```yaml
-# .syllora/config.yaml
-ui:
-  slides: true
+```
+Syllora（本机）                         云端 OpenMAIC（你的服务器）
+   │ 1. 访问口令换 cookie ──────────────────▶ POST /api/access-code/verify
+   │ 2. 本章资料合并成 Markdown 上传 ────────▶ POST /api/materials  → materialId
+   │ 3. 发起生成 ────────────────────────────▶ POST /api/generate-classroom → jobId
+   │ 4. 轮询任务（5s） ──────────────────────▶ GET  /api/generate-classroom/{jobId}
+   │ 5. 取回场景 ───────────────────────────▶ GET  /api/stages/{id}/manifest + /scenes
+   │ 6. 本地渲染 / 导出 PNG / 导出 PPTX      （canvas 交给 @openmaic/renderer）
 ```
 
-- 关闭（默认）：初始化不产生任何幻灯片调用，也不写 `slides.json`——旧行为逐字保留。
-- 开启：每批在讲义之外再调用一次，产出该章节的幻灯片。
+## 为什么这样分工
 
-## 产物
+| | 放在云端 | 留在本地 |
+|---|---|---|
+| 内容 | 生成逻辑、模型调用、资料存储、PostgreSQL | — |
+| 渲染 | — | `@openmaic/renderer`（渲染很轻，没必要上云） |
+| 导出 | — | PNG（`slideToPng`）、PPTX（`pptxgenjs`） |
 
-发布到 `.syllora/revisions/<revision>/`：
+**关键取舍：资料会上传到你自己的服务器。** Syllora 原本是"本地优先、资料不出本机"，
+启用幻灯片意味着接受这一数据流向——所以该功能默认关闭，必须显式开启。
 
-| 文件 | 内容 |
-|---|---|
-| `slides.json` | `SlideDeck[]`，每项含 `chapter` 与 `scenes` |
-| `slides/*.md` | 每套幻灯片的 Markdown 降级版（正文提取 + 来源），便于纯文本阅读与检索 |
-| `manifest.json` | 开启时含 `slideDeckCount` |
-| `.syllora/.staging/cache` | 幻灯片结果缓存，键为 `slides-v1:<model>:<批次内容>`；命中即复用，只补变化批次 |
+## 配置
 
-一份 `Scene` 的形状（与 DSL 契约对齐，另加本项目要求的 `citations`）：
+```yaml
+# <课程>/.syllora/config.yaml
+ui:
+  slides: true          # 开关（默认关）
+
+cloud:
+  base_url: https://studyandchat.top   # 云端 OpenMAIC 站点
+  access_code: <站点访问口令>           # 对应云端 ACCESS_CODE
+
+  # 可选：Syllora 代填云端模型配置（用户本地输入 Key，写入云端）
+  provider: deepseek
+  preset: deepseek
+  model: deepseek-chat
+  api_key: <你的 Key>
+```
+
+`slides` 只在**开关打开且 `base_url`/`access_code` 都填好**时才生效——避免"开了但连不上"的模糊状态。
+关闭时（默认）不产生任何云端请求，也不写 `slides.json`，既有行为逐字保留。
+
+## 生成粒度与产物
+
+**一章 = 一个云端课堂。** Syllora 的批次划分即章节划分，每章：
+
+1. 把本章全部来源片段合并成一份 Markdown 上传（云端单次最多 5 份资料，逐片段上传会超限）
+2. 发起一次课堂生成，轮询到终态
+3. 取回场景并归一化，写入 `revisions/<rev>/slides.json`
 
 ```jsonc
+// slides.json 的一项
 {
-  "id": "scene-1", "title": "本章要点", "order": 0,
-  "citations": ["<sourceId>"],              // 本页依据的来源片段，必须属于本批
-  "content": { "type": "slide", "canvas": { /* viewportSize 1000、viewportRatio 0.5625 … */ } }
+  "chapter": "第一章",
+  "classroomId": "cls_xxx",     // 云端课堂 id，便于追溯是哪次生成
+  "sourceIds": ["s1", "s2"],    // 本章依据的 Syllora 来源（章节级溯源）
+  "scenes": [{ "id": "...", "title": "...", "order": 0, "content": { "type": "slide", "canvas": { } } }]
 }
 ```
 
-## 校验与降级
+同时落盘 `slides/*.md`（从 canvas 提取正文的降级视图，便于纯文本阅读与检索），
+`manifest.json` 开启时含 `slideCount`。
 
-两道校验，规则与讲义一致：
+**缓存**：键为 `slides-v2:<模型>:<本批内容>`。资料未变的章节直接复用，不会重复上云计费。
 
-1. **zod**（`syllora-slides.ts`）：字段、数量、坐标必须是有限正数，元素类型限定在渲染器支持的子集。
-2. **`validateSlideDeck`**：引用必须属于本批；**本批每个来源至少被一页引用**（保证覆盖，不挑好写的讲）。
+## 关于引用可追溯的变化
 
-失败处理：
+云端**不返回** Syllora 的逐页来源 id，因此原先"每页引用可回溯到原文"无法维持。
+改为**章节级溯源**：每份幻灯片记录本次生成上传了哪些 Syllora 来源，并在界面上如实标注
+「本章依据」与云端课堂 id，**不声称逐页对应**。
 
-- 单批幻灯片连续两次失败 → 记进 `job.progress.failures`（形如 `第三章（幻灯片）：…`），**继续处理下一批**；
-- 幻灯片全部失败也不影响 Markdown 讲义发布与 revision 落盘；
-- 旧 revision 没有 `slides.json` → 读取返回空列表，界面提示"这一版没有幻灯片讲义"，不报错。
+## 失败降级
 
-## 阅读与导出
+幻灯片是附加产物，永不阻断讲义：
 
-讲义阅读器新增视图切换（文字讲义 / 幻灯片）：按章节选择、翻页、显示每页的原文依据锚点，并提供两种导出：
+- 某一章两次尝试后仍失败 → 记进 `job.progress.failures`（`第三章（幻灯片）：…`），**继续下一章**
+- 全部失败也不影响 Markdown 讲义发布与 revision 落盘
+- 旧 revision 没有 `slides.json` → 读取返回空列表，界面提示"这一版没有幻灯片讲义"
+- 云端返回的场景里认不出 canvas 的页会被丢弃，而不是把畸形数据交给渲染器
 
-- **本页 PNG**：用渲染器自带的 `slideToPng`，不自行截 DOM。
-- **全部 PPTX**：`apps/web/src/features/workbench/slide-export.ts` 用 `pptxgenjs` 按画布坐标映射成
-  PPT 形状。DSL 的坐标系是权威（元素都在 `viewportSize × viewportSize*viewportRatio` 内），因此
-  按 `10 英寸 / viewportSize` 换算即可保证版面；讲者备注写入「章节 · 页标题」。
+> **实现注意**：`within()` 对**不存在**的路径会抛 ENOENT，所以旧 revision 的兼容必须显式吞掉"文件不存在"。
 
-PPTX 保真边界（有意为之，不是遗漏）：
+## 代填模型 Key
+
+用户在本地填写 Key，Syllora 写入云端：
+
+1. `POST /api/verify-model` 校验 `{model, apiKey, baseUrl, providerType}`，不通过立即停止
+2. `PUT /api/model-config` 写入供应商（`kind: 'provider'`）
+3. `PUT /api/model-config` 赋值根槽位 `llm`（`kind: 'slots'`）
+
+槽位体系：根槽位是 `llm`，`course.outline` / `course.content` 等是它的子槽位，
+**未显式赋值时继承 `llm`**，因此只需写根槽位。写入带乐观并发（`revision`），
+冲突返回 409；被部署层 `openmaic.yml` 锁定的槽位返回 `SLOT_LOCKED`。
+
+## 渲染与导出
+
+讲义阅读器新增「文字讲义 / 幻灯片」切换：按章节选择、翻页、显示本章依据，并提供：
+
+- **本页 PNG**：用渲染器自带的 `slideToPng`
+- **全部 PPTX**：`apps/web/src/features/workbench/slide-export.ts` 用 `pptxgenjs` 按画布坐标映射
+
+PPTX 保真边界：
 
 | 元素 | 处理 |
 |---|---|
-| `text` | 段落与 `<br>` 还原为换行，内联字号取 `font-size`，其余样式保守降级为纯文本 |
-| `latex` | **以原文文本呈现**，不做 HTML→OMML 转换（那是上游约 52 KB 的链路），保证内容不丢 |
+| `text` | 段落与 `<br>` 还原为换行，内联字号取 `font-size`，其余样式保守降级 |
+| `latex` | 以原文文本呈现（不做 HTML→OMML 转换，保证内容不丢） |
 | `image` / `shape` | 图片按 `src` 插入；形状把 SVG path 包成 data URI 插入，保持外形 |
-| `line` | 映射为 PPT 线段 |
-| `table` | 映射为 PPT 表格 |
-| `chart` / `video` / `audio` | 不导出（需要额外数据与媒体链路），跳过而不是产出坏形状 |
+| `line` / `table` | 映射为 PPT 线段 / 原生表格 |
+| `chart` / `video` / `audio` | 不导出（需要额外数据与媒体链路），跳过而非产出坏形状 |
 
-单个元素导出失败会被跳过并打印警告，不影响其余元素与整份文件；整页没有任何元素可写时同样留痕，
-避免"导出成功但少了一页"这种静默问题。
+## 云端前置条件
 
-## 已知边界
-
-- 幻灯片是"附加产物"：同一批里讲义失败仍按原有规则让整理失败，幻灯片失败则只记录。
-- 生成质量取决于模型对契约的遵守程度，未做真实模型的语义抽检（当前验证到结构与契约层面）。
-- PPTX 不还原行内样式细节（粗体/颜色/多字体混排）与公式的 OMML 形态；需要这些时再引入上游那条导出链路。
+1. **云端必须配置模型**：否则生成任务会以
+   `No model is configured for course.outline...` 失败。用设置界面或本模块的代填功能配置。
+2. **资料限制**（取自 `/api/generate-classroom/capabilities`）：最多 5 份、总 150 MB、单文件 50 MB，
+   支持 `pdf` / `txt` / `markdown`。
+3. **访问口令**：云端未设 `ACCESS_CODE` 时门禁关闭，任何人都能访问——上公网前必须设置。
 
 ## 同步与升级
 
-依赖走 npm 而非源码快照，升级方式：
-
-```bash
-pnpm --filter web add @openmaic/dsl@<version> @openmaic/renderer@<version>
-```
-
-升级前确认上游 `license` 仍为 MIT：上游官网曾写 AGPL-3.0，但仓库 `LICENSE` 与 `package.json` 为
-MIT，其更新日志记录了 v0.3.0（2026-06-28）的 AGPL-3.0 → MIT 调整。若上游改回 AGPL，本集成需要
-重新评估（AGPL 会传染到整个 Syllora）。
+客户端对着**实测过的线上契约**写，不是对着文档推测。契约集中在
+`packages/host/chat-service/src/syllora-cloud.ts` 的文件头注释里。云端升级后若接口变化，
+优先核对那里列出的端点与字段，并由 `tests/syllora-cloud.spec.ts`（用真实 HTTP 服务器模拟云端）兜住。

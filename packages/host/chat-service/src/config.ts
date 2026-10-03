@@ -33,10 +33,22 @@ export interface ResolvedChatConfig {
   readonly maxTokens?: number | null
   readonly defaultMode: 'quick' | 'feynman' | 'debug'
   /**
-   * 是否在初始化时额外生成"幻灯片讲义"（`ui.slides`）。默认**关**：开启后每批会在讲义之外
-   * 多一次模型调用，属于用户应显式选择的成本，不应该是升级后静默多出来的开销。
+   * 是否在初始化时生成"幻灯片讲义"（`ui.slides`）。默认**关**。
+   *
+   * 开启后每章会向云端 OpenMAIC 发一次生成请求（资料会上传到该服务器），
+   * 属于用户应显式选择的成本与数据流向，不应该是升级后静默多出来的行为。
+   * 还必须在 `cloud` 里配好 `base_url` 与 `access_code`，否则不会启用。
    */
   readonly slides: boolean
+  /** 云端 OpenMAIC 连接信息；未配置时幻灯片功能不可用。 */
+  readonly cloud?: {
+    readonly baseUrl: string
+    readonly accessCode: string
+    readonly provider?: string
+    readonly preset?: string
+    readonly model?: string
+    readonly apiKey?: string
+  }
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
@@ -63,6 +75,20 @@ interface ConfigYaml {
     readonly max_tokens?: number | null
   }>
   readonly ui?: { default_mode?: string; slides?: boolean }
+  /**
+   * 云端 OpenMAIC：幻灯片在云端生成，本地只负责渲染。
+   * - `base_url`：站点根地址，如 https://studyandchat.top
+   * - `access_code`：站点访问口令（对应 OpenMAIC 的 ACCESS_CODE）
+   * - `model_*`：代填到云端的模型配置（用户本地输入，写入云端后由云端调用）
+   */
+  readonly cloud?: {
+    readonly base_url?: string
+    readonly access_code?: string
+    readonly provider?: string
+    readonly preset?: string
+    readonly model?: string
+    readonly api_key?: string
+  }
   readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
@@ -216,7 +242,18 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     maxConcurrency,
     maxTokens,
     defaultMode,
-    slides: config.ui?.slides === true,
+    // 幻灯片只有同时具备开关与云端连接信息时才启用，避免"开了但连不上"的模糊状态。
+    slides: config.ui?.slides === true && !!config.cloud?.base_url?.trim() && !!config.cloud?.access_code?.trim(),
+    ...(config.cloud?.base_url?.trim() && config.cloud?.access_code?.trim() ? {
+      cloud: {
+        baseUrl: config.cloud.base_url.trim().replace(/\/+$/, ''),
+        accessCode: config.cloud.access_code.trim(),
+        ...(config.cloud.provider?.trim() ? { provider: config.cloud.provider.trim() } : {}),
+        ...(config.cloud.preset?.trim() ? { preset: config.cloud.preset.trim() } : {}),
+        ...(config.cloud.model?.trim() ? { model: config.cloud.model.trim() } : {}),
+        ...(config.cloud.api_key?.trim() ? { apiKey: config.cloud.api_key.trim() } : {}),
+      },
+    } : {}),
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
     agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',

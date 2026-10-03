@@ -1,153 +1,130 @@
 /**
- * 幻灯片讲义：生成、引用校验、失败降级、旧版本兼容，以及"默认关闭"的契约。
- * 这些用例都用合成客户端，不依赖真实模型。
+ * 幻灯片归一化与校验的单元测试。
+ *
+ * 生成已经移到云端（那部分的网络行为由 `syllora-cloud.spec.ts` 用真实 HTTP 服务器验证），
+ * 所以这里只测本模块自己的职责：把云端场景归一化、校验产物、以及 Markdown 降级视图。
+ *
+ * 输入形态对着实测的云端响应写：场景形如 `{ id, title, order, content: { type, canvas } }`。
  */
-import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
-import { SylloraProjects } from '../src/syllora-projects.ts'
-import type { StructuredCallClient } from '@syllora/course-builder'
+import { describe, expect, it } from 'vitest'
+import type { Source } from '../src/syllora-domain.ts'
+import {
+  normalizeCloudScenes,
+  slideArtifactMarkdown,
+  slideFailureMessage,
+  validateSlideArtifact,
+  type SlideArtifact,
+} from '../src/syllora-slides.ts'
 
-const roots: string[] = []
-afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
-const config = { providerId: 'fixture', model: 'fixture', baseUrl: 'http://127.0.0.1:9/v1', apiKey: 'fixture-only', apiKeyEnv: null, temperature: 0, maxConcurrency: 1, defaultMode: 'quick' as const }
+/** 一份最小可渲染的 canvas：渲染器只要求有 elements 数组与主题。 */
+const canvas = (text: string) => ({
+  id: 'c1',
+  viewportSize: 1000,
+  viewportRatio: 0.5625,
+  theme: { backgroundColor: '#fff', themeColors: ['#002fa7'], fontColor: '#202128', fontName: 'sans-serif' },
+  elements: [
+    { type: 'text', id: 't1', left: 60, top: 40, width: 880, height: 120, content: `<p>${text}</p>` },
+  ],
+})
 
-/** 讲义 payload（与既有夹具同形）。 */
-function lecture(sources: any[]) {
-  return {
-    chapter: String(sources[0].section).split(' / ').at(-1)!.slice(0, 60),
-    intro: { text: '合成章节导读', sourceIds: sources.map(source => source.id) },
-    concepts: sources.filter(source => source.kind !== 'heading' && source.text.length >= 4)
-      .map((source, i) => ({ name: `合成概念 ${i}`, text: '合成解释', sourceIds: [source.id], quote: source.text.slice(0, 40) })),
-    examples: [], connections: [], analogies: [],
-  }
-}
+const scene = (id: string, title: string, order: number, text: string) => ({
+  id,
+  title,
+  order,
+  content: { type: 'slide', canvas: canvas(text) },
+})
 
-/**
- * 幻灯片 payload：画布 1000×562，每页引用两个片段里的一部分。
- * `copies` 让同一份来源可以被多页引用；`corrupt` 用来制造"契约不合法"的输出。
- */
-function deck(sources: any[], options: { corrupt?: boolean } = {}) {
-  const headings = sources.filter(source => source.kind === 'heading')
-  const bodies = sources.filter(source => source.kind !== 'heading')
-  const text = (id: string, content: string, left: number, top: number, width: number, height: number) =>
-    ({ type: 'text', id, left, top, width, height, rotate: 0, content: `<p>${content}</p>`, defaultFontName: 'sans-serif', defaultColor: '#202128' })
-  const canvas = (id: string, heading: any, body: any) => ({
-    id, viewportSize: 1000, viewportRatio: 0.5625,
-    theme: { backgroundColor: '#ffffff', themeColors: ['#002fa7'], fontColor: '#202128', fontName: 'sans-serif' },
-    elements: [
-      text(`${id}-title`, String(heading?.text ?? '章节').replace(/^#\s*/, '').slice(0, 30), 60, 40, 880, 80),
-      text(`${id}-body`, String(body?.text ?? '依据').slice(0, 40), 60, 160, 880, 300),
-    ],
+const source = (id: string, section = '第一章'): Source => ({
+  id, materialId: 'm1', version: 1, anchor: 'a.md · 行 1', text: '资料原文', section, kind: 'paragraph',
+} as Source)
+
+describe('normalizeCloudScenes', () => {
+  it('保留可渲染的场景并按 order 排序', () => {
+    const scenes = normalizeCloudScenes([
+      scene('s2', '第二页', 2, '内容二'),
+      scene('s1', '第一页', 1, '内容一'),
+    ])
+    expect(scenes.map(item => item.id)).toEqual(['s1', 's2'])
+    expect(scenes[0]!.content.canvas).toBeDefined()
+    expect(scenes[0]!.content.type).toBe('slide')
   })
-  const scenes = [
-    { id: 'scene-1', title: '本章要点', order: 0, citations: [headings[0]?.id ?? sources[0]!.id], content: { type: 'slide' as const, canvas: canvas('c1', headings[0], bodies[0]) } },
-    { id: 'scene-2', title: '展开说明', order: 1, citations: bodies.map(source => source.id).slice(0, 1), content: { type: 'slide' as const, canvas: canvas('c2', headings[0], bodies[0]) } },
-  ]
-  if (options.corrupt) {
-    // 越界坐标 + 缺失 theme：schema 与契约都不该放行。
-    scenes.push({ id: 'scene-3', title: '坏的', order: 2, citations: ['not-a-real-source'], content: { type: 'slide' as const, canvas: { id: 'c3', viewportSize: 0, viewportRatio: 0, theme: {} as never, elements: [] } } as never })
-  }
-  return { chapter: String(sources[0].section).split(' / ').at(-1)!.slice(0, 60), scenes }
-}
 
-async function setup(options: { slides?: boolean; corruptDeck?: boolean; extraCalls?: number[] } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'syllora-slides-'))
-  roots.push(root)
-  const folder = join(root, 'course')
-  await mkdir(folder)
-  await writeFile(join(folder, 'a.md'), '# 甲章\n\n合成甲章依据，用于幻灯片。\n\n# 乙章\n\n合成乙章依据，用于幻灯片。')
-  let lectureCalls = 0, slideCalls = 0
-  const client: StructuredCallClient = {
-    async *stream(callOptions) {
-      const text = (callOptions.messages.at(-1) as any).content[0].text as string
-      const sources = JSON.parse(text.slice(text.indexOf('所选资料：\n') + '所选资料：\n'.length))
-      if (text.includes('课堂幻灯片')) {
-        slideCalls++
-        if (options.corruptDeck) throw new Error('合成幻灯片失败')
-        yield { type: 'text-delta', text: JSON.stringify(deck(sources, { corrupt: options.corruptDeck })) }
-        return
-      }
-      lectureCalls++
-      yield { type: 'text-delta', text: JSON.stringify(lecture(sources)) }
-    },
-  }
-  const projects = new SylloraProjects(join(root, 'app'), {
-    config: async () => config, client: () => client,
-    ...(options.slides === undefined ? {} : { slides: options.slides }),
+  it('丢弃没有 canvas 的场景，而不是把畸形数据交给渲染器', () => {
+    const scenes = normalizeCloudScenes([
+      { id: 'ok', title: '好', order: 0, content: { type: 'slide', canvas: canvas('x') } },
+      { id: 'no-canvas', title: '缺 canvas', order: 1, content: { type: 'slide' } },
+      { id: 'empty', title: '空', order: 2 },
+    ] as never)
+    expect(scenes.map(item => item.id)).toEqual(['ok'])
   })
-  await projects.handle('preferences', { consent: true })
-  const { id } = await projects.handle('openCourse', { path: folder }) as { id: string }
-  const job = await projects.handle('initialize', { courseId: id, requestId: randomUUID(), paths: ['a.md'] }) as { jobId: string }
-  let settled: any
-  for (let i = 0; i < 400; i++) {
-    const state = await projects.handle('state', {}) as any
-    const current = state.jobs.find((candidate: any) => candidate.id === job.jobId)
-    if (current && current.state !== 'running') { settled = { state, job: current }; break }
-    await new Promise(resolve => setTimeout(resolve, 10))
-  }
-  if (!settled) throw new Error('初始化未结束')
-  return { root, folder, projects, id, ...settled, calls: () => ({ lectureCalls, slideCalls }) }
-}
 
-describe('幻灯片讲义', () => {
-  it('开启时按章节产出幻灯片，写进 revision 并带可回溯引用', async () => {
-    const s = await setup({ slides: true })
-    expect(s.job.state).toBe('succeeded')
-    expect(s.calls().slideCalls).toBeGreaterThan(0)
-    const revision = s.state.courses[0].revision
-    const decks = JSON.parse(await readFile(join(s.folder, '.syllora', 'revisions', revision, 'slides.json'), 'utf8'))
-    expect(decks.length).toBeGreaterThan(0)
-    for (const item of decks) {
-      expect(item.scenes.length).toBeGreaterThan(0)
-      for (const scene of item.scenes) expect(scene.citations.length).toBeGreaterThan(0)
+  it('缺失 id/title/order 时用兜底值补齐，不因单个字段缺失丢弃整页', () => {
+    const scenes = normalizeCloudScenes([
+      { content: { type: 'slide', canvas: canvas('无 id') } },
+    ] as never)
+    expect(scenes).toHaveLength(1)
+    expect(scenes[0]!.id).toBe('scene-1')
+    expect(scenes[0]!.title).toBe('')
+    expect(scenes[0]!.order).toBe(0)
+  })
+
+  it('云端返回空数组时得到空结果（由 validate 负责报错）', () => {
+    expect(normalizeCloudScenes([])).toEqual([])
+  })
+})
+
+describe('validateSlideArtifact', () => {
+  const artifact = (overrides: Partial<SlideArtifact> = {}): SlideArtifact => ({
+    chapter: '第一章',
+    classroomId: 'cls_1',
+    sourceIds: ['s1'],
+    scenes: normalizeCloudScenes([scene('s1', '一', 0, '内容')]),
+    ...overrides,
+  })
+
+  it('正常产物通过校验', () => {
+    expect(() => validateSlideArtifact(artifact(), [source('s1')])).not.toThrow()
+  })
+
+  it('没有可渲染页时报出明确原因', () => {
+    expect(() => validateSlideArtifact(artifact({ scenes: [] }), [source('s1')]))
+      .toThrowError('云端未返回任何可渲染的幻灯片页')
+  })
+
+  it('记录了不属于本批的来源时报错（防止跨批串味）', () => {
+    expect(() => validateSlideArtifact(artifact({ sourceIds: ['other'] }), [source('s1')]))
+      .toThrowError('幻灯片记录了未提供的来源')
+  })
+})
+
+describe('slideArtifactMarkdown', () => {
+  it('把画布文本提取为可读的 Markdown（无渲染器时的降级路径）', () => {
+    const artifact: SlideArtifact = {
+      chapter: '第一章',
+      classroomId: 'cls_1',
+      sourceIds: ['s1'],
+      scenes: normalizeCloudScenes([
+        scene('s1', '第一节', 0, '勾股定理'),
+        scene('s2', '第二节', 1, '逆定理'),
+      ]),
     }
-    // 通过公开读取面拿到幻灯片，且引用仍指向可用来源。
-    const read = await s.projects.handle('slides', { courseId: s.id }) as any
-    expect(read.revision).toBe(revision)
-    expect(read.decks.length).toBe(decks.length)
-    const manifest = JSON.parse(await readFile(join(s.folder, '.syllora', 'revisions', revision, 'manifest.json'), 'utf8'))
-    expect(manifest.slideDeckCount).toBe(decks.length)
+    const markdown = slideArtifactMarkdown(artifact)
+    expect(markdown).toContain('# 第一章')
+    expect(markdown).toContain('## 第一节')
+    expect(markdown).toContain('- 勾股定理')
+    expect(markdown).toContain('## 第二节')
+    // 不应残留 HTML 标签
+    expect(markdown).not.toContain('<p>')
+  })
+})
+
+describe('slideFailureMessage', () => {
+  it('带上章节名与原因，便于在 failures 里定位', () => {
+    expect(slideFailureMessage('第三章', new Error('云端返回 401：拒绝访问')))
+      .toBe('第三章（幻灯片）：云端返回 401：拒绝访问')
   })
 
-  it('幻灯片失败只记进度，不影响讲义发布', async () => {
-    const s = await setup({ slides: true, corruptDeck: true })
-    // 讲义照常成功，revision 照常发布。
-    expect(s.job.state).toBe('succeeded')
-    expect(s.state.courses[0].revision).toBeTruthy()
-    expect(s.job.progress.failures.join(' ')).toContain('幻灯片')
-    const read = await s.projects.handle('slides', { courseId: s.id }) as any
-    expect(read.decks).toEqual([])
-    const lectures = await s.projects.handle('lectures', { courseId: s.id }) as any
-    expect(lectures.lectures.length).toBeGreaterThan(0)
-  })
-
-  it('默认关闭：不产生幻灯片调用，也不写 slides.json', async () => {
-    const s = await setup()
-    expect(s.job.state).toBe('succeeded')
-    expect(s.calls().slideCalls).toBe(0)
-    const revision = s.state.courses[0].revision
-    await expect(readFile(join(s.folder, '.syllora', 'revisions', revision, 'slides.json'), 'utf8')).rejects.toThrow()
-  })
-
-  it('旧 revision 没有 slides.json 时读作空列表而不是报错', async () => {
-    const s = await setup({ slides: true })
-    const revision = s.state.courses[0].revision
-    // 模拟历史 revision：目录在、但没有 slides.json（这个特性之前发布的版本就是这样）。
-    await rm(join(s.folder, '.syllora', 'revisions', revision, 'slides.json'))
-    const read = await s.projects.handle('slides', { courseId: s.id }) as any
-    expect(read.revision).toBe(revision)
-    expect(read.decks).toEqual([])
-  })
-
-  it('来源被删除后，引用失效的幻灯片不再返回', async () => {
-    const s = await setup({ slides: true })
-    const materialId = s.state.courses[0].materials[0].id
-    await s.projects.handle('deleteMaterial', { courseId: s.id, materialId, confirmed: true })
-    const read = await s.projects.handle('slides', { courseId: s.id }) as any
-    // 资料删除会清掉发布产物，因此这里要么空、要么只剩仍可回溯的页。
-    for (const item of read.decks) for (const scene of item.scenes) expect(scene.citations.length).toBeGreaterThan(0)
+  it('非 Error 值也能转成可读信息', () => {
+    expect(slideFailureMessage('第一章', '字符串错误')).toBe('第一章（幻灯片）：字符串错误')
   })
 })
