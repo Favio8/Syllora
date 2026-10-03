@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+﻿import { randomUUID } from 'node:crypto'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { z } from 'zod'
@@ -8,6 +8,7 @@ import type { Lecture } from './syllora-project-types.ts'
 export type { Lecture } from './syllora-project-types.ts'
 import { atomicJson, jsonFile, managedDirectory, pdfPageIssues, scanFiles, sha, stableId, stateDirectory, structuredSources, within } from './syllora-files.ts'
 import { generationFailure } from './syllora-jobs.ts'
+import { groundQuote, normalizeQuoteText } from './syllora-quotes.ts'
 
 const section = z.object({ text: z.string().trim().min(1).max(6000), sourceIds: z.array(z.string()).min(1) })
 const concept = section.extend({ name: z.string().trim().min(1).max(60), quote: z.string().trim().min(4) })
@@ -19,17 +20,7 @@ export const lectureSchema = z.object({
 })
 export interface InitProgress { stage: 'scanning' | 'parsing' | 'organizing' | 'validating'; done: number; total: number; failures: string[]; message: string }
 export interface InitializationResult { revision: string; materials: Material[]; points: Point[]; lectures: Lecture[]; fingerprints: Record<string,string>; path: string }
-/** 引用比对归一化：导出文本常带 HTML 标签（<em>/<strong>）与 Markdown 强调
- * （*斜体*、**加粗**）残留，模型引用时通常按纯文本摘录——先原样比对（保持
- * 最严校验），失败再做归一化容错（剥标签/强调符、折叠空白），不放松「引用
- * 必须出自原文」的语义。 */
-function normalizeQuoteText(s: string): string {
-  return s
-    .replace(/<[^>]+>/g, '')
-    .replace(/[*_`~]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+/** 引用比对归一化与引文接地都在 `syllora-quotes.ts`（初始化与「精加工」共用一份）。 */
 export function validateLecture(value: z.infer<typeof lectureSchema>, sources: Source[]) {
   const supported = new Map(sources.map(s => [s.id,s.text])), used = new Set<string>()
   for (const item of [value.intro,...value.concepts,...value.examples,...value.connections,...value.analogies]) {
@@ -41,34 +32,6 @@ export function validateLecture(value: z.infer<typeof lectureSchema>, sources: S
     })) throw new Error('讲义依据不是资料原文')
   }
   if (sources.some(s => !used.has(s.id))) throw new Error('本批资料没有完整关联到讲义，请重试')
-}
-/** 引文接地：模型常用转述代替逐字摘录。这里在本批资料里找与转述最贴近的原文
- *  句子，用它替换引文——发布出去的依据仍然必须是原文逐字（校验不放松），但
- *  「模型改写了一句」不再等于丢弃整个概念。 */
-function groundQuote(quote: string, sources: Source[]): { id: string; text: string } | null {
-  const wanted = normalizeQuoteText(quote), grams = new Set<string>()
-  if (wanted.length < 6) return null
-  for (let i = 0; i + 1 < wanted.length && grams.size < 240; i++) grams.add(wanted.slice(i, i + 2))
-  let best: { id: string; text: string; score: number } | null = null
-  for (const source of sources) {
-    const text = source.text.slice(0, 4000)
-    if (!text.trim()) continue
-    const haystack = normalizeQuoteText(text)
-    let hits = 0
-    for (const gram of grams) if (haystack.includes(gram)) hits++
-    const score = hits / grams.size
-    if (score >= 0.5 && score > (best?.score ?? 0)) best = { id: source.id, text, score }
-  }
-  if (best === null) return null
-  const sentences = best.text.split(/(?<=[。！？；])|\n+/).map(s => s.trim()).filter(s => s.length >= 8)
-  let pick: { text: string; hits: number } | null = null
-  for (const sentence of sentences) {
-    const hay = normalizeQuoteText(sentence)
-    let hits = 0
-    for (const gram of grams) if (hay.includes(gram)) hits++
-    if (hits > (pick?.hits ?? 0)) pick = { text: sentence, hits }
-  }
-  return pick === null ? null : { id: best.id, text: pick.text.slice(0, 200) }
 }
 /** 发布前修整模型输出：单条引用出错不应作废整批。
  * - 不在本批的来源 id 直接剔除；
@@ -210,6 +173,21 @@ export async function initializeFolder(options: {
     batch.push(source);size+=length
   }
   if(batch.length)batches.push(batch)
+  // 目录型批次（整批几乎只有标题、没有正文）单独产讲义只会得到「本批资料仅给出该标题」这类空话
+  // ——导出资料开头的目录页正好会形成这种批次。把它们并入上一批，让标题跟着正文一起被整理。
+  // 判据是"正文句字符数"：标题行只有含句末标点或超过 30 字时才折算为正文，
+  // 这样既能认出目录页（整批短标题），又不会把"整行加粗的例题/公式"误判成目录。
+  const headingOnly=(group:Source[])=>group.reduce((n,source)=>{
+    const text=source.text.trim()
+    if(source.kind==='heading'&&text.length<=30&&!/[。；]/.test(text))return n
+    return n+text.length
+  },0)<150
+  const mergedBatches:Source[][]=[]
+  for(const group of batches){
+    if(batches.length>1&&mergedBatches.length>0&&headingOnly(group)){ mergedBatches[mergedBatches.length-1]!.push(...group); continue }
+    mergedBatches.push(group)
+  }
+  if(mergedBatches.length!==batches.length){ batches.length=0; batches.push(...mergedBatches) }
   const lectures:Lecture[]=[], points:Point[]=[]
   // 批次之间互不依赖，只把模型调用并发起来；缓存、进度、讲义与知识点仍按批次顺序串行落盘。
   // 缓存的批次不占并发位，也不产生调用（重跑只补变化章节的语义不变）。
@@ -295,3 +273,4 @@ export async function initializeFolder(options: {
   await rename(stage,publishedPath)
   return {revision,materials,points,lectures,fingerprints,path:publishedPath}
 }
+
