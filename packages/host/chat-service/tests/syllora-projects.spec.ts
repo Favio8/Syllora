@@ -8,7 +8,7 @@ import { SylloraService } from '../src/syllora.ts'
 import { selectContext, sha, structuredSources, within } from '../src/syllora-files.ts'
 import * as files from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
-import { validateLecture } from '../src/syllora-initialize.ts'
+import { lectureMarkdown, validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
 /** ENOTEMPTY/EBUSY：取消类用例的清理会与仍在收尾的写入竞争，重试几次即可，不掩盖真正的清理失败。 */
@@ -28,12 +28,12 @@ const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'h
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
 }
-async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1) {
+async function setup(change?:(sources:any[],call:number,prompt:string,maxTokens:number|undefined)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1,maxTokens?:number) {
   await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder)
   let calls=0
-  const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
-  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency}),client:()=>client,...(pdf?{pdf}:{})})
+  const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls,message.slice(0,message.indexOf('所选资料：\n')),options.maxTokens):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
+  const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency,...(maxTokens===undefined?{}:{maxTokens})}),client:()=>client,...(pdf?{pdf}:{})})
   await projects.handle('preferences',{consent:true})
   const course=await projects.handle('openCourse',{path:folder}) as {id:string}
   return {root,folder,app,projects,id:course.id,calls:()=>calls,client}
@@ -109,6 +109,50 @@ describe('course folder initialization',()=>{
     invalid=false;const count=s.calls();const recovered=await initialize(s);expect(recovered.job.state).toBe('succeeded');expect(s.calls()-count).toBe(1)
     expect(recovered.state.courses[0].materials[0].revisionNumber).toBe(2);expect(recovered.state.courses[0].materials[0].history.length).toBeGreaterThan(0)
     expect(recovered.state.courses[0].points.map((p:any)=>p.id)).toEqual(first.state.courses[0].points.map((p:any)=>p.id))
+  })
+  it('restores escaped JSON evidence from a PDF before caching and publishing without a second model call',async()=>{
+    const body='curl --request POST\n--data \'{\\"mode\\": \\"demo\\", \\"enabled\\": false}\'\n'
+    const s=await setup(sources=>{
+      const value=lecture(sources),source=sources.find(s=>s.kind!=='heading')
+      value.concepts[0]!.quote=source.text.trim().replaceAll('\\"','"')
+      return value
+    },async()=>({total:1,pages:[{num:1,text:'# Response\n'+body}]}))
+    await writeFile(join(s.folder,'example.pdf'),'pdf-fixture')
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded');expect(s.calls()).toBe(1)
+    const result=await s.projects.handle('lectures',{courseId:s.id}) as any
+    expect(result.lectures[0].concepts[0].quote).toBe(body.trim())
+    const replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(1)
+  })
+  it('retries unsupported evidence with the failed quote and permitted original source instead of repeating the prompt',async()=>{
+    let retryFeedback=''
+    const s=await setup((sources,_call,prompt)=>{
+      const value=lecture(sources)
+      if(!prompt.includes('上次输出的校验反馈'))value.concepts[0]!.quote='不在资料中的错误依据'
+      else retryFeedback=prompt
+      return value
+    })
+    await writeFile(join(s.folder,'lecture.md'),'# 定义\n资料提供准确的概念定义。')
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(s.calls()).toBe(2)
+    expect(retryFeedback).toContain('不在资料中的错误依据')
+    expect(retryFeedback).toContain('资料提供准确的概念定义。')
+    const replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(2)
+  })
+  it('retries a truncated output with concise guidance and uses the adapter default output budget',async()=>{
+    let budget:number|undefined,feedback=''
+    const s=await setup((sources,_call,prompt,maxTokens)=>{
+      budget=maxTokens
+      if(!prompt.includes('长度上限而被截断'))throw Object.assign(new Error('model output truncated'),{code:'OUTPUT_TRUNCATED'})
+      feedback=prompt;return lecture(sources)
+    })
+    await writeFile(join(s.folder,'lecture.md'),'# 定义\n资料提供准确的概念定义。')
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(s.calls()).toBe(2)
+    expect(budget).toBe(16_384);expect(feedback).toContain('完整输出 JSON');expect(feedback).toContain('每个来源都被引用')
+  })
+  it('respects an explicitly configured provider output budget for initialization',async()=>{
+    let budget:number|undefined
+    const s=await setup((sources,_call,_prompt,maxTokens)=>{budget=maxTokens;return lecture(sources)},undefined,1,2048)
+    await writeFile(join(s.folder,'lecture.md'),'# 定义\n资料提供准确的概念定义。')
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(budget).toBe(2048)
   })
   it('cancels initialization without publishing and does not write into another opened course',async()=>{
     let release!:()=>void, entered!:()=>void;const start=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r)
@@ -206,6 +250,26 @@ describe('structured sources and migration',()=>{
     const sources=structuredSources('m','v',[{text:'资料提供准确的概念定义。',anchor:'a'},{text:'另一片段说明适用条件。',anchor:'b'}]),value=lecture(sources)
     value.concepts[0]!.quote='编造的依据';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
     const incomplete=lecture([sources[0]]);expect(()=>validateLecture(incomplete,sources)).toThrow('没有完整关联')
+  })
+  it('publishes exact original quote bytes after a reversible double-quote spelling difference',()=>{
+    const text='请求示例：{\\"mode\\": \\"demo\\", \\"enabled\\": false}。'
+    const sources=structuredSources('m','v',[{text,anchor:'a'}]),value=lecture(sources)
+    value.concepts[0]!.quote='{ "mode": "demo" }'
+    expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
+    value.concepts[0]!.quote='{\\"mode\\": \\"demo\\", \\"enabled\\": false}'.replaceAll('\\"','"')
+    validateLecture(value,sources)
+    expect(value.concepts[0]!.quote).toBe('{\\"mode\\": \\"demo\\", \\"enabled\\": false}')
+    expect(text).toContain(value.concepts[0]!.quote)
+    expect(lectureMarkdown({...value,id:'l',materialIds:['m'],sourceIds:[sources[0]!.id]})).toContain(value.concepts[0]!.quote)
+  })
+  it('does not repair changed values, newline escapes, invented citations or quotes from another source',()=>{
+    const sources=structuredSources('m','v',[{text:'{\\"enabled\\": false}；换行符写作 \\n；字符写作 \\u0041。',anchor:'a'},{text:'其他资料中的准确依据。',anchor:'b'}])
+    for(const quote of ['{"enabled": true}','换行符写作 \n','字符写作 A。','其他资料中的准确依据。']){
+      const value=lecture(sources);value.concepts[0]!.quote=quote
+      expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
+    }
+    const value=lecture(sources);value.concepts[0]!.sourceIds=['invented-source']
+    expect(()=>validateLecture(value,sources)).toThrow('未提供的来源')
   })
   it('keeps one document as one chapter even though every PDF page has its own anchor',()=>{
     // 页锚点必须只做定位：一旦它同时充当章节回退键，每一页都会变成独立批次，
