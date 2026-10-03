@@ -156,14 +156,22 @@ export async function createStaticHost(options: StaticHostOptions): Promise<Stat
       let body: Buffer | string = file
       if (isHtml) {
         // index.html 按 (root, mtime) 缓存 tap 注入结果，避免每请求重读重注入。
-        const cacheKey = `${filePath}:${(await stat(filePath)).mtimeMs}`
-        let injected = indexCache.get(cacheKey)
-        if (injected === undefined) {
-          injected = withBootstrapTap(file.toString('utf8'), options.bootstrap ?? null)
-          if (indexCache.size > 8) indexCache.clear()
-          indexCache.set(cacheKey, injected)
+        // 读到内容之后文件仍可能被并发删除或重建（Next export 覆盖 dist）：那次
+        // stat 失败必须是可降级的——未捕获的 rejection 会被宿主当成致命错误
+        // （Node ≥15 直接终止进程），代价是整应用猝死而不是少一次缓存。
+        const mtimeMs = await stat(filePath).then(info => info.mtimeMs).catch(() => null)
+        if (mtimeMs === null) {
+          body = withBootstrapTap(file.toString('utf8'), options.bootstrap ?? null)
+        } else {
+          const cacheKey = `${filePath}:${mtimeMs}`
+          let injected = indexCache.get(cacheKey)
+          if (injected === undefined) {
+            injected = withBootstrapTap(file.toString('utf8'), options.bootstrap ?? null)
+            if (indexCache.size > 8) indexCache.clear()
+            indexCache.set(cacheKey, injected)
+          }
+          body = injected
         }
-        body = injected
       }
       // C-12：缓存与安全响应头——旧实现完全缺失：① HTML 不缓存（tap 注入的
       // token 每次启动都可能变，缓存会让旧 token 复用）；② 带 hash 的静态资产

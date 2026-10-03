@@ -1057,23 +1057,33 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
-          // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
-          // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
-          // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
-          // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
-          const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
-          const hit = await staticHost.respond(url.pathname, { sessionCookie })
-          if (hit === null) {
-            response.writeHead(404)
-            response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
-            return
+          try {
+            // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
+            // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
+            // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
+            // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
+            const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
+            const hit = await staticHost.respond(url.pathname, { sessionCookie })
+            if (hit === null) {
+              response.writeHead(404)
+              response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
+              return
+            }
+            response.setHeader('Content-Type', hit.contentType)
+            // C-12：透出静态托管的缓存/安全响应头（no-cache HTML / immutable
+            // hash 资产 / nosniff）。
+            for (const [name, value] of Object.entries(hit.headers ?? {})) response.setHeader(name, value)
+            response.writeHead(hit.status)
+            response.end(request.method === 'HEAD' ? undefined : hit.body)
+          } catch (error) {
+            // 与相邻两个静态端点同口径：这条路径是 fire-and-forget 的，异常一旦
+            // 逃逸就是未处理的 rejection——Node ≥15 会直接终止宿主进程（用户正在
+            // 学习时整个应用消失），而不是返回一个 5xx。
+            if (response.headersSent || response.writableEnded || response.destroyed) return
+            console.error('[syllora] 静态资源交付失败:', error instanceof Error ? error.message : String(error))
+            response.writeHead(500)
+            response.end(JSON.stringify({ error: { code: 'static-host-failed', message: '静态资源交付失败', details: null } }))
           }
-          response.setHeader('Content-Type', hit.contentType)
-          // C-12：透出静态托管的缓存/安全响应头（no-cache HTML / immutable
-          // hash 资产 / nosniff）。
-          for (const [name, value] of Object.entries(hit.headers ?? {})) response.setHeader(name, value)
-          response.writeHead(hit.status)
-          response.end(request.method === 'HEAD' ? undefined : hit.body)
         })()
         return
       }
