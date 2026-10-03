@@ -159,13 +159,17 @@ function cleanHeadingLabel(raw: string): string {
 }
 /**
  * 加粗小节标题（`**1.6 电路等效**`）：导出资料常用「整行加粗」当小节，而不是 `##`。
- * 只认像标题的加粗行——带章节号，或**含中文**且短、不以句号结尾；单位符号（`**Ω**`）与整句正文都不算。
+ * 只认像标题的加粗行——带章节号，或**含中文**、短、不以句号结尾。
+ * 公式与例题也常整行加粗（`**P吸= u i= 5×(-1) = -5 W**`、`**例1 …**`），它们是正文：
+ * 含 `=`/`≈`/`×` 等运算符号或以「例/解/如图/则/故/所以」开头的一律不当标题。
  */
 function boldHeadingTitle(line: string): string {
   const bold = /^\s*\*\*(.+?)\*\*\s*$/.exec(line.trim())
   if (!bold) return ''
   const title = cleanHeadingLabel(bold[1]!)
   if (title === '' || !/[\p{L}\p{N}]/u.test(title) || /[。；;]$/.test(title)) return ''
+  if (/[=≈×÷]/.test(title)) return ''
+  if (/^(例|解|如图|由图|则|故|所以|因此|注意|思考|练习)/.test(title)) return ''
   if (CHAPTER_NUMBER.test(title)) return title
   return CHAPTER_TITLE.test(title) && title.length <= 24 ? title : ''
 }
