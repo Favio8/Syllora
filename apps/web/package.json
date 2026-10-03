@@ -22,6 +22,7 @@
     "@tiptap/starter-kit": "^3.31.4",
     "@xyflow/react": "^12.11.3",
     "d3-force": "^3.0.0",
+    "echarts": "^6.1.0",
     "html-to-image": "^1.11.11",
     "katex": "^0.16.47",
     "lucide-react": "^1.33.0",
@@ -36,6 +37,7 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "shiki": "^4.5.0",
     "tiptap-markdown": "^0.9.0",
     "zustand": "^5.0.15"
   },

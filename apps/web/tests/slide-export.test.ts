@@ -45,8 +45,9 @@ describe('PPTX 组装', () => {
     // 100px @ 1000 视口 = 1 英寸 = 914400 EMU（pptxgenjs 用 EMU 描述位置）。
     expect(slideXml).toMatch(/<a:off x="914400"/);
     // 讲者备注带上章节与页标题，导出的文件里仍能看出结构。
-    const notesXml = await zip.file('ppt/notesSlides/notesSlide1.xml').async('string');
-    expect(notesXml).toContain('甲章');
+    const notesFile = zip.file('ppt/notesSlides/notesSlide1.xml');
+    expect(notesFile).not.toBeNull();
+    expect(await notesFile!.async('string')).toContain('甲章');
   });
 
   it('没有可渲染元素时跳过而不是产出坏形状', () => {

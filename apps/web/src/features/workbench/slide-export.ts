@@ -59,6 +59,12 @@ export function elementFontSize(html: string, fallback: number): number {
   return Number.isFinite(size) && size > 0 ? size : fallback;
 }
 
+/** 取一个有限数值，取不到就用 fallback。用于画布上可能缺失的坐标字段。 */
+function finiteOr(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
 /** 把 SVG path 包成 data URI 图，交给 pptxgenjs 作为图片插入（形状保真的最简单做法）。 */
 function shapeDataUri(element: SlideElement): string | null {
   const path = typeof element.path === 'string' ? element.path : '';
@@ -120,9 +126,11 @@ export function renderCanvas(slide: PptxGenJS.Slide, canvas: SlideCanvas): numbe
         written++;
       } else if (element.type === 'line') {
         const start = Array.isArray(element.start) ? element.start : [0, 0];
+        // 线段的 start 是元素内的偏移。取不到有限数值时退回 0，
+        // 不能写 `Number(x) ?? fallback`——Number() 永不返回 nullish，那样兜底是死代码。
         slide.addShape('line', {
-          x: (element.left + Number(start[0]) || element.left) * scale,
-          y: (element.top + Number(start[1]) ?? element.top) * scale,
+          x: (element.left + finiteOr(start[0], 0)) * scale,
+          y: (element.top + finiteOr(start[1], 0)) * scale,
           w: Math.max(box.w, 0.01),
           h: Math.max(box.h, 0.01),
           line: { color: String((element as { color?: string }).color ?? '#202128').replace('#', ''), width: 1 },
