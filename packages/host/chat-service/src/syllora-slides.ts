@@ -45,15 +45,35 @@ export interface SlideArtifact {
 }
 
 /**
+ * 从场景里取出可渲染的画布。
+ *
+ * 上游存在两种形态（都在其自身代码里出现过）：
+ * - `content: { type: 'slide', canvas: {...} }` —— DSL 的 `SlideContent`，主形态
+ *   （见 packages/@openmaic/dsl/src/stage.ts 的 `canvas: Slide`）
+ * - `content: { elements: [...], remark }` —— 画布字段被内联，没有 canvas 包一层
+ *
+ * 两种都要认，否则第二种会被整页丢掉。都取不到才返回 null。
+ */
+function readCanvas(content: unknown): unknown | null {
+  if (!content || typeof content !== 'object') return null
+  const record = content as Record<string, unknown>
+  const nested = record.canvas
+  if (nested && typeof nested === 'object') return nested
+  // 内联形态：content 自身就是画布
+  if (Array.isArray(record.elements)) return content
+  return null
+}
+
+/**
  * 把云端场景归一化成一节的场景。
- * 云端形态随版本演进，因此这里做保守映射：认不出 canvas 的场景直接丢弃，
+ * 云端形态随版本演进，因此这里做保守映射：认不出画布的场景直接丢弃，
  * 而不是让一份畸形数据把整个渲染器打挂。
  */
 export function normalizeCloudScenes(scenes: CloudScene[]): SlideArtifact['scenes'] {
   const out: SlideArtifact['scenes'] = []
   scenes.forEach((scene, index) => {
-    const canvas = scene.content?.canvas
-    if (!canvas || typeof canvas !== 'object') return
+    const canvas = readCanvas(scene.content)
+    if (!canvas) return
     const id = typeof scene.id === 'string' && scene.id ? scene.id : `scene-${index + 1}`
     const title = typeof scene.title === 'string' ? scene.title : ''
     const order = typeof scene.order === 'number' && Number.isFinite(scene.order) ? scene.order : index

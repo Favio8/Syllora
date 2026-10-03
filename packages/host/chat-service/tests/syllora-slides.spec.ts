@@ -71,6 +71,19 @@ describe('normalizeCloudScenes', () => {
   it('云端返回空数组时得到空结果（由 validate 负责报错）', () => {
     expect(normalizeCloudScenes([])).toEqual([])
   })
+
+  it('认得上游的两种画布形态（嵌套 canvas 与内联画布）', () => {
+    // 形态一来自上游测试夹具 tests/import/server-backed-import.test.ts:
+    //   scenes: [{ title: 'Slide', order: 0, content: { type: 'slide', canvas: slide } }]
+    // 形态二见于 tests/generation/scene-api-retry-boundary.test.ts:
+    //   content: { elements: [], remark: 'ok' }   —— 画布字段被内联
+    const scenes = normalizeCloudScenes([
+      { id: 'nested', title: '嵌套', order: 0, content: { type: 'slide', canvas: canvas('嵌套画布') } },
+      { id: 'inline', title: '内联', order: 1, content: { elements: [{ type: 'text', content: '<p>内联画布</p>' }], remark: 'ok' } },
+    ] as never)
+    expect(scenes.map(item => item.id)).toEqual(['nested', 'inline'])
+    expect(scenes[1]!.content.canvas).toMatchObject({ elements: expect.any(Array) })
+  })
 })
 
 describe('validateSlideArtifact', () => {
