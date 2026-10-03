@@ -1297,7 +1297,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     const { mkdir, rename, rm } = await import('node:fs/promises')
     const { createWriteStream } = await import('node:fs')
     const { randomUUID } = await import('node:crypto')
-    const root = registry.lastOpenedPath
+    // 课程作用域端点必须按 courseId 解析课程根（与 wrapCourseService 同口径）：
+    // 工作台切课不会重新 openCourse，lastOpenedPath 可能仍停在共享工作区或上一门
+    // 课——旧实现按 lastOpenedPath 落盘，文件写进了另一处 sources/，而下方
+    // sync(courseId) 又按 courseId 触发课程构建，于是「上传成功但课程里什么都没有」。
+    const root = await workspaceForCourse(courseId)
     if (root === '') {
       response.writeHead(409)
       response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))

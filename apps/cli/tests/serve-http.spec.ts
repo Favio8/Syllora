@@ -492,6 +492,47 @@ describe("serve HTTP 边界（集成）", () => {
     });
     expect(res.status).toBe(409);
   }, 15_000);
+
+  it("上传落盘按 courseId 解析课程根，不写进 lastOpenedPath 指向的别处", async () => {
+    // 回归：工作台先开课程 A、再开另一个工作区 B 后，lastOpenedPath 停在 B。
+    // 旧实现按 lastOpenedPath 落盘——文件写进 B/sources，而落盘后触发的
+    // sync(courseId) 又按 courseId 在 A 上构建，于是「上传成功但课程里没有东西」。
+    const uploadHost = await startHost();
+    const uploadBase = `http://127.0.0.1:${uploadHost.port}`;
+    const uploadRpc = async (method: string, payload: unknown): Promise<any> => {
+      const response = await fetch(`${uploadBase}/api/${method}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${uploadHost.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const body = (await response.json()) as any;
+      expect(body.error).toBeUndefined();
+      return body.result;
+    };
+    try {
+      const courseFolder = join(uploadHost.home, "upload-course");
+      const otherWorkspace = join(uploadHost.home, "upload-other-workspace");
+      mkdirSync(courseFolder);
+      mkdirSync(otherWorkspace);
+      const course = await uploadRpc("syllora/openCourse", { path: courseFolder });
+      // 把 lastOpenedPath 移到别处：此后所有「按 lastOpenedPath 落盘」的实现都会露馅。
+      await uploadRpc("syllora/openCourse", { path: otherWorkspace });
+      const form = new FormData();
+      form.append("file", new Blob(["upload probe"]), "probe.txt");
+      const response = await fetch(`${uploadBase}/api/courses/${course.id}/sources`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${uploadHost.token}` },
+        body: form,
+        signal: AbortSignal.timeout(20_000),
+      });
+      expect(response.status).toBe(200);
+      expect(existsSync(join(courseFolder, "sources", "probe.txt"))).toBe(true);
+      expect(existsSync(join(otherWorkspace, "sources", "probe.txt"))).toBe(false);
+    } finally {
+      stop(uploadHost);
+    }
+  }, 30_000);
 });
 
 describe("serve 关停与实例锁", () => {
