@@ -107,6 +107,21 @@ export function lectureMarkdown(lecture: Lecture) {
     (lecture.connections.length ? '\n## 知识联系\n\n'+lecture.connections.map(s=>s.text+cite(s.sourceIds)).join('\n\n') : '') +
     (lecture.analogies.length ? '\n## 教学类比（整理生成）\n\n'+lecture.analogies.map(s=>s.text+cite(s.sourceIds)).join('\n\n') : '')
 }
+/** 章节名取本批来源片段里出现最多的 section（解析阶段已清洗掉标记与噪音层级）。
+ *  合批后一批会跨多个小节，直接采用模型自创标题会得到「A与B」这种伪章节。 */
+export function dominantSection(group: Source[]): string {
+  const counts = new Map<string, number>()
+  for (const source of group) {
+    const key = (source.section ?? '').trim()
+    if (key === '') continue
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  let best = '', score = 0
+  for (const [key, count] of counts) {
+    if (count > score || (count === score && best !== '' && key.length < best.length)) { best = key; score = count }
+  }
+  return best
+}
 export async function initializeFolder(options: {
   root: string; course: Course; paths: string[]; expected: Record<string,string>; acceptPartial: boolean; jobId: string; modelKey: string;
   /** 并发整理的章节数上限；写入与进度仍串行，只是模型调用并发。 */
@@ -243,14 +258,23 @@ export async function initializeFolder(options: {
   const pendingOutputs=new Map(pending.map((item,index)=>[item.index,organizedOutputs[index]!]))
   for(const [index,group] of batches.entries()) {
     const output=(cachedOutputs[index] ?? pendingOutputs.get(index))!
+    // 章节名以「本批来源的众数 section」为准（解析阶段已清洗）；模型自创标题只在完全没有 section 时兜底。
+    const section=dominantSection(group)
+    if(section!=='') output.chapter=section.slice(0,60)
     const lecture:Lecture={...output,id:sha(JSON.stringify(group.map(s=>s.id))),materialIds:[...new Set(group.map(s=>s.materialId))],sourceIds:group.map(s=>s.id)}
     lectures.push(lecture)
     for(const item of output.concepts) {
-      const originKey=sha(group[0]!.materialId+':'+output.chapter+':'+item.name)
-      const old=course.points.find(p=>p.originKey===originKey || (!p.originKey&&p.chapter===output!.chapter&&p.name===item.name))
+      // 概念身份只由「资料 + 概念名」决定，**不含章节名**：章节名会随解析口径/合批方式变化，
+      // 一旦把它算进身份，重新整理时同一概念会被当成新点，旧点则变成孤儿留在课程里（越跑越乱）。
+      const originKey=sha(group[0]!.materialId+':'+item.name)
+      // 兼容旧口径：v5 之前的 originKey 含章节名，改用新口径后旧点认不回来、会被复制成两份。
+      // 这里按「同资料同名」把旧点认回来（概念名在同一门课里就是它的身份）。
+      const old=course.points.find(p=>p.originKey===originKey || (!p.originKey&&p.chapter===output!.chapter&&p.name===item.name) || p.name===item.name)
       const existing=points.find(p=>p.originKey===originKey)
       if(existing)existing.sourceIds=[...new Set([...existing.sourceIds,...item.sourceIds])]
-      else points.push({id:old?.id??randomUUID(),chapter:old?.chapter??output.chapter,name:old?.name??item.name,sourceIds:item.sourceIds,originKey})
+      // 章节名与概念名一律以**本次结果**为准：沿用旧点的章节名会让"解析口径修好"刷不掉脏章节，
+      // 图谱里就会永远留着一串模型自创的小章节。只沿用旧点的 id（保住学习证据的关联）。
+      else points.push({id:old?.id??randomUUID(),chapter:output.chapter,name:item.name,sourceIds:item.sourceIds,originKey})
     }
     await options.check(); await writeFile(join(stage,'lectures',`${lecture.id}.md`),lectureMarkdown(lecture),'utf8')
   }

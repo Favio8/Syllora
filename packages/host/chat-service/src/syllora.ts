@@ -748,7 +748,35 @@ export class SylloraService {
         if(digest(JSON.stringify(course.materials))!==digest(JSON.stringify(snapshot.materials)))fail('VERSION_CONFLICT','课程资料已变化，请重新初始化')
         const materialIds=new Set(result.materials.map(m=>m.id)), existingPointIds=new Set(course.points.map(p=>p.id)), incoming=new Map(result.points.map(p=>[p.id,p]))
         course.materials=[...result.materials,...course.materials.filter(m=>!materialIds.has(m.id)).map(m=>({...m,active:false}))]
-        course.points=[...course.points.map(old=>{const next=incoming.get(old.id);return next?{...next,...old,sourceIds:next.sourceIds,originKey:next.originKey!}:old}),...result.points.filter(p=>!existingPointIds.has(p.id))]
+        // 合并顺序：旧点的历史字段打底、**本次结果覆盖**章节名与概念名（否则章节名永远停在旧值，
+        // 解析口径修好也刷不掉脏章节）；来源 id 与身份键以本次结果为准。
+        const liveSourceIds=new Set(course.materials.flatMap(m=>m.sources.map(s=>s.id)))
+        const publishedSourceIds=new Set(result.materials.flatMap(m=>m.sources.map(s=>s.id)))
+        const merged=[...course.points.map(old=>{const next=incoming.get(old.id);return next?{...old,...next,sourceIds:next.sourceIds,originKey:next.originKey!}:old}),...result.points.filter(p=>!existingPointIds.has(p.id))]
+          // 本次覆盖的资料以**本次结果**为准确概念集合：模型每次整理产出的概念名并不完全一致，
+          // 上一轮留下的同名外概念若不清理，图谱里就会永远堆着一串几个点的小章节。
+          // 其他资料的点只要来源片段仍在（liveSourceIds）就原样保留。
+          .filter(p=>{
+            if(incoming.has(p.id))return true
+            if(p.sourceIds.some(sourceId=>publishedSourceIds.has(sourceId)))return false
+            return p.sourceIds.some(sourceId=>liveSourceIds.has(sourceId))
+          })
+        // 同一资料内同名概念只保留一条：历史上因身份口径变化复制出来的重复项在这里合并（来源取并集）。
+        // 仅限本次发布的资料，别的资料的同名概念不动。
+        type MergedPoint=(typeof merged)[number]
+        const byName=new Map<string,MergedPoint>(), deduped:MergedPoint[]=[]
+        for(const point of merged) {
+          if(!point.sourceIds.some(sourceId=>publishedSourceIds.has(sourceId))){ deduped.push(point); continue }
+          const prior=byName.get(point.name)
+          if(!prior){ byName.set(point.name,point);deduped.push(point);continue }
+          // 谁来自本次结果谁做主（章节名以它为准），另一方的来源并进来；否则旧点的模型自创章节名会赢，
+          // 图谱里就会留下一串几个点的小章节。
+          const winner=incoming.has(point.id)?point:prior
+          const loser=winner===point?prior:point
+          winner.sourceIds=[...new Set([...winner.sourceIds,...loser.sourceIds])]
+          if(winner===point){ const index=deduped.indexOf(prior); if(index>=0) deduped[index]=point; byName.set(point.name,point) }
+        }
+        course.points=deduped
         course.revision=result.revision;course.initializedAt=this.now()
         recordNext(course,this.now(),id,'material',true)
         current.state='succeeded';finishJob(current,this.now());current.message=`已整理 ${result.lectures.length} 份章节讲义，覆盖 ${result.lectures.reduce((n,l)=>n+l.sourceIds.length,0)} 个来源片段；学习范围与计划保持待用户确认。`

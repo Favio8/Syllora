@@ -122,6 +122,14 @@ interface Block { text: string; start: number; end: number; section: string; con
  * the wrapped formulas carry an operator, a digit, or a unit instead.
  */
 const CHAPTER_TITLE = /[\u3400-\u9fff\uf900-\ufaff]/
+/**
+ * 只有带章节号的标题才算教材层级：「第一章 电路的基本规律」「1.2 电路变量」「1.8 运算放大器」。
+ * 导出资料会把每页的小节标题、甚至整句正文都重复成 heading（`### **实际方向 —— 规定为正电荷运动的方向。**`），
+ * 全都当章节会把一部教材切成几百个伪章节，章节名也随之退化成模型拼接出来的「A与B」。
+ */
+const CHAPTER_NUMBER = /^(?:第[一二三四五六七八九十百\d]+[章节]|\d+(?:\.\d+)+)/
+/** 进入 context 链的最大标题层级：更深的多半是逐页小标题或正文句。 */
+const MAX_HEADING_LEVEL = 3
 function looksLikeChapter(numbered: RegExpExecArray): boolean {
   const title = numbered[2]!.trim()
   return CHAPTER_TITLE.test(title) && !/^[=+\-−–—×÷*/^_<>≤≥≈%‰°]/.test(title)
@@ -133,29 +141,66 @@ function looksLikeChapter(numbered: RegExpExecArray): boolean {
  * per page. When that fallback is accepted it is also the section shown to the learner, so the display keeps the
  * document identity; the block anchor stays page-accurate.
  */
+/**
+ * 标题入栈前清洗：导出 Markdown 的标题行常带 `**`/`<strong>`/编号残留，甚至整行只有一个 `-`。
+ * 不清洗就会把标记与噪音层级一起拼进 `section`（例如 `**2. 举例** / **-**`），使每个片段组合都
+ * 变成一个新 section，章节名随之退化成模型拼接出来的伪标题（「A与B」）。
+ */
+function cleanHeadingLabel(raw: string): string {
+  return raw
+    .replace(/<[^>]+>/g, '')
+    .replace(/^#{1,6}\s*/, '')
+    // 刻意保留编号（`1.6 不含独立源的等效`）：章节号既是有用的展示信息，也是「这是教材层级」的判据。
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s、.．:：\-–—+]+/, '')
+    .replace(/[\s、.．:：\-–—+*#]+$/, '')
+    .trim()
+}
+/**
+ * 加粗小节标题（`**1.6 电路等效**`）：导出资料常用「整行加粗」当小节，而不是 `##`。
+ * 只认像标题的加粗行——带章节号，或**含中文**且短、不以句号结尾；单位符号（`**Ω**`）与整句正文都不算。
+ */
+function boldHeadingTitle(line: string): string {
+  const bold = /^\s*\*\*(.+?)\*\*\s*$/.exec(line.trim())
+  if (!bold) return ''
+  const title = cleanHeadingLabel(bold[1]!)
+  if (title === '' || !/[\p{L}\p{N}]/u.test(title) || /[。；;]$/.test(title)) return ''
+  if (CHAPTER_NUMBER.test(title)) return title
+  return CHAPTER_TITLE.test(title) && title.length <= 24 ? title : ''
+}
 function blocks(text: string, label: string, fallback: string): Block[] {
   const lines = text.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) ?? []
   const result: Block[] = [], headings: string[] = []
-  let offset = 0, i = 0
+  let offset = 0, i = 0, chapterTitle = ''
   while (i < lines.length) {
     const line = lines[i]!, start = offset, startLine=i+1
     if (!line.trim()) { offset += line.length; i++; continue }
     const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line.trim())
     const numbered = /^\s*\d+[.)]\s/.test(line) ? null : /^(第[一二三四五六七八九十百\d]+[章节]|\d+(?:\.\d+)*[、.\s])\s*(.{1,70})$/.exec(line.trim())
     const chapter = numbered && looksLikeChapter(numbered) ? numbered : null
-    if (heading || chapter) {
-      const level = heading ? heading[1]!.length : 1
-      headings.splice(level - 1); headings[level - 1] = heading ? heading[2]! : line.trim()
+    // 导出资料的小节标题常写成「整行加粗」而不是 `##`（`**1.6 电源**`）。不识别它们，章节号就会
+    // 一直停在最后一个 `#` 标题上，把后面几百个片段全算进同一节。
+    // 加粗小节行必须自己起一块：否则它会被并进上一段正文，标题栈看不到它，整节内容都被算进上一节。
+    const boldTitle = boldHeadingTitle(line)
+    if (heading || chapter || boldTitle !== '') {
+      const level = heading ? heading[1]!.length : 2
+      const title = boldTitle !== '' ? boldTitle : cleanHeadingLabel(heading ? heading[2]! : line.trim())
+      // 清洗后没有实义内容的行（`**-**`、`+`、纯编号）不入栈：它们只会制造噪音章节。
+      if (title !== '' && /[\p{L}\p{N}]/u.test(title)) {
+        if (level <= MAX_HEADING_LEVEL) { headings.splice(level - 1); headings[level - 1] = title }
+        if (CHAPTER_NUMBER.test(title)) chapterTitle = title
+      }
     }
     const fence = /^\s*(`{3,}|~{3,})/.exec(line)
-    const kind = fence ? 'code' : /^\s*\|/.test(line) ? 'table' : /^\s*(?:[-*+] |\d+[.)] )/.test(line) ? 'list' : heading || chapter ? 'heading' : 'paragraph'
+    const kind = fence ? 'code' : /^\s*\|/.test(line) ? 'table' : /^\s*(?:[-*+] |\d+[.)] )/.test(line) ? 'list' : heading || chapter || boldTitle !== '' ? 'heading' : 'paragraph'
     let body = line; offset += line.length; i++
     if (fence) {
       while (i < lines.length) { const next = lines[i++]!; body += next; offset += next.length; if (next.trim().startsWith(fence[1]![0]!.repeat(fence[1]!.length))) break }
     } else if (kind !== 'heading') {
       while (i < lines.length) {
         const next = lines[i]!
-        if (!next.trim() || /^\s*(?:#{1,6}\s|`{3,}|~{3,})/.test(next) || (kind === 'table' && !/^\s*\|/.test(next))) break
+        if (!next.trim() || boldHeadingTitle(next) !== '' || /^\s*(?:#{1,6}\s|`{3,}|~{3,})/.test(next) || (kind === 'table' && !/^\s*\|/.test(next))) break
         if (kind !== 'table' && /^\s*\|/.test(next)) break
         if (kind === 'paragraph' && /^\s*(?:[-*+] |\d+[.)] )/.test(next)) break
         if (!/^\s*\d+[.)]\s/.test(next) && /^\d+(?:\.\d+)*[、.\s]\s*.{1,70}$/.test(next.trim())) break
@@ -163,7 +208,9 @@ function blocks(text: string, label: string, fallback: string): Block[] {
         body += next; offset += next.length; i++
       }
     }
-    result.push({ text: body, start, end: offset, section: headings.filter(Boolean).join(' / ') || fallback, context: headings.filter(Boolean).join(' > '), kind, anchor: `${label} · 行 ${startLine}–${i}` })
+    const chain = headings.filter(Boolean)
+    // 有章节号就用它当 section（教材层级）；否则退回标题链，最后退回文档身份。
+    result.push({ text: body, start, end: offset, section: chapterTitle !== '' ? chapterTitle : chain.join(' / ') || fallback, context: chain.join(' > '), kind, anchor: `${label} · 行 ${startLine}–${i}` })
   }
   return result
 }
