@@ -49,6 +49,114 @@ cloud:
 `slides` 只在**开关打开且 `base_url`/`access_code` 都填好**时才生效——避免"开了但连不上"的模糊状态。
 关闭时（默认）不产生任何云端请求，也不写 `slides.json`，既有行为逐字保留。
 
+## 怎么把本地和云端连起来
+
+上面是字段清单，这一节是**从零到连通的操作顺序**。四步，跳过任何一步都会失败。
+
+### 第 1 步：拿到云端的地址与访问口令
+
+| 要填的值 | 从哪来 |
+|---|---|
+| `base_url` | 你部署 OpenMAIC 的站点地址，例如 `https://studyandchat.top`。**本机 Docker 部署则是 `http://127.0.0.1:3000`** |
+| `access_code` | 云端服务器的 `/opt/openmaic/.env.local` 里 `ACCESS_CODE=` 那一行的值 |
+
+在云端服务器上取访问口令：
+
+```bash
+grep '^ACCESS_CODE=' /opt/openmaic/.env.local | cut -d= -f2-
+```
+
+> 若云端 `.env.local` 没设 `ACCESS_CODE`，门禁是关闭的——任何人都能访问，
+> 此时本地也要把 `access_code` 填成同一个空值才连得上（但不该这样上公网）。
+
+### 第 2 步：本地填 `config.yaml`
+
+```yaml
+# <课程>/.syllora/config.yaml
+ui:
+  slides: true
+
+cloud:
+  base_url: https://studyandchat.top
+  access_code: <第 1 步取到的值>
+```
+
+**注意作用范围**：`config.yaml` 在**课程目录**下。多个课程要各自配一份；
+放在上级目录的共享配置不会自动带下来。
+
+### 第 3 步：确认真的连上了
+
+这一步最容易被跳过，但连不上时的报错各不相同，先单独确认省时间。
+
+**先确认站点活着、门禁开着**（这个接口不需要口令）：
+
+```bash
+curl -s https://studyandchat.top/api/access-code/status
+# → {"success":true,"enabled":true,"authenticated":false}
+```
+
+`enabled: true` 说明站点设了口令。`authenticated: false` 是正常的——这个请求没带 cookie。
+
+**再确认口令正确**（能换到 cookie 就通了）：
+
+```bash
+curl -s -i -X POST https://studyandchat.top/api/access-code/verify \
+  -H 'content-type: application/json' \
+  -d '{"code":"<你的访问口令>"}' | grep -i '^set-cookie'
+# → Set-Cookie: openmaic_access=... （出现这行就说明口令对）
+```
+
+没出现 `Set-Cookie` 就是口令错。Syllora 侧对应的报错是：
+
+| 现象 | 含义 |
+|---|---|
+| `云端拒绝了访问口令（401）。请检查 config.yaml 的 cloud.accessCode` | 口令不对 |
+| `云端未返回访问 cookie；请确认站点访问口令正确` | 口令对了但响应异常（多为站点未就绪） |
+| `无法连接云端 <地址>：fetch failed` | 地址不通：域名、端口、防火墙或 HTTPS 证书 |
+
+### 第 4 步：配好云端的模型（否则第一次生成必失败）
+
+**这一步最容易漏。** 云端没有任何模型时，生成会直接失败：
+
+```
+No model is configured for course.outline. Set one in the model settings,
+or assign the slot (or an ancestor) in openmaic.yml.
+```
+
+两种做法，**必须选一种**：
+
+- **让 Syllora 代填**（推荐）：在本地 `cloud` 里填 `provider` / `preset` / `model` / `api_key`，
+  Syllora 会先写云端供应商、校验 Key、再赋给根槽位 `llm`。
+- **在云端锁槽位**：改云端 `openmaic.yml`，全局生效、与 owner 无关。
+
+> **不要用"浏览器登录后台配一次"这条路**——它落在该浏览器的匿名 owner 上，
+> 而 Syllora 用访问码建立的是另一个会话，**看不到**。原因见后文
+> 「为什么应由 Syllora 代填」。
+
+### 这条链路实际用的是什么
+
+我们这次部署（`https://studyandchat.top`）跑通过的组合，可直接照抄：
+
+```yaml
+cloud:
+  base_url: https://studyandchat.top
+  access_code: <服务器 .env.local 里的 ACCESS_CODE>
+  provider: deepseek
+  preset: deepseek
+  model: deepseek-v4-flash
+  api_key: <你的 DeepSeek Key>
+```
+
+云端同时开这三个提速开关（写在云端 `.env.local`，改完要重启容器）：
+
+```bash
+PARALLEL_SCENE_CONCURRENCY=4
+LLM_THINKING_DISABLED=true
+```
+
+顺带提醒：**重启容器会打断正在进行的生成**，该章会记为失败（细节见
+[OPENMAIC_CLOUD_API.md](OPENMAIC_CLOUD_API.md) 的轮询一节）。
+
 ## 生成粒度与产物
 
 **一章 = 一个云端课堂。** Syllora 的批次划分即章节划分，每章：
