@@ -113,9 +113,11 @@ export async function initializeFolder(options: {
   const sources=materials.filter(m=>m.status==='ready'||m.accepted).flatMap(m=>m.sources)
   if(!sources.length) throw new Error('选中资料没有可用正文')
   const batches:Source[][]=[]; let batch:Source[]=[], size=0
+  // 只按体量断批，不再一个 section 一批：小章节多的讲义（如 65 节）原先等于 65 次模型调用，直接被供应商限流。
+  // 合批后一个批次可跨小节/跨资料直到上限——单批最多 20 个片段，或序列化总长超过 8000 字符另起一批。
   for(const source of sources) {
     const length=JSON.stringify(source).length
-    if(batch.length&&(batch[0]!.section!==source.section || batch.length>=20 || size+length>8000)) { batches.push(batch);batch=[];size=0 }
+    if(batch.length && (batch.length>=20 || size+length>8000)) { batches.push(batch);batch=[];size=0 }
     batch.push(source);size+=length
   }
   if(batch.length)batches.push(batch)
@@ -123,7 +125,7 @@ export async function initializeFolder(options: {
   // 批次之间互不依赖，只把模型调用并发起来；缓存、进度、讲义与知识点仍按批次顺序串行落盘。
   // 缓存的批次不占并发位，也不产生调用（重跑只补变化章节的语义不变）。
   const cachedOutputs:Array<z.infer<typeof lectureSchema>|null>=[]
-  const lectureCachePath=(group:Source[]) => join(cacheDir,`${sha('lecture-v1:'+options.modelKey+':'+JSON.stringify(group.map(({version: _version,...source})=>source)))}.json`)
+  const lectureCachePath=(group:Source[]) => join(cacheDir,`${sha('lecture-v2:'+options.modelKey+':'+JSON.stringify(group.map(({version: _version,...source})=>source)))}.json`)
   for(const group of batches) {
     let output=await jsonFile<z.infer<typeof lectureSchema>>(lectureCachePath(group))
     if(output) { try {output=lectureSchema.parse(output);validateLecture(output,group)} catch {output=null} }
@@ -182,7 +184,7 @@ export async function initializeFolder(options: {
   await atomicJson(join(stage,'sources.json'),sources)
   await atomicJson(join(stage,'outline.json'),points)
   await atomicJson(join(stage,'lectures.json'),lectures)
-  await atomicJson(join(stage,'manifest.json'),{version:1,revision,courseId:course.id,fingerprints,failures,sourceCount:sources.length,coveredSourceCount:lectures.reduce((n,l)=>n+l.sourceIds.length,0),promptVersion:'lecture-v1',model:options.modelKey})
+  await atomicJson(join(stage,'manifest.json'),{version:1,revision,courseId:course.id,fingerprints,failures,sourceCount:sources.length,coveredSourceCount:lectures.reduce((n,l)=>n+l.sourceIds.length,0),promptVersion:'lecture-v2',model:options.modelKey})
   await options.check(); await managedDirectory(stateDir,'revisions')
   const publishedPath=join(stateDir,'revisions',revision)
   await rename(stage,publishedPath)

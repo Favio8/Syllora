@@ -41,6 +41,9 @@ async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unkno
 async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<400;i++){const state=await projects.handle('state',{}) as any;const job=state.jobs.find((j:any)=>j.id===jobId);if(job&&job.state!=='running')return {state,job};await new Promise(r=>setTimeout(r,10))}throw new Error('initialization did not settle')}
 async function initialize(s:Awaited<ReturnType<typeof setup>>,acceptPartial=false){const scan=await s.projects.handle('scan',{courseId:s.id}) as any;const files=scan.files.filter((f:any)=>f.status==='ready');const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint])),acceptPartial}) as any;return settle(s.projects,job.jobId)}
 const DOC='# 第一章\n\n单位矩阵的主对角线元素为一，其余元素为零。\n\n# 第二章\n\n矩阵乘法需要检查左矩阵列数与右矩阵行数是否相等。\n'
+/** 单章正文撑到 ~4000 字符（序列化后约 5000）：合批后单章 < 8000 自成一批、两章 > 8000 断批，
+ *  并发/失败/重试用例里"批次=章节"的断言就不必跟着批边界改写。 */
+const PADDED = (title: string) => `# ${title}\n\n${'依据内容表述完整，支持拆出观点并保持引用可核验。'.repeat(150)}\n`
 describe('course folder initialization',()=>{
   it('CR-14: retries loading projects after a damaged index is repaired without restarting',async()=>{
     const s=await setup(),filename=join(s.app,'.syllora','projects.json')
@@ -67,14 +70,25 @@ describe('course folder initialization',()=>{
     const s=await setup();const doc=Array.from({length:40},(_,i)=>`# 第${i+1}章\n\n主题${i+1}的定义。${'本段包含课程依据与完整解释。'.repeat(45)}\n`).join('\n');await writeFile(join(s.folder,'long.md'),doc)
     expect(doc.length).toBeGreaterThan(22000)
     const {state,job}=await initialize(s);expect(job.state).toBe('succeeded');expect(state.courses[0].points).toHaveLength(40)
-    const result=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(result.lectures).toHaveLength(40);expect(result.lectures.at(-1).chapter).toBe('第40章')
+    const result=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(result.lectures.length).toBeGreaterThan(1);expect(result.lectures.length).toBeLessThan(40);expect(result.lectures.at(-1).concepts.some((c:any)=>c.quote.includes('主题40'))).toBe(true)
     const manifest=JSON.parse(await readFile(join(s.folder,'.syllora','revisions',state.courses[0].revision,'manifest.json'),'utf8'));expect(manifest.coveredSourceCount).toBe(manifest.sourceCount)
     expect(await readFile(join(s.folder,'long.md'),'utf8')).toBe(doc)
     const ids=state.courses[0].points.map((point:any)=>point.id),calls=s.calls();
     const replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(calls);expect(replay.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids)
     await writeFile(join(s.folder,'long.md'),doc.replace('主题40的定义。','主题40的定义，新增尾章依据。'))
     const changed=await initialize(s);expect(changed.job.state).toBe('succeeded');expect(s.calls()-calls).toBe(1);expect(changed.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids);expect(new Set(changed.state.courses[0].points.map((point:any)=>point.id)).size).toBe(40)
-    const latest=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(latest.lectures.at(-1).concepts[0].quote).toContain('新增尾章依据')
+    const latest=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(latest.lectures.at(-1).concepts.some((c:any)=>c.quote.includes('新增尾章依据'))).toBe(true)
+  })
+  it('merges many small sections into size-bounded batches instead of one model call per section',async()=>{
+    const many=Array.from({length:65},(_,i)=>`# 第${i+1}节\n\n小节${i+1}有一句可引用的依据，足够生成一个概念。\n`).join('')
+    let calls=0,maxSources=0,maxChars=0
+    const s=await setup(sources=>{calls++;maxSources=Math.max(maxSources,sources.length);maxChars=Math.max(maxChars,JSON.stringify(sources).length);return lecture(sources)})
+    await writeFile(join(s.folder,'many.md'),many)
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(calls).toBeLessThan(12);expect(calls).toBeGreaterThan(1)
+    // 老口径是一个小节一次调用（65 节 = 65 次）；合批后每批只受 20 片段 / 8000 字符上限约束。
+    expect(maxSources).toBeLessThanOrEqual(20);expect(maxChars).toBeLessThanOrEqual(8000)
+    expect(result.state.courses[0].points).toHaveLength(65)
+    const lectures=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(lectures.lectures).toHaveLength(calls)
   })
   it('counts all parsed characters including whitespace before sending any model request',async()=>{
     const s=await setup();await writeFile(join(s.folder,'oversized.txt'),'正文依据。'+'\n'.repeat(100001))
@@ -100,9 +114,11 @@ describe('course folder initialization',()=>{
   it('reuses checkpoints, preserves the previous publication on failure and retries only changed chapters',async()=>{
     let invalid=false
     const s=await setup(sources=>{const result=lecture(sources);if(invalid&&result.chapter==='第二章')result.concepts[0]!.quote='不在资料中的错误依据';return result})
-    await writeFile(join(s.folder,'lecture.md'),DOC);const first=await initialize(s);expect(first.job.state).toBe('succeeded');const initialCalls=s.calls()
+    // 单批文档：改动只影响这一批——"失败保留上一版、重试只重算变化批次"仍可验证。
+    const doc='# 第二章\n\n'+'矩阵乘法需要检查左矩阵列数与右矩阵行数是否相等。'.repeat(130)+'\n'
+    await writeFile(join(s.folder,'lecture.md'),doc);const first=await initialize(s);expect(first.job.state).toBe('succeeded');const initialCalls=s.calls()
     const latest=await initialize(s);expect(latest.job.state).toBe('succeeded');expect(s.calls()).toBe(initialCalls)
-    await writeFile(join(s.folder,'lecture.md'),DOC.replace('是否相等','是否相等，以及维度条件'));invalid=true
+    await writeFile(join(s.folder,'lecture.md'),doc.replace('是否相等','是否相等，以及维度条件'));invalid=true
     const failed=await initialize(s);expect(failed.job.state).toBe('failed');expect(failed.state.courses[0].revision).toBe(latest.state.courses[0].revision)
     expect(failed.job.progress.failures.join(' ')).toContain('第二章')
     expect(failed.job.calls).toBeLessThanOrEqual(4)
@@ -287,15 +303,15 @@ describe('structured sources and migration',()=>{
     expect(new Set(sources.map(s=>s.section))).toEqual(new Set(['1.1 问题背景','3.2 符号说明']))
   })
   it('keeps a failed concurrent run consistent: failure recorded, nothing published, progress matches what finished',async()=>{
-    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const FOUR=PADDED('第一章')+PADDED('第二章')+PADDED('第三章')+PADDED('第四章')
     const s=await setup()
     await writeFile(join(s.folder,'lecture.md'),FOUR)
-    // 冷缓存 + 并发 3 + 单章必败：现有回归只覆盖"全部成功"，一旦并发退化成串行也测不出来。
+    // 冷缓存 + 并发 3 + 含失败批：现有回归只覆盖"全部成功"，一旦并发退化成串行也测不出来。
     const client:StructuredCallClient={async *stream(options){
       const message=(options.messages.at(-1) as any).content[0].text
       const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length))
       await new Promise(r=>setTimeout(r,40))
-      if(String(sources[0].section)==='第二章')throw new Error('合成章节失败')
+      if(sources.some((s:any)=>s.section==='第二章'))throw new Error('合成章节失败')
       yield {type:'text-delta',text:JSON.stringify(lecture(sources))}
     }}
     const app=join(s.root,'failure-app')
@@ -307,17 +323,19 @@ describe('structured sources and migration',()=>{
     const job=await projects.handle('initialize',{courseId:id,requestId:randomUUID(),paths:ready.map((f:any)=>f.path),fingerprints:Object.fromEntries(ready.map((f:any)=>[f.path,f.fingerprint]))}) as any
     const settled=await settle(projects,job.jobId)
     expect(settled.job.state).toBe('failed')
-    expect(settled.job.progress.failures.join(' ')).toContain('第二章')
+    // 失败消息带上批次名与来源范围（第一批的批次名固定是文档首个标题，不依赖合批边界）。
+    expect(settled.job.progress.failures.length).toBeGreaterThan(0)
+    expect(settled.job.progress.failures[0]).toMatch(/^第一章（.*）：/)
     // 失败作业不得发布 revision，也不得留下知识点。
     expect(settled.state.courses[0].revision).toBeUndefined();expect(settled.state.courses[0].points).toEqual([])
-    // 进度只统计真正落盘的章节：并发 3 时另外两章会完成并写入缓存，第二章不计入。
+    // 进度只统计真正落盘的批次：含第二章的批全部失败，成功批次完成并写入缓存；failures 补齐 total。
     const rescanned=await files.scanFiles(s.folder,settled.state.courses[0].materials)
     expect(rescanned.every(f=>f.status==='ready')).toBe(true)
-    expect(settled.job.progress.done).toBeLessThan(4)
-    expect(settled.job.progress.total).toBe(4)
+    expect(settled.job.progress.done).toBeLessThan(settled.job.progress.total)
+    expect(settled.job.progress.done + settled.job.progress.failures.length).toBe(settled.job.progress.total)
   })
   it('organizes chapters concurrently up to the configured limit and still publishes every chapter',async()=>{
-    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const FOUR=PADDED('第一章')+PADDED('第二章')+PADDED('第三章')+PADDED('第四章')
     const s=await setup(undefined,undefined,3)
     await writeFile(join(s.folder,'lecture.md'),FOUR)
     let inFlight=0,peak=0,calls=0
@@ -339,10 +357,11 @@ describe('structured sources and migration',()=>{
     const job=await projects.handle('initialize',{courseId:id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint]))}) as any
     const settled=await settle(projects,job.jobId)
     expect(settled.job.state).toBe('succeeded')
-    const state=await projects.handle('state',{}) as any
-    const chapters=state.courses[0].points.map((p:any)=>p.chapter)
-    expect(new Set(chapters)).toEqual(new Set(['第一章','第二章','第三章','第四章']))
-    expect(calls).toBe(4)
+    // 合批后不再"一节一讲"：断言每个节的概念都被整理出来（覆盖完整），而不是固定讲数。
+    const lectures=await projects.handle('lectures',{courseId:id}) as any
+    const covered=new Set(lectures.lectures.flatMap((l:any)=>l.concepts.map((c:any)=>c.name.split(' 概念 ')[0])))
+    expect(covered).toEqual(new Set(['第一章','第二章','第三章','第四章']))
+    expect(calls).toBeGreaterThan(1)
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(3)
   })
@@ -400,7 +419,7 @@ describe('application-managed course directories',()=>{
     expect(course).toMatchObject({id:s.id,folder:join(managed,s.id),revision:published.state.courses[0].revision})
     expect(await readFile(join(managed,s.id,'lecture.md'),'utf8')).toBe(DOC)
     expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC)
-    expect((await projects.handle('lectures',{courseId:s.id}) as any).lectures).toHaveLength(2)
+    expect((await projects.handle('lectures',{courseId:s.id}) as any).lectures).toHaveLength(1)
     expect(state.projects[0].error).toBeNull()
     const registry=JSON.parse(await readFile(join(s.app,'.syllora','projects.json'),'utf8'));expect(registry[0].path).toBe(join(managed,s.id))
     expect((await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any).courses[0].revision).toBe(course.revision)
