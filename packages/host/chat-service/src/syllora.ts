@@ -712,7 +712,7 @@ export class SylloraService {
       if(existing)return {job:existing,course:structuredClone(course),fresh:false}
       if(!await this.consent(db))fail('CONSENT_REQUIRED','请先确认允许向所选模型发送资料片段和问题')
       if(db.jobs.some(j=>j.courseId===course.id&&j.state==='running'))fail('BUSY','本课程已有生成任务，请等待或取消')
-      const job:Job={...jobDiagnostics(),promptVersion:'lecture-v1',id:id(),requestId:p.requestId,courseId:course.id,kind:'initialize',state:'running',message:'正在解析选中资料',createdAt:this.now(),model:config.model,calls:0,inputTokens:null,outputTokens:null}
+      const job:Job={...jobDiagnostics(),promptVersion:'lecture-v2',id:id(),requestId:p.requestId,courseId:course.id,kind:'initialize',state:'running',message:'正在解析选中资料',createdAt:this.now(),model:config.model,calls:0,inputTokens:null,outputTokens:null}
       db.jobs.push(job);return {job,course:structuredClone(course),fresh:true}
     })
     if(!created.fresh)return {jobId:created.job.id}
