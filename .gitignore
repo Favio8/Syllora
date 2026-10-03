@@ -1,6 +1,8 @@
 node_modules/
 .syllora-home/
 .syllora-data/
+.syllora-review/
+.vercel/
 lib/
 # 源码目录 src/lib 不是构建产物，必须重新包含（lib/ 规则会吞掉任意深度的 lib/）
 !**/src/lib/

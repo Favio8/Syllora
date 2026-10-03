@@ -1,11 +1,12 @@
 import { ApiError, streamSse } from '@/src/lib/api';
+import { reviewFetch } from '@/src/lib/review-transport';
 import type { SylloraState } from '@/src/types/syllora';
 import type { ReadingDocument, ReadingService } from './types';
 
 export async function workbenchRpc<T=unknown>(action:string,payload:unknown={},signal?:AbortSignal):Promise<T> {
   const token=(window as unknown as {__SYLLORA__?:{token?:string}}).__SYLLORA__?.token;
   const timeout=AbortSignal.timeout(15000);
-  const response=await fetch(`/api/syllora/${action}`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({payload}),signal:signal?AbortSignal.any([signal,timeout]):timeout});
+  const response=await reviewFetch(`/api/syllora/${action}`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({payload}),signal:signal?AbortSignal.any([signal,timeout]):timeout});
   let body:{ok?:boolean;result?:T;error?:{code?:string;message?:string}};
   try {body=await response.json();} catch {throw new ApiError('INVALID_RESPONSE',`服务返回非 JSON 响应 (${response.status})`,response.status);}
   if(!body||typeof body!=='object')throw new ApiError('INVALID_RESPONSE','服务响应格式无效，请重试查询原任务',response.status);

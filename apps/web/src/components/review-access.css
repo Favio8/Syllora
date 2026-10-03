@@ -1,0 +1,8 @@
+.sy-review-access{min-height:100dvh;display:grid;align-items:center;padding:40px clamp(24px,12vw,180px);background:#f7f7f8;color:#202128;font-family:Arial,"Microsoft YaHei",sans-serif}
+.sy-review-card{max-width:460px;width:100%;padding:32px 0;border-top:1px solid #dcdde2;border-bottom:1px solid #dcdde2}
+.sy-review-card>svg{color:#002fa7}.sy-review-card h1{margin:18px 0 12px;font-size:38px;font-weight:550;letter-spacing:-1.5px}.sy-review-card p{font-size:14px;line-height:1.8;color:#626570}
+.sy-review-card form{display:flex;flex-direction:column;gap:12px;margin-top:28px}.sy-review-card label{font-size:13px}.sy-review-card input{font:inherit;padding:12px;border:1px solid #dcdde2;background:#fff;min-width:0}.sy-review-card input:focus{outline:2px solid #002fa7;outline-offset:2px}
+.sy-review-card button{font:inherit;border:0;background:#002fa7;color:#fff;padding:13px;cursor:pointer}.sy-review-card button:disabled{opacity:.55;cursor:default}.sy-review-card .sy-review-error{color:#a12727;margin:0}.sy-review-spinner{display:inline-block;vertical-align:middle;animation:sy-review-spin 1s linear infinite}@keyframes sy-review-spin{to{transform:rotate(360deg)}}
+.sy-review-session{display:contents}.sy-review-session .sy-top,.sy-review-session .sy-nw-top{padding-right:116px}
+.sy-review-logout{position:fixed;right:16px;top:20px;z-index:60;display:flex;align-items:center;gap:6px;padding:6px 9px;font-size:11px;font-family:Arial,"Microsoft YaHei",sans-serif;border:1px solid #dcdde2;background:#fff;color:#626570;cursor:pointer}
+@media(prefers-reduced-motion:reduce){.sy-review-spinner{animation:none}}
