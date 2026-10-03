@@ -99,7 +99,8 @@ describe('course folder initialization',()=>{
   })
   it('reuses checkpoints, preserves the previous publication on failure and retries only changed chapters',async()=>{
     let invalid=false
-    const s=await setup(sources=>{const result=lecture(sources);if(invalid&&result.chapter==='第二章')result.concepts[0]!.quote='不在资料中的错误依据';return result})
+    // 整批概念都给不出可核验的依据：修整无法抢救（不会编造出处），这一批才该失败。
+    const s=await setup(sources=>{const result=lecture(sources);if(invalid&&result.chapter==='第二章')result.concepts.forEach(c=>{c.quote='不在资料中的错误依据'});return result})
     await writeFile(join(s.folder,'lecture.md'),DOC);const first=await initialize(s);expect(first.job.state).toBe('succeeded');const initialCalls=s.calls()
     const latest=await initialize(s);expect(latest.job.state).toBe('succeeded');expect(s.calls()).toBe(initialCalls)
     await writeFile(join(s.folder,'lecture.md'),DOC.replace('是否相等','是否相等，以及维度条件'));invalid=true

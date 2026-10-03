@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BookOpen, FolderOpen, Settings, ArrowRight, Send, Upload, FileText, Check, Archive, RotateCcw, X, LoaderCircle, PanelRight, Pencil, Menu, ChevronRight, PanelRightOpen, UserRound, SlidersHorizontal, Monitor, Database, Clock, ArrowLeft } from 'lucide-react';
@@ -10,6 +10,7 @@ import type { SylloraState, Task, CourseView } from '../types/syllora';
 import type { SettingsPayload, ToolInventoryEntry } from '../types/api';
 import { editDraft, hydrateCourse, markSaved, rememberServer, type DraftCache } from './syllora-drafts';
 import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from '../lib/markdownPlugins';
+import { normalizeInlineMarkup } from '../lib/inlineMarkup';
 import { LectureReader, MaterialInitialization, ProjectDialog } from './syllora-project-ui';
 import LearningModeSwitch from '../features/workbench/components/LearningModeSwitch';
 import { useLearningExposures } from './syllora-metrics';
@@ -412,7 +413,7 @@ export default function Syllora() {
     {signedOut&&<div className="sy-logout-screen"><span className="brand-icon"><BookOpen size={26}/></span><h2>已退出学习空间</h2><p>你的课程与学习记录已保留在本机。</p><button className="button primary" onClick={()=>setSignedOut(false)}>进入学习空间</button></div>}
     {userPage&&<UserDialogs page={userPage} name={data?.uiPreferences?.name??'学习者'} preferences={data?.uiPreferences??{name:'学习者',theme:'light',dailyMinutes:40,revision:0}} onPreferencesSaved={refresh} error={error} onClose={()=>setUserPage(null)}/>}
     {creating&&<ProjectDialog onClose={()=>{setCreating(false);setMigration(null)}} {...(migration?{migrationName:migration.name}:{})} onOpen={async (name,icon)=>{if(!(await flushDraft()))throw new Error('请先保存当前课程草稿');const result=await logicalRequest<{id:string}>(migration?'migrateCourse':'createCourse',migration?{courseId:migration.id}:{name,...(icon?{icon}:{}),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone});await refresh();selectedRef.current=result.id;setSelected(result.id);setCreating(false);setMigration(null);setView('workspace');setTab('materials');setShowRight(true)}}/>}
-    {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{course?.materials.find(m=>m.id===source.materialId)?.name} · {source.anchor}</p><pre className="sy-source-text">{source.text}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
+    {sourceId&&<div className="sy-overlay" onClick={()=>setSourceId(null)}><section className="sy-modal" role="dialog" aria-modal="true" aria-label="资料来源" onClick={e=>e.stopPropagation()}><header><h2>资料来源</h2><button aria-label="关闭来源" onClick={()=>setSourceId(null)}><X size={19}/></button></header>{source?<><p className="sy-muted">{course?.materials.find(m=>m.id===source.materialId)?.name} · {source.anchor}</p><pre className="sy-source-text">{normalizeInlineMarkup(source.text)}</pre></>:<p>此来源已删除或不属于当前课程。</p>}</section></div>}
     {diffCourse?.draft&&<DiffModal course={diffCourse} onClose={()=>setDiffCourse(null)} busy={busy} onConfirm={async()=>{if(await run('confirmPlan',{courseId:diffCourse.id,baseVersion:diffCourse.draft!.baseVersion,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}} onReject={async()=>{if(await run('rejectPlan',{courseId:diffCourse.id,draftId:diffCourse.draft!.id})){setDiffCourse(null);setAdjustNotice(null)}}}/>}
     {agentManage&&<AgentManageDialog onClose={()=>setAgentManage(false)}/>}
     {settings&&<Modal title="设置" className="settings-modal" onClose={()=>setSettings(false)}><div className="settings-layout"><nav className="settings-navigation" aria-label="设置分区"><span>个人学习空间</span>{([{id:'models',label:'模型配置',icon:SlidersHorizontal},{id:'display',label:'显示与交互',icon:Monitor},{id:'archive',label:'数据管理',icon:Database}] as const).map(({id,label,icon:Icon})=><button key={id} className={(settingsTab===id||(id==='archive'&&settingsTab==='diag'))?'active':''} aria-current={settingsTab===id||(id==='archive'&&settingsTab==='diag')?'page':undefined} onClick={()=>setSettingsTab(id)}><Icon size={17}/>{label}</button>)}<small>Syllora<br/>让学习更有自己的节奏</small></nav><div className="settings-content-column">
@@ -582,3 +583,4 @@ function AgentManageDialog({onClose}:{onClose:()=>void}) {
     </>}
   </section></div>;
 }
+
