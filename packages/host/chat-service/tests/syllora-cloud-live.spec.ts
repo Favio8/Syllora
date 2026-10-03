@@ -58,8 +58,10 @@ describe.runIf(enabled)('真实云端端到端', () => {
     const steps: string[] = []
     const status = await cloud.waitForJob(jobId, {
       intervalMs: 5_000,
-      // 实测生成耗时在 13–20 分钟之间波动（8 页课堂），所以放宽容忍度而不是把它当失败
-      timeoutMs: 26 * 60_000,
+      // 实测同一份资料的生成耗时波动很大：命令行直跑约 13 分钟、通过本测试跑
+      // 两次分别超过 26 分钟。云端生成是异步任务，时长取决于上游模型排队与负载，
+      // 因此这里的超时是"给得足够宽"，而不是把它当性能断言。
+      timeoutMs: 45 * 60_000,
       onProgress: current => { steps.push(`${current.step}:${current.progress ?? ''}`) },
     })
     // 失败时把云端原话带出来，便于定位（例如未配置模型）
@@ -88,5 +90,5 @@ describe.runIf(enabled)('真实云端端到端', () => {
     console.warn('LIVE-SCENE-COUNT', String(scenes.length), 'NORMALIZED', String(normalized.length), 'SKIPPED', String(skippedNonSlideCount))
     console.warn('LIVE-CONTENT-TYPES', JSON.stringify([...new Set(scenes.map(s => (s.content as { type?: string } | undefined)?.type))]))
     console.warn('LIVE-STEPS', JSON.stringify(steps.slice(0, 12)))
-  }, 30 * 60_000)
+  }, 50 * 60_000)
 })
