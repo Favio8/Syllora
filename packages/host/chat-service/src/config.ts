@@ -35,8 +35,6 @@ export interface ResolvedChatConfig {
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
-  /** 教学技能 id（见 skills.ts）；空串=不启用技能。 */
-  readonly agentSkill?: string
   readonly permissionPreset?: 'read-only' | 'workspace-write' | 'danger-full-access'
   readonly plugins?: Record<string, boolean>
 }
@@ -58,7 +56,7 @@ interface ConfigYaml {
     readonly max_tokens?: number | null
   }>
   readonly ui?: { default_mode?: string }
-  readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
+  readonly agent?: { preset?: string; system_prompt?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
 }
@@ -169,7 +167,6 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
       defaultMode: 'quick',
       agentPreset: 'syllora-learning',
       agentSystemPrompt: '',
-      agentSkill: '',
       permissionPreset: 'workspace-write',
       plugins: {},
     }
@@ -212,7 +209,6 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     defaultMode,
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
-    agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',
     permissionPreset,
     plugins,
   }
@@ -237,16 +233,15 @@ async function resolveCredential(workspaceRoot: string, providerId: string, apiK
     // 但必须留痕（L7）：master.key 与工作区错位时静默降级会让排障变成猜谜。
     const { unsealCredentials } = await import('./secret-box.ts')
     creds = (await unsealCredentials(credsRaw)).data
-  } catch {
-    console.warn('[config] credentials.json 解密失败，本次按未配置凭据处理；请在设置中重新填写 API Key')
+  } catch (error) {
+    console.warn(`[config] credentials.json 解密失败，本次按未配置凭据处理：${error instanceof Error ? error.message : String(error)}`)
     return null
   }
-  // CR-08：旧实现在末尾无条件回退 `default` 键——某供应商没有自己的凭据时，会把
-  // 凭据表里 `default` 的密钥（往往是另一个供应商的）发往它的 baseUrl：既是静默
-  // 串号，也等于凭据外带。这里只认与本次解析目标严格相关的键；本地保留
-  // `providers.<id>` 的嵌套读法（迁移期的历史结构）。
-  const exactKeys = [apiKeyEnv, providerId, providerId.replace(/^openai\//, '')]
-  for (const key of exactKeys) {
+  // Settings writes credentials under the generated apiKeyEnv ref
+  // (e.g. `MOCK_API_KEY`), while older workspaces may still use the
+  // provider id or a `default` entry. Accept all compatible keys without
+  // exposing the secret in the resolved config payload.
+  for (const key of [apiKeyEnv, providerId, providerId.replace(/^openai\//, ''), 'default']) {
     if (key === null) continue
     const value = creds[key]
     if (typeof value === 'string' && value !== '') return value

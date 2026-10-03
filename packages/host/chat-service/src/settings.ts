@@ -11,13 +11,12 @@ import { readFile } from 'node:fs/promises'
 import { atomicText } from './syllora-files.ts'
 import { join, resolve } from 'node:path'
 import yaml from 'js-yaml'
-import { z } from 'zod'
 import { workspaceStateDirOf } from '@syllora/tools'
 import { ANTHROPIC_VERSION, anthropicEndpoint } from '@syllora/llm-anthropic'
 import { sealCredentials, unsealCredentials, writeFileAtomicRestricted } from './secret-box.ts'
 import { MAX_AGENT_PROMPT_CHARS } from './config.ts'
-import { AGENT_SKILLS, AGENT_SKILL_IDS } from './skills.ts'
 import { sharedConfigRootOf } from './shared-root.ts'
+import { DOCMIND_ENDPOINT } from './docmind.ts'
 
 export interface ProviderModelPayload {
   readonly id: string
@@ -77,21 +76,11 @@ export interface SettingsPayload {
     readonly apiKeyConfigured: boolean
   }
   readonly providers: ProviderPayload[]
-  /** 需求七：供应商展示顺序（provider id 全序，含未列在 providers 里的 id 时按写入顺序补齐）。 */
-  readonly providerOrder: string[]
   readonly ui: { readonly defaultMode: string }
-  readonly agent: {
-    readonly preset: string
-    readonly systemPrompt: string
-    readonly maxPromptChars: number
-    readonly presets: AgentPresetPayload[]
-    /** 当前启用的教学技能 id；空串=不启用。 */
-    readonly skill: string
-    /** 可选教学技能清单（正文在 skills.ts，这里只给展示用的名称与描述）。 */
-    readonly skills: Array<{ readonly id: string; readonly name: string; readonly description: string }>
-  }
+  readonly agent: { readonly preset: string; readonly systemPrompt: string; readonly maxPromptChars: number; readonly presets: AgentPresetPayload[] }
   readonly permissions: { readonly preset: string; readonly presets: PermissionPresetPayload[] }
   readonly plugins: { readonly inventory: PluginInventoryPayload[] }
+  readonly docmind: { readonly configured: boolean; readonly endpoint: string }
 }
 
 interface ProviderConfigYaml {
@@ -106,6 +95,13 @@ interface ProviderConfigYaml {
   readonly models?: Array<{ id?: string; name?: string; context_window?: number | null; max_tokens?: number | null }>
 }
 
+/** DocMind（文档智能解析）配置段：endpoint 可选，凭据走密封 credentials.json。 */
+interface DocMindConfigYaml {
+  readonly endpoint?: string | null
+  readonly access_key_id_env?: string | null
+  readonly access_key_secret_env?: string | null
+}
+
 interface ConfigYaml {
   version?: number
   llm?: {
@@ -117,13 +113,12 @@ interface ConfigYaml {
     max_concurrency?: number
   }
   providers?: Record<string, ProviderConfigYaml>
-  /** 需求七：供应商列表的展示顺序（provider id 全序）。缺省按写入顺序。 */
-  provider_order?: string[]
   active_provider?: string
   ui?: { default_mode?: string }
-  agent?: { preset?: string; system_prompt?: string; skill?: string }
+  agent?: { preset?: string; system_prompt?: string }
   permissions?: { preset?: string }
   plugins?: Record<string, unknown>
+  docmind?: DocMindConfigYaml
 }
 
 /** 两个预设的默认系统提示词；service 构造 AgentPreset 时直接取这里，避免两处漂移。 */
@@ -205,7 +200,7 @@ async function withCredentialLock<T>(workspaceRoot: string, fn: () => Promise<T>
   }
 }
 
-/** Workspace-wide read/modify/write serialization for config.yaml (M3：此前
+/** Workspace-wide read/modify/write serialization for config.yaml (��此前
  * saveProvider/deleteProvider/activateProvider/updateSettings/setCredential
  * 全部无锁 RMW，并发保存会互相覆盖丢字段——例如 api_key_env 被覆盖后凭据
  * 变孤儿、界面显示「未配置」)。锁序固定为 config → credential，避免死锁。 */
@@ -314,22 +309,14 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
   const llmRef = activeProvider?.api_key_env ?? config.llm?.api_key_env ?? null
   const providers: ProviderPayload[] = []
   for (const [id, provider] of Object.entries(config.providers ?? {})) {
-    // 需求七：默认模型以供应商条目为准（updateSettings 把选择写回该条目）；
-    // 条目为空时才回落到指向同一供应商的 llm 段，避免显示别家的模型。
-    const llmModel = config.llm?.provider === id ? (config.llm?.model ?? '') : ''
-    providers.push(await providerPayload(root, id, { ...provider, model: provider.model?.trim() || llmModel || '' }))
+    providers.push(await providerPayload(root, id, provider))
   }
-  // 需求七：展示顺序 = provider_order 里已知的 id（按序）+ 其余按写入顺序补齐，
-  // 保证新增/导入的供应商一定出现在列表里（不会因顺序字段缺项而消失）。
-  const known = new Set(providers.map(provider => provider.id))
-  const ordered = (config.provider_order ?? []).filter(id => known.has(id))
-  const providerOrder = [...ordered, ...providers.map(provider => provider.id).filter(id => !ordered.includes(id))]
   return {
     version: config.version ?? 1,
     activeProviderId: active,
     llm: {
       provider: active,
-      model: activeProvider?.model?.trim() || (config.llm?.provider === active ? (config.llm?.model ?? '') : '') || '',
+      model: activeProvider?.model ?? config.llm?.model ?? '',
       apiKeyEnv: llmRef,
       apiBase: activeProvider?.base_url ?? config.llm?.api_base ?? null,
       temperature: activeProvider?.temperature ?? config.llm?.temperature ?? 0.3,
@@ -337,18 +324,11 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
       apiKeyConfigured: await credentialConfigured(root, llmRef),
     },
     providers,
-    providerOrder,
     ui: { defaultMode: config.ui?.default_mode === 'quick' || config.ui?.default_mode === 'feynman' || config.ui?.default_mode === 'debug' ? config.ui.default_mode : 'quick' },
-    agent: {
-      preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning',
-      systemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim() : '',
-      maxPromptChars: MAX_AGENT_PROMPT_CHARS,
-      presets: AGENT_PRESETS,
-      skill: AGENT_SKILL_IDS.includes(config.agent?.skill ?? '') ? config.agent!.skill! : '',
-      skills: AGENT_SKILLS.map(item => ({ id: item.id, name: item.name, description: item.description })),
-    },
+    agent: { preset: AGENT_PRESETS.some(item => item.id === config.agent?.preset) ? config.agent!.preset! : 'syllora-learning', systemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim() : '', maxPromptChars: MAX_AGENT_PROMPT_CHARS, presets: AGENT_PRESETS },
     permissions: { preset: PERMISSION_PRESETS.some(item => item.id === config.permissions?.preset) ? config.permissions!.preset! : 'workspace-write', presets: PERMISSION_PRESETS },
     plugins: { inventory: pluginInventory(config) },
+    docmind: await docmindConfigPayload(workspaceRoot),
   }
 }
 
@@ -364,7 +344,7 @@ export function normalizeProtocol(value: unknown): ProviderProtocol {
   return value === 'anthropic' ? 'anthropic' : 'openai'
 }
 
-/** Built-in catalog entry (Python provider_catalog parity + 需求七 预设清单). */
+/** Built-in catalog entry (Python provider_catalog parity). */
 export interface CatalogEntry {
   readonly id: string
   readonly name: string
@@ -374,13 +354,8 @@ export interface CatalogEntry {
 }
 
 /**
- * 预置供应商清单（需求七：选预设后只需填 Key）。baseUrl/协议/默认模型取自
- * 各家官方文档，写成可直接用的默认值；用户仍可在编辑卡片的「自定义设置」里
- * 改 Base URL、协议与模型列表。
- *
- * 清单参考 cc-switch（MIT，farion1231/cc-switch）的供应商结构自行整理；
- * 未复制其代码，仅沿用「预设 + 自定义兜底」的组织方式。
- * models 留空的条目（官方未公布稳定 id 列表）由「从端点获取」发现。
+ * 预置供应商清单。baseUrl 与模型名取自各家官方文档，写成可直接用的默认值；
+ * 用户仍可在编辑卡片的「自定义设置」里改 Base URL、协议与模型列表。
  */
 export function providerCatalog(): CatalogEntry[] {
   return [
@@ -390,45 +365,6 @@ export function providerCatalog(): CatalogEntry[] {
       baseUrl: 'https://api.deepseek.com',
       protocol: 'openai',
       // 官方未在文档页面列出稳定的 id 列表，留空由「从端点获取」发现。
-      models: [],
-    },
-    {
-      id: 'moonshot',
-      name: 'Kimi / Moonshot',
-      baseUrl: 'https://api.moonshot.cn/v1',
-      protocol: 'openai',
-      models: [],
-    },
-    {
-      id: 'glm',
-      name: '智谱 GLM',
-      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-      protocol: 'openai',
-      models: [
-        { id: 'glm-5.3', name: 'GLM-5.3', contextWindow: null, maxTokens: null },
-        { id: 'glm-5.2', name: 'GLM-5.2（推理）', contextWindow: null, maxTokens: null },
-        { id: 'glm-5.3-flash', name: 'GLM-5.3 Flash', contextWindow: null, maxTokens: null },
-      ],
-    },
-    {
-      id: 'sensenova',
-      name: '商汤 SenseNova',
-      baseUrl: 'https://api.sensenova.cn/compatible-mode/v1',
-      protocol: 'openai',
-      models: [],
-    },
-    {
-      id: 'siliconflow',
-      name: 'SiliconFlow',
-      baseUrl: 'https://api.siliconflow.cn/v1',
-      protocol: 'openai',
-      models: [],
-    },
-    {
-      id: 'openrouter',
-      name: 'OpenRouter',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      protocol: 'openai',
       models: [],
     },
     {
@@ -444,6 +380,17 @@ export function providerCatalog(): CatalogEntry[] {
         { id: 'mimo-v2.5', name: 'MiMo V2.5', contextWindow: null, maxTokens: null },
       ],
     },
+    {
+      id: 'glm',
+      name: '智谱 GLM',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      protocol: 'openai',
+      models: [
+        { id: 'glm-5.3', name: 'GLM-5.3', contextWindow: null, maxTokens: null },
+        { id: 'glm-5.2', name: 'GLM-5.2（推理）', contextWindow: null, maxTokens: null },
+        { id: 'glm-5.3-flash', name: 'GLM-5.3 Flash', contextWindow: null, maxTokens: null },
+      ],
+    },
     { id: 'custom', name: 'OpenAI 兼容', baseUrl: null, protocol: 'openai', models: [] },
     {
       id: 'anthropic',
@@ -453,79 +400,6 @@ export function providerCatalog(): CatalogEntry[] {
       models: [],
     },
   ]
-}
-
-/** 连接测试结果的分类（需求七：错误可操作）。 */
-export type ConnectionFailureKind = 'unauthorized' | 'not-found' | 'protocol' | 'model-missing' | 'timeout' | 'network' | 'invalid-config'
-
-export interface ConnectionTestResult {
-  readonly ok: boolean
-  readonly kind: ConnectionFailureKind | null
-  /** 面向用户的明确、可操作提示（不回显密钥、不回显目标 URL）。 */
-  readonly message: string
-  /** 端点上报的可用模型 id（截断）；成功且模型缺失时用来提示候选。 */
-  readonly modelIds: string[]
-}
-
-/** 端点探测失败 → 分类 + 可操作提示。 */
-function classifyProbeError(error: unknown): ConnectionTestResult {
-  const raw = error instanceof Error ? error.message : String(error)
-  // discoverModels 把状态码编进消息（`端点返回 HTTP 401…`），这里解析回来做分类。
-  const status = Number.isFinite(Number((error as { status?: unknown })?.status))
-    ? Number((error as { status?: unknown }).status)
-    : Number(/端点返回 HTTP (\d{3})/.exec(raw)?.[1] ?? 0)
-  if (raw === 'REDIRECT') return { ok: false, kind: 'network', message: '端点返回了重定向；请检查 Base URL 是否指向真正的 API 根地址。', modelIds: [] }
-  if (status === 401 || status === 403) return { ok: false, kind: 'unauthorized', message: '认证失败（401/403）：请检查 API Key 是否正确、是否已激活或被服务端吊销。', modelIds: [] }
-  if (status === 404) return { ok: false, kind: 'not-found', message: '端点不存在（404）：请检查 Base URL；多数供应商需要以 /v1 结尾。', modelIds: [] }
-  if (status === 400 || status === 405) return { ok: false, kind: 'protocol', message: `协议不匹配（HTTP ${status}）：请确认该供应商使用 OpenAI 兼容还是 Anthropic 协议。`, modelIds: [] }
-  if (status === 429) return { ok: false, kind: 'network', message: '供应商限流（429）：Key 本身可用，请稍后重试或降低并发。', modelIds: [] }
-  if (raw.includes('超时') || raw.includes('timeout') || raw.includes('aborted')) return { ok: false, kind: 'timeout', message: '连接超时：请检查网络、代理或 Base URL 是否可达。', modelIds: [] }
-  return { ok: false, kind: 'network', message: `无法连接端点：${raw}`, modelIds: [] }
-}
-
-/**
- * 测试连接（需求七）。最小请求：列模型（GET /models）+（可选）确认默认模型在列。
- * 使用表单当前值（未保存也能测），密钥解析优先级与「从端点获取」一致：
- * 表单新填 > 已加密存储的凭据（按 providerId）> 环境变量。
- */
-export async function testConnection(input: {
-  baseUrl: string
-  protocol?: ProviderProtocol
-  apiKey?: string | null
-  apiKeyEnv?: string | null
-  providerId?: string | null
-  model?: string | null
-}): Promise<ConnectionTestResult> {
-  let baseUrl: string
-  try {
-    baseUrl = validateModelBaseUrl(input.baseUrl)
-  } catch (error) {
-    return { ok: false, kind: 'invalid-config', message: error instanceof Error ? error.message : 'Base URL 不合法', modelIds: [] }
-  }
-  let modelIds: ProviderModelPayload[]
-  try {
-    modelIds = await discoverModels({
-      baseUrl,
-      apiKey: input.apiKey?.trim() || null,
-      apiKeyEnv: input.apiKeyEnv ?? null,
-      refresh: true,
-      ...(input.protocol === undefined ? {} : { protocol: input.protocol }),
-    })
-  } catch (error) {
-    return classifyProbeError(error)
-  }
-  const ids = modelIds.map(model => model.id)
-  const wanted = (input.model ?? '').trim()
-  if (wanted !== '' && !ids.includes(wanted)) {
-    const preview = ids.slice(0, 8).join('、')
-    return {
-      ok: false,
-      kind: 'model-missing',
-      message: `连接成功，但端点没有模型 ${wanted}${preview === '' ? '' : `；可用示例：${preview}${ids.length > 8 ? ' 等' : ''}`}。请重新选择默认模型或点「从端点获取」。`,
-      modelIds: ids.slice(0, 50),
-    }
-  }
-  return { ok: true, kind: null, message: `连接成功${ids.length > 0 ? `，发现 ${ids.length} 个模型` : ''}。`, modelIds: ids.slice(0, 50) }
 }
 
 /** Normalize a `/models` response (Python `_parse_models_payload` parity). */
@@ -584,7 +458,7 @@ export function validateModelBaseUrl(rawUrl: string): string {
   return trimmed.replace(/\/+$/, '')
 }
 
-/** M6：模型目录探测缓存——sessionModels 每次打开选模目录会对全部已配 Key
+/** ��模型目录探测缓存——sessionModels 每次打开选模目录会对全部已配 Key
  * 的 provider 并行打 `/models`（5s 超时），无缓存时离线/慢端点必卡选模 UI。
  * 键用 baseUrl + 密钥摘要（不落明文）；`refresh: true` 强制绕过（设置页
  * 「从端点获取」按钮永远实时）。 */
@@ -798,7 +672,7 @@ export async function activateProvider(workspaceRoot: string, providerId: string
 
 /** Store one provider's API key into `.syllora/credentials.json`. */
 export async function setCredential(workspaceRoot: string, providerId: string, apiKey: string): Promise<SettingsPayload> {
-  // M3：config 段与凭据段同锁序（config → credential）串行，与并发保存的
+  // ��config 段与凭据段同锁序（config → credential）串行，与并发保存的
   // provider 编辑互不丢更新。
   return withConfigLock(workspaceRoot, async () => {
     const config = await readConfig(workspaceRoot)
@@ -831,8 +705,6 @@ export async function updateSettings(workspaceRoot: string, partial: {
   agentPreset?: string
   /** 自定义预设提示词；空串表示清除（回到预设自带默认）。 */
   agentSystemPrompt?: string
-  /** 教学技能 id；空串表示不启用。 */
-  agentSkill?: string
   permissionPreset?: string
   plugins?: Record<string, boolean>
 }): Promise<SettingsPayload> {
@@ -842,13 +714,6 @@ export async function updateSettings(workspaceRoot: string, partial: {
     const nextLlm: NonNullable<ConfigYaml['llm']> = { ...llm }
     if (partial.provider !== undefined) nextLlm.provider = partial.provider.trim()
     if (partial.model !== undefined) nextLlm.model = partial.model.trim()
-    // 需求七：选择的默认模型同时写回所选供应商条目——只改 llm 段的话，
-    // 供应商卡片（以条目为准）仍显示旧模型，激活后两边会漂移。
-    const providers = { ...(config.providers ?? {}) }
-    const selectedProvider = partial.provider?.trim() || config.active_provider || nextLlm.provider
-    if (selectedProvider && providers[selectedProvider] && partial.model !== undefined) {
-      providers[selectedProvider] = { ...providers[selectedProvider], model: partial.model.trim() }
-    }
     if (partial.apiKeyEnv !== undefined) {
       const value = partial.apiKeyEnv.trim()
       // 加固4：与 discoverModels 的 API_KEY_ENV_RE 对齐——旧判定接受任意标识符
@@ -870,7 +735,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
       }
       nextUi.default_mode = partial.defaultMode
     }
-    const nextAgent: { preset?: string; system_prompt?: string; skill?: string } = { ...(config.agent ?? {}) }
+    const nextAgent: { preset?: string; system_prompt?: string } = { ...(config.agent ?? {}) }
     if (partial.agentPreset !== undefined) {
       if (!AGENT_PRESETS.some(item => item.id === partial.agentPreset)) throw new Error('Agent preset 无效')
       nextAgent.preset = partial.agentPreset
@@ -881,13 +746,6 @@ export async function updateSettings(workspaceRoot: string, partial: {
       // 空串=清除：写 undefined 让 yaml 不留空字段，读取时自然回退到预设默认。
       if (value === '') delete nextAgent.system_prompt
       else nextAgent.system_prompt = value
-    }
-    if (partial.agentSkill !== undefined) {
-      const value = partial.agentSkill.trim()
-      if (value !== '' && !AGENT_SKILL_IDS.includes(value)) throw new Error(`教学技能不存在: ${value}`)
-      // 空串=清除：不启用技能时不往 yaml 里写空字段。
-      if (value === '') delete nextAgent.skill
-      else nextAgent.skill = value
     }
     const nextPermissions = { ...(config.permissions ?? {}) }
     if (partial.permissionPreset !== undefined) {
@@ -901,7 +759,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
         nextPlugins[id] = enabled
       }
     }
-    const changed = JSON.stringify(providers) !== JSON.stringify(config.providers ?? {}) || JSON.stringify(nextLlm) !== JSON.stringify(llm) || JSON.stringify(nextUi) !== JSON.stringify(config.ui ?? {})
+    const changed = JSON.stringify(nextLlm) !== JSON.stringify(llm) || JSON.stringify(nextUi) !== JSON.stringify(config.ui ?? {})
       || JSON.stringify(nextAgent) !== JSON.stringify(config.agent ?? {}) || JSON.stringify(nextPermissions) !== JSON.stringify(config.permissions ?? {})
       || JSON.stringify(nextPlugins) !== JSON.stringify(config.plugins ?? {})
     if (!changed) {
@@ -909,126 +767,87 @@ export async function updateSettings(workspaceRoot: string, partial: {
       // 让前端把"什么都没改就点保存"报成红色失败弹窗。直接返回当前 payload。
       return settingsPayload(workspaceRoot)
     }
-    await writeConfig(workspaceRoot, { ...config, providers, llm: nextLlm, ui: nextUi, agent: nextAgent, permissions: nextPermissions, plugins: nextPlugins })
+    await writeConfig(workspaceRoot, { ...config, llm: nextLlm, ui: nextUi, agent: nextAgent, permissions: nextPermissions, plugins: nextPlugins })
     return settingsPayload(workspaceRoot)
   })
 }
 
-/**
- * 需求七：供应商拖拽排序的持久化（参照 reorderPoints / reorderCourses 的先例）。
- * 只接受当前已配置供应商 id 的全序；顺序写入 config.yaml 的 provider_order，
- * 未列出的供应商按写入顺序追加，绝不因顺序字段缺项而从列表消失。
- */
-export async function reorderProviders(workspaceRoot: string, providerIds: string[]): Promise<SettingsPayload> {
-  return withConfigLock(workspaceRoot, async () => {
-    const config = await readConfig(workspaceRoot)
-    const known = Object.keys(config.providers ?? {})
-    if (new Set(providerIds).size !== providerIds.length) throw new Error('供应商顺序无效，请刷新后重试')
-    const unknown = providerIds.filter(id => !known.includes(id))
-    if (unknown.length > 0) throw new Error(`供应商顺序包含未知条目: ${unknown.join(', ')}`)
-    const rest = known.filter(id => !providerIds.includes(id))
-    await writeConfig(workspaceRoot, { ...config, provider_order: [...providerIds, ...rest] })
-    return settingsPayload(workspaceRoot)
-  })
+// ---------------------------------------------------------------------------
+// DocMind（文档智能解析）配置：config.yaml 的 `docmind` 段 + 密封凭据。
+// 凭据 refs 固定为 DOCMIND_ACCESS_KEY_ID / _SECRET（与 deriveKeyRef 形态一致，
+// 只发给阿里云官方 SDK，不受 API_KEY_ENV_RE 的供应商白名单约束）。
+// ---------------------------------------------------------------------------
+
+export const DOCMIND_ACCESS_KEY_ID_REF = 'DOCMIND_ACCESS_KEY_ID'
+export const DOCMIND_ACCESS_KEY_SECRET_REF = 'DOCMIND_ACCESS_KEY_SECRET'
+
+export interface ResolvedDocMindCredential {
+  accessKeyId: string
+  accessKeySecret: string
+  endpoint: string
 }
 
-/** 需求七：导出结构（**不含明文密钥**，仅结构性字段）。 */
-export interface ProviderExportEntry {
-  readonly id: string
-  readonly name: string
-  readonly model: string
-  readonly baseUrl: string | null
-  readonly protocol: ProviderProtocol
-  readonly temperature: number
-  readonly maxConcurrency: number
-  readonly models: ProviderModelPayload[]
-  /** 只回显「是否已配置密钥」，导出文件里没有密钥本身。 */
-  readonly apiKeyConfigured: boolean
+/** 候选配置根：共享设置目录（设置页写入处）优先，课程根兜底。 */
+async function docmindRoots(workspaceRoot: string): Promise<string[]> {
+  const shared = sharedConfigRootOf()
+  if (shared !== null && resolve(shared) !== resolve(workspaceRoot)) return [shared, workspaceRoot]
+  return [workspaceRoot]
 }
 
-export interface ProviderExportPayload {
-  readonly version: 1
-  readonly activeProviderId: string
-  readonly providers: ProviderExportEntry[]
-  /** 导出文件里绝不包含密钥；为 true 时界面提示导入后需逐项补 Key。 */
-  readonly credentialsExcluded: true
+/** 单个密钥：环境变量 > 密封凭据。 */
+async function docmindSecret(root: string, ref: string): Promise<string | null> {
+  const env = process.env[ref]
+  if (typeof env === 'string' && env.trim() !== '') return env
+  const value = (await readCredentials(root).catch(() => ({} as Record<string, string>)))[ref]
+  return typeof value === 'string' && value.trim() !== '' ? value : null
 }
 
-/** 导出全部供应商配置（结构性字段，无明文密钥）。 */
-export async function exportProviders(workspaceRoot: string): Promise<ProviderExportPayload> {
-  const payload = await settingsPayload(workspaceRoot)
-  const byId = new Map(payload.providers.map(provider => [provider.id, provider]))
-  const entries: ProviderExportEntry[] = []
-  for (const id of payload.providerOrder) {
-    const provider = byId.get(id)
-    if (provider === undefined) continue
-    entries.push({
-      id: provider.id,
-      name: provider.name,
-      model: provider.model,
-      baseUrl: provider.baseUrl,
-      protocol: provider.protocol,
-      temperature: provider.temperature,
-      maxConcurrency: provider.maxConcurrency,
-      models: provider.models,
-      apiKeyConfigured: provider.apiKeyConfigured,
-    })
+/** 解析 DocMind 凭据（不抛错，未配置返回 null）。 */
+export async function resolveDocMindCredential(workspaceRoot: string): Promise<ResolvedDocMindCredential | null> {
+  for (const root of await docmindRoots(workspaceRoot)) {
+    const config = await readConfig(root)
+    const doc = config.docmind
+    const endpoint = doc?.endpoint?.trim() || DOCMIND_ENDPOINT
+    const idRef = doc?.access_key_id_env?.trim() || DOCMIND_ACCESS_KEY_ID_REF
+    const secretRef = doc?.access_key_secret_env?.trim() || DOCMIND_ACCESS_KEY_SECRET_REF
+    const accessKeyId = await docmindSecret(root, idRef)
+    const accessKeySecret = await docmindSecret(root, secretRef)
+    if (accessKeyId !== null && accessKeySecret !== null) return { accessKeyId, accessKeySecret, endpoint }
   }
-  return { version: 1, activeProviderId: payload.activeProviderId, providers: entries, credentialsExcluded: true }
+  return null
 }
 
-/** 导入结构校验（与导出一致；密钥字段被显式忽略）。 */
-const providerImportSchema = z.object({
-  version: z.literal(1),
-  activeProviderId: z.string().optional().default(''),
-  providers: z.array(z.object({
-    id: z.string().trim().min(1),
-    name: z.string().optional().default(''),
-    model: z.string().optional().default(''),
-    baseUrl: z.string().nullish(),
-    protocol: z.enum(['openai', 'anthropic']).optional(),
-    temperature: z.number().min(0).max(2).optional(),
-    maxConcurrency: z.number().int().min(1).max(32).optional(),
-    models: z.array(z.object({
-      id: z.string().trim().min(1),
-      name: z.string().optional().default(''),
-      contextWindow: z.number().nullish(),
-      maxTokens: z.number().nullish(),
-    })).optional().default([]),
-  })).min(1),
-})
+/** settings payload 的 docmind 投影（只含是否已配置与端点，不含密钥）。 */
+export async function docmindConfigPayload(workspaceRoot: string): Promise<{ configured: boolean; endpoint: string }> {
+  const resolved = await resolveDocMindCredential(workspaceRoot)
+  return { configured: resolved !== null, endpoint: resolved?.endpoint ?? DOCMIND_ENDPOINT }
+}
 
-/**
- * 导入供应商配置：结构性字段落盘，**密钥一律不导入**（导出文件本就不含密钥；
- * 即使被人为塞入 apiKey/api_key 也被 schema 丢弃，这里再显式忽略未知键）。
- * 不覆盖已有 id（skip），返回新建/跳过的清单供界面提示「逐项补 Key」。
- */
-export async function importProviders(workspaceRoot: string, payload: unknown): Promise<{ saved: SettingsPayload; imported: string[]; skipped: string[] }> {
-  const parsed = providerImportSchema.parse(payload)
+/** 保存 DocMind 访问密钥到密封凭据 + config.yaml 的 docmind 段（锁序 config → credential）。 */
+export async function setDocMindCredential(workspaceRoot: string, input: {
+  accessKeyId?: string
+  accessKeySecret?: string
+  endpoint?: string | null
+}): Promise<SettingsPayload> {
+  const id = (input.accessKeyId ?? '').trim()
+  const secret = (input.accessKeySecret ?? '').trim()
+  const endpoint = input.endpoint === undefined ? undefined : (input.endpoint?.trim() || null)
   return withConfigLock(workspaceRoot, async () => {
     const config = await readConfig(workspaceRoot)
-    const providers: Record<string, ProviderConfigYaml> = { ...(config.providers ?? {}) }
-    const imported: string[] = []
-    const skipped: string[] = []
-    for (const entry of parsed.providers) {
-      const id = entry.id.trim()
-      if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`供应商 ID 不合法: ${id}`)
-      if (providers[id] !== undefined) { skipped.push(id); continue }
-      providers[id] = {
-        id,
-        name: entry.name.trim() || id,
-        model: entry.model.trim(),
-        base_url: entry.baseUrl?.trim() || null,
-        protocol: entry.protocol ?? 'openai',
-        api_key_env: null,
-        ...(entry.temperature === undefined ? {} : { temperature: entry.temperature }),
-        ...(entry.maxConcurrency === undefined ? {} : { max_concurrency: entry.maxConcurrency }),
-        models: entry.models.map(model => ({ id: model.id, name: model.name || model.id, context_window: model.contextWindow ?? null, max_tokens: model.maxTokens ?? null })),
-      }
-      imported.push(id)
+    await withCredentialLock(workspaceRoot, async () => {
+      const credentials = (await readCredentialsRaw(workspaceRoot)).data
+      if (id !== '') credentials[DOCMIND_ACCESS_KEY_ID_REF] = id
+      else delete credentials[DOCMIND_ACCESS_KEY_ID_REF]
+      if (secret !== '') credentials[DOCMIND_ACCESS_KEY_SECRET_REF] = secret
+      else delete credentials[DOCMIND_ACCESS_KEY_SECRET_REF]
+      await writeCredentials(workspaceRoot, credentials)
+    })
+    const docmind: DocMindConfigYaml = {
+      ...(endpoint === undefined ? {} : { endpoint }),
+      access_key_id_env: id !== '' ? DOCMIND_ACCESS_KEY_ID_REF : null,
+      access_key_secret_env: secret !== '' ? DOCMIND_ACCESS_KEY_SECRET_REF : null,
     }
-    const order = [...(config.provider_order ?? []).filter(id => providers[id] !== undefined), ...imported.filter(id => !(config.provider_order ?? []).includes(id))]
-    await writeConfig(workspaceRoot, { ...config, providers, provider_order: order })
-    return { saved: await settingsPayload(workspaceRoot), imported, skipped }
+    await writeConfig(workspaceRoot, { ...config, docmind })
+    return settingsPayload(workspaceRoot)
   })
 }

@@ -23,6 +23,7 @@ import ApprovalPanel from "@/src/components/chat/ApprovalPanel";
 import QueueDock from "@/src/components/chat/QueueDock";
 import { Clawzy } from "@/src/components/mascot";
 import { useChatStream } from "@/src/hooks/useChatStream";
+import { useSessionActions } from "@/src/hooks/useSessionActions";
 import { useAppStore } from "@/src/store/useAppStore";
 
 /** DSH FOLLOW_THRESHOLD：距底 24px 内视为跟随态。 */
@@ -42,6 +43,7 @@ export default function ChatArea() {
   const flashStatusBanner = useAppStore((s) => s.flashStatusBanner);
   const setWizardOpen = useAppStore((s) => s.setWizardOpen);
   const { send, answer, retryLast, stop } = useChatStream();
+  const { forkSession } = useSessionActions();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -96,6 +98,15 @@ export default function ChatArea() {
   const hero = messages.length === 0 && !streaming;
   const courseTitle =
     courses.find((c) => c.id === activeCourseId)?.title ?? "";
+
+  async function branchFromMessage(chatIndex: number) {
+    if (!activeSessionId || !activeCourseId) return;
+    try {
+      await forkSession(activeSessionId, activeCourseId, chatIndex);
+    } catch (cause) {
+      flashStatusBanner(`✗ 无法创建分支：${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -153,20 +164,22 @@ export default function ChatArea() {
           <div className="mx-auto flex w-full max-w-[748px] flex-[1_0_auto] flex-col gap-4 px-8 py-4">
             {wakeupCard ? <WakeupCard card={wakeupCard} /> : null}
             {(() => {
+              let persistedChatIndex = -1;
               // UI-6：重试按钮必须重发"该卡对应的用户消息"，而不是全局最后一次
               // 发送——旧失败卡在后续成功发送之后重试时，lastSent 已被覆盖。
               let lastUserText = "";
               return messages.map((msg) => {
+                const hasPersistedChat = msg.persisted !== false && (msg.role === "user" || Boolean(msg.content));
+                if (hasPersistedChat) persistedChatIndex += 1;
+                const chatIndex = persistedChatIndex;
                 if (msg.role === "user" && msg.persisted !== false) lastUserText = msg.content;
-                // CR-13：`lastUserText` 是 map 共享的 let 绑定，若在点击时读取会拿到
-                // 全表最后一条用户消息（旧失败卡重试会重发错误文本）。渲染时把本卡
-                // 对应的文本固化成常量，闭包只捕获该值。
-                const retryText = lastUserText;
                 return (
                   <MessageCard
                     key={msg.id}
                     message={msg}
-                    onRetry={msg.error ? () => retryLast(retryText) : undefined}
+                    onRetry={msg.error ? () => retryLast(lastUserText) : undefined}
+                    onBranch={hasPersistedChat && activeSessionId ? () => branchFromMessage(chatIndex) : undefined}
+                    branchUnavailable={streaming}
                   />
                 );
               });

@@ -16,7 +16,9 @@ export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:
 }
 // `notes` 是本应用管理的笔记目录（{课程根}/notes/）：用户自己的笔记不作为课程资料候选，
 // 否则每写一篇笔记都会出现在资料清单里，并可能被当作生成依据发送给模型。
-const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__', 'notes'])
+// `ebook` 是电子书产物目录（docmind/markdown.md、refined.md 等）；把它当课程资料扫描会让
+// 「更新课程讲义」把同一本书的多种产物重复计入，直接撞上 100,000 字符上限。
+const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__', 'notes', 'ebook'])
 
 export async function atomicJson(path: string, value: unknown) {
   return atomicText(path, JSON.stringify(value, null, 2))
@@ -93,7 +95,7 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
   }
   async function walk(dir: string) {
     for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('~$') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
+      if (entry.name.startsWith('.') || excluded.has(entry.name) || entry.isSymbolicLink()) continue
       const path = join(dir, entry.name), name = relative(root, path).split(sep).join('/')
       if (entry.isDirectory()) { await walk(path); continue }
       if (!entry.isFile()) continue

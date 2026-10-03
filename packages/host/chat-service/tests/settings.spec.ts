@@ -19,7 +19,6 @@ import {
   updateSettings,
 } from '../src/settings.ts'
 import { loadChatConfig } from '../src/config.ts'
-import { AGENT_SKILL_IDS } from '../src/skills.ts'
 import { unsealCredentials } from '../src/secret-box.ts'
 
 /** Fixture values standing in for stored secrets; none carries a provider's key
@@ -110,26 +109,6 @@ describe('settings domain', () => {
     expect(config.apiKey).toBe('mock-secret')
     expect(config.apiKeyEnv).toBe('MOCK_API_KEY')
     await rm(root, { recursive: true, force: true })
-  })
-
-  it('projects teaching skills and validates the selection round-trip', async () => {
-    const { root, ws } = await setup()
-    try {
-      const initial = await settingsPayload(ws)
-      expect(initial.agent.skill).toBe('')
-      expect(initial.agent.skills.map(item => item.id)).toEqual(AGENT_SKILL_IDS)
-      expect(initial.agent.skills.every(item => item.name !== '' && item.description !== '')).toBe(true)
-
-      const saved = await updateSettings(ws, { agentSkill: 'zpd' })
-      expect(saved.agent.skill).toBe('zpd')
-      expect((await loadChatConfig(ws)).agentSkill).toBe('zpd')
-
-      const cleared = await updateSettings(ws, { agentSkill: '' })
-      expect(cleared.agent.skill).toBe('')
-      expect((await loadChatConfig(ws)).agentSkill).toBe('')
-
-      await expect(updateSettings(ws, { agentSkill: 'not-a-skill' })).rejects.toThrow(/教学技能不存在/)
-    } finally { await rm(root, { recursive: true, force: true }) }
   })
 
   it('projects the full payload from config.yaml', async () => {
@@ -393,7 +372,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('M3：并发保存两个 provider 双双存活（config 写锁串行化 RMW）', async () => {
+  it('��并发保存两个 provider 双双存活（config 写锁串行化 RMW）', async () => {
     const { root, ws } = await setup()
     await Promise.all([
       saveProvider(ws, { id: 'alpha', name: 'Alpha', model: 'model-a', baseUrl: 'https://a.example/v1' }),
@@ -409,7 +388,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('M3：并发「保存凭据」与「更新设置」互不丢字段', async () => {
+  it('��并发「保存凭据」与「更新设置」互不丢字段', async () => {
     const { root, ws } = await setup()
     await Promise.all([
       setCredential(ws, 'mock', 'concurrent-secret'),
@@ -425,7 +404,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('M6：discoverModels 命中缓存不发请求，refresh 强制实时', async () => {
+  it('��discoverModels 命中缓存不发请求，refresh 强制实时', async () => {
     let hits = 0
     const server: Server = createServer((_req, res) => {
       hits += 1

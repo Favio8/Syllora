@@ -28,11 +28,7 @@ export default function Dropdown({ label, value, options, onChange, disabled = f
     if (disabled || !options.length) return;
     if (timer.current) clearTimeout(timer.current);
     const rect = trigger.current!.getBoundingClientRect();
-    // 需求五：行高按内容估（带 description 的行更高），上限放宽到视口 60%——
-    // 旧实现按固定 48px/行且封顶 296px，权限这类"标题+说明"的行会被截成
-    // 滚动条，用户看不到完整档位说明。
-    const rowHeight = options.some(option => option.description) ? 66 : 48;
-    const desired = Math.min(Math.round(window.innerHeight * 0.6), options.length * rowHeight + 16, 420);
+    const desired = Math.min(296, options.length * 48 + 16);
     const below = window.innerHeight - rect.bottom - 16;
     const above = rect.top - 16;
     const bottom = below >= Math.min(desired, 180) || below >= above;

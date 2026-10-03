@@ -25,16 +25,10 @@ export class ToolRejected extends ToolError {
 
 export type ToolStatus = 'success' | 'degraded' | 'rejected'
 
-/** 回灌模型时允许进入消息体的 data 键（白名单，防止把审计/元数据整包灌回）。
- *  CR-18：缺 `body` → `fetch_url` 的网页正文被丢弃，模型只看到「已获取 200」，
- *    工具对模型等于失效（search_web 的 `results` 在白名单内，反证漏配）。
- *  CR-19：缺 `locations`/`hover`/`result` → LSP 投影的三个键都不进上下文，
- *    「跳转到定义」「悬停」结果对模型不可见。 */
+/** 回灌模型时允许进入消息体的 data 键（白名单，防止把审计/元数据整包灌回）。 */
 const MODEL_DATA_KEYS = new Set([
   'lines', 'content', 'text', 'matches', 'results', 'sources', 'items',
   'notes', 'output', 'stdout', 'stderr', 'diff', 'links', 'errors', 'cards',
-  'body', 'locations', 'hover', 'result', 'anchors', 'summary', 'title', 'url',
-  'status', 'kind',
 ])
 
 function serializeModelData(data: Record<string, unknown>): string {

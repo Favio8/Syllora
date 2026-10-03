@@ -33,17 +33,18 @@ export class SylloraProjects {
     if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
     return (await this.service(courseId)).readNoteAsset(courseId,name)
   }
+  /** 电子书内文件读取（GET /api/syllora/ebook-file 用）；路径白名单在 service 内校验。 */
+  async readEbookFile(courseId:string,ebookId:string,path:string) {
+    if(!z.string().uuid().safeParse(courseId).success||!z.string().uuid().safeParse(ebookId).success)throw new SylloraError('INVALID_REQUEST','课程或电子书 ID 不正确')
+    return (await this.service(courseId)).readEbookFile(courseId,ebookId,path)
+  }
   private async load() {
-    // CR-14：`ready` 一旦失败就会把整个进程钉死——projects.json 读一次失败
-    // （文件被外部占用、半写入、权限瞬时变化）之后，所有操作都复用同一个已
-    // rejected 的 promise，修好文件也要重启。这里在失败时清掉缓存，让下一次
-    // 调用重新尝试（成功路径仍只读一次）。
     this.ready??=(async()=>{
       await mkdir(this.root,{recursive:true});await stateDirectory(this.root)
       this.projects=await jsonFile<Project[]>(join(this.root,'.syllora','projects.json'))??[]
       if(this.options.managedCoursesRoot)await this.relocateCourses()
     })()
-    try { await this.ready } catch (error) { this.ready=null; throw error }
+    await this.ready
   }
   private async serialize<T>(fn:()=>Promise<T>) {
     const next=this.tail.then(async()=>{await this.load();return fn()});this.tail=next.catch(()=>undefined);return next
@@ -173,21 +174,6 @@ export class SylloraProjects {
     if(action==='activity') {const state=await this.handle('state',{}) as {courses:Course[]};return {activity:state.courses.flatMap(course=>course.activity??[])}}
     if(action==='createCourse')return this.createManaged(payload)
     if(action==='openCourse')return this.openFolder(payload)
-    if(action==='reorderCourses') {
-      // 需求一：左栏拖拽 / 浮层排序的持久化。入参是全部已打开课程的 id 全序，
-      // 顺序写进 projects.json。新打开课程仍由 remember() 置顶——手动排序只调整
-      // 既有课程的相对次序；与已打开集合不一致时拒绝（避免把并发打开的课程挤掉）。
-      const p=z.object({courseIds:z.array(z.string().uuid()).min(1)}).parse(payload)
-      if(new Set(p.courseIds).size!==p.courseIds.length)throw new SylloraError('INPUT_INVALID','课程顺序无效，请刷新后重试')
-      return this.serialize(async()=>{
-        const existing=this.projects
-        if(p.courseIds.length!==existing.length||!p.courseIds.every(id=>existing.some(project=>project.id===id)))throw new SylloraError('INPUT_INVALID','课程顺序与已打开课程不一致，请刷新后重试')
-        const order=new Map(p.courseIds.map((id,index)=>[id,index]))
-        this.projects=[...existing].sort((a,b)=>order.get(a.id)!-order.get(b.id)!)
-        await atomicJson(join(this.root,'.syllora','projects.json'),this.projects)
-        return {saved:true,order:this.projects.map(project=>project.id)}
-      })
-    }
     if(action==='preferences') {
       // Compatibility endpoint for older UI clients; effective policy stays enabled.
       z.object({consent:z.boolean()}).parse(payload)

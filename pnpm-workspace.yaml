@@ -3,6 +3,7 @@ packages:
   - packages/*/*
   - apps/*
 allowBuilds:
+  '@alicloud/openapi-core': false # postinstall 仅为版本标记，无需构建；SDK 未经构建即可用
   electron: true # 桌面壳需要下载 Electron 二进制（check-runtime 校验内嵌 Node）
   electron-winstaller: false # 本期不构建 Windows 安装器增量补丁
   esbuild: true

@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { api, ApiError } from "@/src/lib/api";
+import type { DocMindSettings, SettingsPayloadWithDocMind } from "@/src/lib/api";
 import { useAppStore } from "@/src/store/useAppStore";
 import { useFocusTrap } from "@/src/hooks/useFocusTrap";
 import type {
@@ -25,7 +26,6 @@ import type {
   ProviderPayload,
   ProviderProtocol,
   SettingsPayload,
-  ConnectionTestResult,
 } from "@/src/types/api";
 
 interface EditorProfile {
@@ -138,8 +138,6 @@ function ProviderEditorCard({
   const [model, setModel] = useState(draft?.model ?? provider?.model ?? "");
   const [baseUrl, setBaseUrl] = useState(draft?.baseUrl ?? provider?.baseUrl ?? entry?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState(draft?.apiKey ?? "");
-  const [testBusy, setTestBusy] = useState(false);
-  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [rows, setRows] = useState<ModelDraft[]>(() =>
     draft?.rows ?? draftsFrom(provider?.models ?? entry?.models ?? []),
   );
@@ -223,26 +221,6 @@ function ProviderEditorCard({
     baseUrl.trim().length > 0 &&
     rowIdsValid &&
     capacitiesValid;
-
-  /** 需求七：连接测试——用表单当前值（未保存也能测）。 */
-  async function testNow() {
-    setTestBusy(true);
-    setTestResult(null);
-    try {
-      const result = await api.testConnection({
-        baseUrl: baseUrl.trim(),
-        ...(protocol ? { protocol } : {}),
-        ...(apiKey.trim() !== "" ? { apiKey: apiKey.trim() } : {}),
-        ...(provider ? { providerId: provider.id } : {}),
-        ...(model.trim() !== "" ? { model: model.trim() } : {}),
-      });
-      setTestResult(result);
-    } catch (cause) {
-      setTestResult({ ok: false, kind: "network", message: errorMessage(cause), modelIds: [] });
-    } finally {
-      setTestBusy(false);
-    }
-  }
 
   async function submit() {
     if (!canSave) return;
@@ -672,19 +650,7 @@ function ProviderEditorCard({
 
       {error ? <p className="mt-3 text-xs text-accent-fail" role="alert">{error}</p> : null}
 
-      <div className="mt-4 flex items-center justify-end gap-2">
-        {/* 需求七：保存前可先测一次（用表单当前值，未保存也能测）。 */}
-        <div className="mr-auto flex min-w-0 flex-col">
-          <button
-            type="button"
-            onClick={() => void testNow()}
-            disabled={busy || testBusy || baseUrl.trim() === ""}
-            className="w-max rounded-xl border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-panel disabled:opacity-40"
-          >
-            {testBusy ? "测试中…" : "测试连接"}
-          </button>
-          {testResult ? <p role="status" className={`mt-1 text-xs ${testResult.ok ? "text-accent-pass" : "text-accent-fail"}`}>{testResult.message}</p> : null}
-        </div>
+      <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"
           onClick={onCancel}
@@ -787,6 +753,15 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [settingsRetry, setSettingsRetry] = useState(0);
+  // DocMind 文档解析（电子书投喂的上游）：密钥与端点走 settings.docmind.*，
+  // 与 LLM provider 相互独立；密封加密存储在本机共享设置。
+  const [docmind, setDocmind] = useState<DocMindSettings | null>(() => (initial as SettingsPayloadWithDocMind | null)?.docmind ?? null);
+  const [docmindKeyId, setDocmindKeyId] = useState("");
+  const [docmindKeySecret, setDocmindKeySecret] = useState("");
+  const [docmindEndpoint, setDocmindEndpoint] = useState("");
+  const [docmindBusy, setDocmindBusy] = useState(false);
+  const [docmindError, setDocmindError] = useState<string | null>(null);
+  const [docmindSaved, setDocmindSaved] = useState(false);
   // X4：添加卡按目录条目缓存整卡草稿（切换条目不丢输入）。
   const addDraftsRef = useRef(new Map<string, AddCardDraft>());
   // 返航键要把设置弹窗右侧内容区滚回顶部；该容器是本组件的父节点。
@@ -826,6 +801,35 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     return () => { alive = false };
   }, [initial, settingsRetry]);
 
+  // 未配置时只读探测 DocMind 状态（configured + endpoint），不阻塞页面。
+  useEffect(() => {
+    let alive = true;
+    void api.docmindSettings().then(
+      (result) => { if (alive) setDocmind(result); },
+      () => { /* 探测失败静默；保存时再报错 */ },
+    );
+    return () => { alive = false };
+  }, [initial]);
+
+  const handleDocMindSave = async () => {
+    setDocmindBusy(true); setDocmindError(null); setDocmindSaved(false);
+    try {
+      const result = await api.saveDocMind({
+        accessKeyId: docmindKeyId.trim() || undefined,
+        accessKeySecret: docmindKeySecret.trim() || undefined,
+        endpoint: docmindEndpoint.trim() !== "" ? docmindEndpoint.trim() : null,
+      });
+      setDocmind({ configured: result.docmind?.configured ?? false, endpoint: result.docmind?.endpoint ?? "docmind-api.cn-hangzhou.aliyuncs.com" });
+      setDocmindKeyId(""); setDocmindKeySecret(""); setDocmindEndpoint("");
+      setDocmindSaved(true);
+      flashStatusBanner("DocMind 设置已保存");
+    } catch (cause) {
+      setDocmindError(`DocMind 保存失败：${errorMessage(cause)}`);
+    } finally {
+      setDocmindBusy(false);
+    }
+  };
+
   useEffect(() => {
     let alive = true;
     // 目录加载失败不阻塞页面：手填与编辑既有 provider 的路径完全可用，
@@ -838,20 +842,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     return () => { alive = false; };
   }, [catalogRetry]);
 
-  const [testState, setTestState] = useState<Record<string, { busy: boolean; result: ConnectionTestResult | null }>>({});
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [transferNotice, setTransferNotice] = useState<string | null>(null);
-  const [transferBusy, setTransferBusy] = useState(false);
-  const importInputRef = useRef<HTMLInputElement | null>(null);
-
-  // 需求七：展示顺序由 providerOrder 决定（服务端持久化；缺项按写入顺序补齐）。
-  const providers = useMemo(() => {
-    const list = payload?.providers ?? [];
-    const order = payload?.providerOrder ?? [];
-    if (order.length === 0) return list;
-    const index = new Map(order.map((id, position) => [id, position]));
-    return [...list].sort((a, b) => (index.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (index.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-  }, [payload]);
+  const providers = useMemo(() => payload?.providers ?? [], [payload]);
   const activeId = payload?.activeProviderId ?? "";
   const anyUsable = providers.some((p) => p.apiKeyConfigured);
 
@@ -982,95 +973,6 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     }
   }
 
-  /** 需求七：落位后持久化顺序（乐观更新，失败回落到服务端事实）。 */
-  async function handleReorder(ids: string[]) {
-    if (!payload) return;
-    const index = new Map(ids.map((id, position) => [id, position]));
-    setPayload({ ...payload, providers: [...payload.providers].sort((a, b) => (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0)), providerOrder: ids });
-    try {
-      setPayload(await api.reorderProviders(ids));
-    } catch (cause) {
-      setError(errorMessage(cause));
-    }
-  }
-
-  function moveProvider(id: string, direction: 'up' | 'down') {
-    const ids = providers.map((provider) => provider.id);
-    const from = ids.indexOf(id);
-    const to = direction === 'up' ? from - 1 : from + 1;
-    if (from < 0 || to < 0 || to >= ids.length) return;
-    ids.splice(to, 0, ids.splice(from, 1)[0]!);
-    void handleReorder(ids);
-  }
-
-  /** 需求七：连接测试——最小请求（列模型）并按错误分类给可操作提示。 */
-  async function handleTest(provider: ProviderPayload) {
-    setTestState((current) => ({ ...current, [provider.id]: { busy: true, result: null } }));
-    try {
-      const result = await api.testConnection({
-        baseUrl: provider.baseUrl ?? '',
-        protocol: provider.protocol,
-        providerId: provider.id,
-        ...(provider.model ? { model: provider.model } : {}),
-      });
-      setTestState((current) => ({ ...current, [provider.id]: { busy: false, result } }));
-    } catch (cause) {
-      setTestState((current) => ({ ...current, [provider.id]: { busy: false, result: { ok: false, kind: 'network', message: errorMessage(cause), modelIds: [] } } }));
-    }
-  }
-
-  /** 需求七：导出结构（不含明文密钥）。 */
-  async function handleExport() {
-    setTransferBusy(true);
-    setTransferNotice(null);
-    try {
-      const exported = await api.exportProviders();
-      // 兜底断言：导出体里绝不能出现密钥字段（域层已保证，这里再拒一次）。
-      const text = JSON.stringify(exported, null, 2);
-      if (/"(apiKey|api_key|api_key_env|secret|token)"\s*:/.test(text)) throw new Error('导出内容包含疑似密钥字段，已中止');
-      const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `syllora-providers-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      setTransferNotice(`已导出 ${exported.providers.length} 个供应商结构（不含明文密钥）`);
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setTransferBusy(false);
-    }
-  }
-
-  /** 需求七：导入结构；密钥不导入，需逐项补 Key。 */
-  async function handleImportFile(file: File) {
-    setTransferBusy(true);
-    setTransferNotice(null);
-    try {
-      // 兼容两种读取路径：现代浏览器的 Blob.text() 与 jsdom 等仅实现
-      // FileReader 的环境（测试环境）。
-      const text = typeof file.text === 'function'
-        ? await file.text()
-        : await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result ?? ''));
-            reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
-            reader.readAsText(file);
-          });
-      const parsed = JSON.parse(text) as unknown;
-      const result = await api.importProviders(parsed);
-      setPayload(result.saved);
-      setTransferNotice(`已导入 ${result.imported.length} 个供应商${result.skipped.length > 0 ? `；跳过已存在的 ${result.skipped.join('、')}` : ''}。密钥不含在文件里，请为每个供应商补填 API Key 后测试连接。`);
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setTransferBusy(false);
-    }
-  }
-
   async function handleActivate(id: string) {
     try {
       const next = await api.activateProvider(id);
@@ -1120,70 +1022,13 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
             还没有已配置的供应商。先回到「模型配置」添加一个。
           </p>
         ) : (
-          <>
-          {/* 需求七：导入/导出（导出不含明文密钥；导入需逐项补 Key）。 */}
-          <div className="mb-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              disabled={transferBusy || providers.length === 0}
-              className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
-            >
-              导出配置（不含密钥）
-            </button>
-            <button
-              type="button"
-              onClick={() => importInputRef.current?.click()}
-              disabled={transferBusy}
-              className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
-            >
-              导入配置
-            </button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept="application/json,.json"
-              aria-label="导入供应商配置文件"
-              className="hidden"
-              onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handleImportFile(file); }}
-            />
-          </div>
-          {transferNotice ? <p role="status" className="mb-3 text-xs text-text-muted">{transferNotice}</p> : null}
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {providers.map((provider) => {
           const setupPosture = setupId === provider.id;
           const editing = editingId === provider.id;
           return (
-            <li
-              key={provider.id}
-              className={`rounded-xl border border-border-line bg-bg-panel p-3 ${draggingId === provider.id ? "opacity-50" : ""}`}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const source = e.dataTransfer.getData("text/plain") || draggingId;
-                setDraggingId(null);
-                if (!source || source === provider.id) return;
-                const ids = providers.map((item) => item.id);
-                const from = ids.indexOf(source);
-                const to = ids.indexOf(provider.id);
-                if (from < 0 || to < 0) return;
-                ids.splice(to, 0, ids.splice(from, 1)[0]!);
-                void handleReorder(ids);
-              }}
-            >
+            <li key={provider.id} className="rounded-xl border border-border-line bg-bg-panel p-3">
               <div className="flex items-center gap-2.5">
-                {/* 需求七：拖拽排序（与需求一左栏同一交互模式）。 */}
-                <button
-                  type="button"
-                  draggable
-                  aria-label={`拖动排序 ${provider.name || provider.id}`}
-                  title="拖动排序"
-                  onDragStart={(e) => { setDraggingId(provider.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", provider.id); }}
-                  onDragEnd={() => setDraggingId(null)}
-                  className="cursor-grab active:cursor-grabbing text-text-faint"
-                >
-                  ⋮⋮
-                </button>
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${provider.apiKeyConfigured ? "bg-accent-pass" : "bg-accent-fail"}`}
                   title={provider.apiKeyConfigured ? "API Key 已配置" : "API Key 缺失"}
@@ -1212,21 +1057,6 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
                   >
                     激活
                   </button>
-                  {/* 需求七：连接测试（最小请求 + 可操作错误提示）。 */}
-                  <button
-                    type="button"
-                    aria-label={`测试连接 ${provider.name || provider.id}`}
-                    onClick={() => void handleTest(provider)}
-                    disabled={testState[provider.id]?.busy === true}
-                    title="用当前配置发一次最小请求，验证地址、密钥与模型"
-                    className="rounded-full border border-border-line px-2.5 py-1 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
-                  >
-                    {testState[provider.id]?.busy === true ? "测试中…" : "测试"}
-                  </button>
-                  <div className="flex flex-col">
-                    <button type="button" aria-label={`${provider.name || provider.id} 上移`} title="上移" onClick={() => moveProvider(provider.id, 'up')} className="px-1 text-text-faint hover:text-text-primary">↑</button>
-                    <button type="button" aria-label={`${provider.name || provider.id} 下移`} title="下移" onClick={() => moveProvider(provider.id, 'down')} className="px-1 text-text-faint hover:text-text-primary">↓</button>
-                  </div>
                   <button
                     type="button"
                     aria-expanded={editing || setupPosture}
@@ -1247,14 +1077,6 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
                   </button>
                 </div>
               </div>
-              {testState[provider.id]?.result ? (
-                <p
-                  role="status"
-                  className={`mt-2 text-xs ${testState[provider.id]!.result!.ok ? "text-accent-pass" : "text-accent-fail"}`}
-                >
-                  {testState[provider.id]!.result!.message}
-                </p>
-              ) : null}
               {editing || setupPosture ? (
                 <div className="mt-3">
                   <ProviderEditorCard
@@ -1273,7 +1095,6 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
           );
         })}
           </ul>
-          </>
         )
       ) : (
         <>
@@ -1346,6 +1167,51 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
       )}
         </>
       )}
+
+      {/* DocMind 文档解析配置：电子书投喂的上游，密钥经本机密封凭据存储。 */}
+      <div className="mt-4 rounded-xl border border-border-line bg-bg-card p-3">
+        <div className="flex items-center gap-2.5">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${docmind?.configured ? "bg-accent-pass" : "bg-accent-fail"}`} />
+          <span className="min-w-0 text-sm font-medium text-text-primary">DocMind 文档解析</span>
+          <span className="rounded border border-border-line px-1.5 py-0.5 text-[11px] text-text-muted">{docmind?.configured ? "已配置" : "未配置"}</span>
+          <div className="ml-auto">
+            <button
+              type="button"
+              disabled={docmindBusy}
+              onClick={() => void handleDocMindSave()}
+              className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+            >
+              {docmindBusy ? "保存中…" : "保存"}
+            </button>
+          </div>
+        </div>
+        <p className="mt-1.5 text-xs text-text-faint">电子书投喂依赖阿里云文档智能 DocMind 解析课件；密钥留空表示不改现值，端点留空用默认地址。密钥 AES 加密保存在本机，仅用于解析。</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <input
+            value={docmindKeyId}
+            onChange={(e) => setDocmindKeyId(e.target.value)}
+            placeholder="AccessKey ID"
+            autoComplete="off"
+            className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+          />
+          <input
+            type="password"
+            value={docmindKeySecret}
+            onChange={(e) => setDocmindKeySecret(e.target.value)}
+            placeholder="AccessKey Secret"
+            autoComplete="new-password"
+            className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+          />
+          <input
+            value={docmindEndpoint}
+            onChange={(e) => setDocmindEndpoint(e.target.value)}
+            placeholder="端点（默认 docmind-api.cn-hangzhou.aliyuncs.com）"
+            className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus sm:col-span-2"
+          />
+        </div>
+        {docmindError && <p className="mt-1.5 text-xs text-accent-fail" role="alert">{docmindError}</p>}
+        {docmindSaved && <p className="mt-1.5 text-xs text-accent-pass">已保存 ✓</p>}
+      </div>
 
       {deleteId ? (
         <div

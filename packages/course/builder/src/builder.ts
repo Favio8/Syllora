@@ -439,7 +439,7 @@ export class CourseBuilder {
     for (const drop of gate.dropped) report.degraded.push(`${drop.taskId}：${drop.reason}`)
     const skew = answerPositionSkewWarning(gate.answerPositionHistogram)
     if (skew !== null) console.warn(`[quality-gate] ${skew}`)
-    // M2：旧卡退役移到生成成功之后——旧实现先删后生成，生成失败（LLM 报错/
+    // ��旧卡退役移到生成成功之后——旧实现先删后生成，生成失败（LLM 报错/
     // 限流）时旧卡已被删且 checksums 未保存，连续失败会把题池越削越空。
     // 课程锁只包无 LLM 的写段（快），生成与依赖推断留在锁外——文件锁的
     // 30s 超时不会误伤并发评测。

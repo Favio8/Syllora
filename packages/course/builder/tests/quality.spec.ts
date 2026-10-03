@@ -53,36 +53,6 @@ describe('enforceTaskQuality', () => {
     expect(gate.dropped[0]!.reason).toContain('缺少 answer_index')
   })
 
-  it('跨题泄漏：一题的解析里出现另一题的正确选项 → 丢弃泄漏卡', () => {
-    const leaky = mcq({
-      task_id: 't_leak',
-      question: '承接上一题的结论，下面哪个说法成立？',
-      answer_rationale: '注意：连接模型与真实环境的控制系统，转化模型意图 才是本题的答案要点。',
-      answer_index: 0,
-    })
-    const other = mcq({ task_id: 't_other', question: '另一道无关的题面是什么？' })
-    const gate = enforceTaskQuality([leaky, other])
-    expect(gate.kept.map(task => task.task_id)).toEqual(['t_other'])
-    expect(gate.dropped[0]!.reason).toContain('泄漏答案')
-  })
-
-  it('跨题泄漏：题干里写破另一题答案同样丢弃；正确答案写在别处不算', () => {
-    const inQuestion = mcq({
-      task_id: 't_q',
-      question: '「连接模型与真实环境的控制系统，转化模型意图」这个说法对吗？为什么？',
-      options: ['对，因为它就是定义', '不对，缺少前提条件', '不确定', '取决于实现'],
-      answer_index: 1,
-    })
-    const target = mcq({ task_id: 't_target', question: '上一题问的是什么？' })
-    const gate = enforceTaskQuality([inQuestion, target])
-    expect(gate.kept.map(task => task.task_id)).toEqual(['t_target'])
-    // 短选项（<4 字）不参与跨题判定，避免误杀
-    const short = mcq({ task_id: 't_short', question: '结果为 3 吗？', options: ['3', '4', '5', '6'], answer_index: 0 })
-    const plain = mcq({ task_id: 't_plain', question: '下一题请计算 3 加 4 等于多少？', options: ['6', '7', '8', '9'], answer_index: 1 })
-    const ok = enforceTaskQuality([short, plain])
-    expect(ok.kept).toHaveLength(2)
-  })
-
   it('answer_index 越界 → 丢弃', () => {
     const gate = enforceTaskQuality([mcq({ answer_index: 9 })])
     expect(gate.dropped[0]!.reason).toContain('越界')

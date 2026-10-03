@@ -97,16 +97,37 @@ describe("useInstantCard（F4 对话即出题）", () => {
   });
 });
 
-describe("MessageActions 已取消的两个操作入口", () => {
-  // 需求：主界面取消「转复习卡」与「从此处创建分支」——操作区只保留时间与复制。
-  it("不再渲染转复习卡与创建分支入口", () => {
-    render(<MessageActions text="划选段落" />);
-    expect(screen.queryByRole("button", { name: /转为复习卡片/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /创建分支/ })).not.toBeInTheDocument();
+describe("MessageActions 转复习卡按钮（F4）", () => {
+  it("提供 onInstantCard 时渲染按钮并回调文本", () => {
+    const onInstantCard = vi.fn();
+    render(<MessageActions text="划选段落" onInstantCard={onInstantCard} />);
+    fireEvent.click(screen.getByRole("button", { name: /转为复习卡片/ }));
+    expect(onInstantCard).toHaveBeenCalledWith("划选段落");
   });
 
-  it("保留复制按钮", () => {
-    render(<MessageActions text="复制我" />);
-    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
+  it("未提供 onInstantCard 时不渲染按钮", () => {
+    render(<MessageActions text="x" />);
+    expect(screen.queryByRole("button", { name: /转为复习卡片/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageActions 会话分支按钮", () => {
+  it("从已持久化消息处分叉", async () => {
+    const onBranch = vi.fn().mockResolvedValue(undefined);
+    render(<MessageActions text="x" onBranch={onBranch} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "从此处创建分支" }));
+
+    await waitFor(() => expect(onBranch).toHaveBeenCalledOnce());
+  });
+
+  it("流式期间显示不可用的分支入口", () => {
+    const onBranch = vi.fn();
+    render(<MessageActions text="x" onBranch={onBranch} branchUnavailable />);
+    const button = screen.getByRole("button", { name: "当前回复完成后可创建分支" });
+
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(button);
+    expect(onBranch).not.toHaveBeenCalled();
   });
 });

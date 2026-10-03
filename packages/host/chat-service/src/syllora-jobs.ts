@@ -1,4 +1,5 @@
 import { RULE_VERSION } from './syllora-domain.ts'
+import { DocMindError } from './docmind.ts'
 
 export const PROMPT_VERSION = 'syllora-teaching-v2'
 export interface JobDiagnostics { promptVersion?: string; ruleVersion?: string; finishedAt?: number | null; elapsedMs?: number | null; errorCode?: string | null; usageKnownCalls?:{input:number;output:number} }
@@ -28,9 +29,15 @@ export function generationFailure(error: unknown): {code:string;message:string} 
     if(code==='TIMEOUT' || code==='UPSTREAM_TIMEOUT' || current.name==='TimeoutError') return {code:'UPSTREAM_TIMEOUT',message:'模型调用超时，原任务已停止，请查询状态后决定是否重试；已保存记录保留。'}
     if(code==='ABORTED' || code==='CANCELLED' || current.name==='AbortError') return {code:'CANCELLED',message:'生成已取消；已保存的学习记录保留。'}
     if(code==='AUTH' || code==='INVALID_CREDENTIAL' || code==='MISSING_CREDENTIAL') return {code:'MODEL_AUTH_FAILED',message:'模型服务鉴权失败，请检查所选供应商配置后重试。'}
-    if(code==='OUTPUT_TRUNCATED') return {code, message:'模型输出已截断，本次结果未发布，请调整范围后重试。'}
+    if(code==='OUTPUT_TRUNCATED') return {code:'OUTPUT_TRUNCATED',message:'模型输出已截断，本次结果未发布，请调整范围后重试。'}
+    // DocMind（文档解析）错误：保留中文消息，取消/超时映射为既有机器码。
+    if(current instanceof DocMindError) return current.code === 'CANCELLED'
+      ? {code:'CANCELLED', message:current.message}
+      : current.code === 'TIMEOUT'
+        ? {code:'UPSTREAM_TIMEOUT', message:current.message}
+        : {code:'DOCMIND_FAILED', message:current.message}
     if(['EACCES','EPERM','ENOSPC','EIO','EBUSY'].includes(code??'')) return {code:'STORAGE_ERROR',message:'学习记录无法保存，请检查课程目录与可用空间；本次结果未发布。'}
-    if(['CONSENT_REQUIRED','NO_USABLE_SOURCE','VERSION_CONFLICT','QUESTION_INVALID','INVALID_SOURCE','MODEL_NOT_CONFIGURED','FOLDER_MISSING'].includes(code??'')) return {code:code!,message:current.message}
+    if(['CONSENT_REQUIRED','NO_USABLE_SOURCE','VERSION_CONFLICT','QUESTION_INVALID','INVALID_SOURCE','MODEL_NOT_CONFIGURED','DOCMIND_NOT_CONFIGURED','LIMIT_EXCEEDED','FOLDER_MISSING'].includes(code??'')) return {code:code!,message:current.message}
     current=current.cause
   }
   return {code:'INVALID_OUTPUT',message:'生成未完成或内容校验失败，本次结果未发布，请检查资料与模型配置后重试。'}

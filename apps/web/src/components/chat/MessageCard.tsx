@@ -5,26 +5,53 @@
  * - 用户：右对齐淡蓝气泡 + 下方 hover 时间/复制操作；
  * - Agent：全宽左对齐无气泡无卡，块序列 = ReasoningRow → markdown 正文；
  *   底部追加 hover 时间/复制操作；
- * - 失败：错误行 + 重试键。
- * （「转复习卡」与「从此处创建分支」已按需求取消；选区浮动按钮一并移除。）
+ * - 失败：错误行 + 重试键；
+ * - 对话即出题（F4）：hover 操作区「转复习卡」按钮 + 划选段落后的浮动按钮，
+ *   复用 TaskGenerator 生成永久复习卡到 tasks/ 池。
  */
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import ThinkingFold from "@/src/components/chat/ThinkingFold";
 import ToolFold from "@/src/components/chat/ToolFold";
 import AskFold from "@/src/components/chat/AskFold";
 import MarkdownView from "@/src/components/chat/MarkdownView";
 import MessageActions from "@/src/components/chat/MessageActions";
 import { Clawzy } from "@/src/components/mascot";
+import useInstantCard from "@/src/hooks/useInstantCard";
 import type { ChatMessage } from "@/src/store/useAppStore";
 
 interface MessageCardProps {
   message: ChatMessage;
   onRetry?: () => void;
+  onBranch?: () => void | Promise<void>;
+  branchUnavailable?: boolean;
 }
 
-export default function MessageCard({ message, onRetry }: MessageCardProps) {
+export default function MessageCard({ message, onRetry, onBranch, branchUnavailable }: MessageCardProps) {
+  const { create, feedback } = useInstantCard();
+  const [selectedSnippet, setSelectedSnippet] = useState("");
   const contentRef = useRef<HTMLDivElement>(null);
+
+  const onMouseUpInContent = useCallback(() => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+    const anchored = contentRef.current?.contains(selection?.anchorNode ?? null);
+    const focused = contentRef.current?.contains(selection?.focusNode ?? null);
+    setSelectedSnippet(anchored && focused ? text : "");
+  }, []);
+
+  const convertSnippet = useCallback(
+    (text: string) => {
+      setSelectedSnippet("");
+      void create(text, `对话精妙段落：${text.slice(0, 24)}`);
+    },
+    [create],
+  );
+
+  const actionHandler = useCallback(
+    (text: string) => convertSnippet(text),
+    [convertSnippet],
+  );
 
   if (message.role === "user") {
     return (
@@ -36,7 +63,15 @@ export default function MessageCard({ message, onRetry }: MessageCardProps) {
           text={message.content}
           createdAt={message.createdAt}
           clock="start"
+          onInstantCard={actionHandler}
+          onBranch={onBranch}
+          branchUnavailable={branchUnavailable}
         />
+        {feedback.message ? (
+          <span role="status" className="text-[12px] text-text-faint">
+            {feedback.message}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -63,11 +98,24 @@ export default function MessageCard({ message, onRetry }: MessageCardProps) {
         <AskFold question={message.ask.question} />
       ) : null}
       {message.content ? (
-        <div ref={contentRef} className="min-w-0">
+        <div ref={contentRef} className="min-w-0" onMouseUp={onMouseUpInContent}>
           <MarkdownView content={message.content} streaming={streaming} />
           {streaming ? (
             <span className="stream-cursor text-accent-focus">█</span>
           ) : null}
+        </div>
+      ) : null}
+      {selectedSnippet ? (
+        <div className="absolute right-0 top-0 z-10 rounded-lg border border-border-line bg-bg-panel p-1 shadow-lg">
+          <button
+            type="button"
+            aria-label="把选区转为复习卡片"
+            onClick={() => convertSnippet(selectedSnippet)}
+            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-accent-focus transition-colors hover:bg-bg-card"
+          >
+            <span className="max-w-[180px] truncate">“{selectedSnippet}”</span>
+            转复习卡
+          </button>
         </div>
       ) : null}
       {!streaming ? (
@@ -75,7 +123,15 @@ export default function MessageCard({ message, onRetry }: MessageCardProps) {
           text={message.content || message.thinking || ""}
           createdAt={message.createdAt}
           clock="end"
+          onInstantCard={actionHandler}
+          onBranch={message.content ? onBranch : undefined}
+          branchUnavailable={branchUnavailable}
         />
+      ) : null}
+      {feedback.message ? (
+        <span role="status" className="text-[12px] text-text-faint">
+          {feedback.message}
+        </span>
       ) : null}
       {message.error ? (
         <div

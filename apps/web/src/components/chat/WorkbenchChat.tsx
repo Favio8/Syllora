@@ -9,6 +9,7 @@ import WakeupCard from './WakeupCard';
 import ModelSeat from './ModelSeat';
 import AgentPermissionPicker from './AgentPermissionPicker';
 import { useChatStream } from '@/src/hooks/useChatStream';
+import { useSessionActions } from '@/src/hooks/useSessionActions';
 import { useAppStore } from '@/src/store/useAppStore';
 
 /** 输入框自动增高的上限：再高就内部滚动，免得把对话区挤没。 */
@@ -32,6 +33,7 @@ export default function WorkbenchChat({ courseName, children, onUpload, onPracti
   const setChatFocus = useAppStore(s => s.setChatFocus);
   const flash = useAppStore(s => s.flashStatusBanner);
   const { send, answer, retryLast, stop } = useChatStream();
+  const { forkSession } = useSessionActions();
   const scroll = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const follow = useRef(true);
@@ -53,6 +55,12 @@ export default function WorkbenchChat({ courseName, children, onUpload, onPracti
     } else { void send(value.trim()); setDraft(key, ''); }
     input.current?.focus();
   }
+  async function branch(index: number) {
+    if (!sessionId || !courseId) return;
+    try { await forkSession(sessionId, courseId, index); }
+    catch (error) { flash(`无法创建分支：${error instanceof Error ? error.message : String(error)}`); }
+  }
+  let persistedIndex = -1;
   let lastUserText = '';
   return <div className="workbench-chat">
     <div className="workbench-chat-scroll" ref={scroll} onScroll={() => { const el = scroll.current; if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64; }}>
@@ -62,9 +70,12 @@ export default function WorkbenchChat({ courseName, children, onUpload, onPracti
         {wakeup && <WakeupCard card={wakeup} />}
         {!messages.length && <div className="workbench-chat-welcome"><span className="brand-icon"><BookOpen size={21} /></span><div><strong>Syllora <small>学习伙伴</small></strong><p>关于{courseName}，有什么想一起弄明白的？<br />从一个问题开始，或用练习检查你的理解。</p></div></div>}
         {messages.map(message => {
+          const persisted = message.persisted !== false && (message.role === 'user' || Boolean(message.content));
+          if (persisted) persistedIndex++;
+          const index = persistedIndex;
           if (message.role === 'user' && message.persisted !== false) lastUserText = message.content;
           const retryText = lastUserText;
-          return <div className={`agent-message ${message.role}`} key={message.id}><MessageCard message={message} onRetry={message.error ? () => retryLast(retryText) : undefined} /></div>;
+          return <div className={`agent-message ${message.role}`} key={message.id}><MessageCard message={message} onRetry={message.error ? () => retryLast(retryText) : undefined} onBranch={persisted && sessionId ? () => branch(index) : undefined} branchUnavailable={streaming} /></div>;
         })}
         {streaming && <div className="workbench-chat-status" role="status"><LoaderCircle size={15} className="spin" />正在准备回答…</div>}
       </div>

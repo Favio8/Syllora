@@ -14,15 +14,12 @@ afterEach(async () => { for (const root of roots.splice(0)) { if (!root.startsWi
 
 interface Note { id: string; title: string; wikilinks: string[]; createdAt: number; updatedAt: number }
 
-async function setup(options: { withModel?: boolean } = {}) {
+async function setup() {
   await mkdir(temp, { recursive: true })
   const root = await mkdtemp(join(temp, 'case-')), folder = join(root, 'course')
   roots.push(root)
   await mkdir(folder)
-  // 笔记 AI 的入参校验发生在模型调用之前：给一个"看起来已配置"的 config 就能单独测校验分支。
-  const projects = new SylloraProjects(join(root, 'app'), options.withModel
-    ? { config: async () => ({ providerId: 'fixture', model: 'fixture-model', baseUrl: 'http://127.0.0.1:9/v1', protocol: 'openai' as const, apiKey: 'fixture', apiKeyEnv: null, temperature: 0.3, maxConcurrency: 1, defaultMode: 'quick' as const }) }
-    : {})
+  const projects = new SylloraProjects(join(root, 'app'), {})
   const opened = await projects.handle('openCourse', { path: folder }) as { id: string }
   return { root, folder, projects, id: opened.id }
 }
@@ -75,18 +72,6 @@ describe('course notes', () => {
     expect(await stat(notePath(s, note.id)).catch(() => null)).toBeNull()
     expect(await list(s)).toEqual([])
     await expect(s.projects.handle('notes/read', { courseId: s.id, noteId: note.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
-  })
-
-  it('笔记 AI：选段类动作缺选区、自定义缺指令都在调用模型前拒绝', async () => {
-    const s = await setup({ withModel: true })
-    const note = await create(s, '线性代数复习')
-    await expect(s.projects.handle('notes/suggest', { courseId: s.id, noteId: note.id, title: '线性代数复习', action: 'rewrite' }))
-      .rejects.toMatchObject({ code: 'SELECTION_REQUIRED' })
-    await expect(s.projects.handle('notes/suggest', { courseId: s.id, noteId: note.id, title: '线性代数复习', action: 'custom', instruction: '   ' }))
-      .rejects.toMatchObject({ code: 'INSTRUCTION_REQUIRED' })
-    // 无资料时"续写/总结"这类以资料为依据的动作仍被挡（保持原行为）
-    await expect(s.projects.handle('notes/suggest', { courseId: s.id, noteId: note.id, title: '线性代数复习', action: 'continue', prefix: '矩阵' }))
-      .rejects.toMatchObject({ code: 'NO_USABLE_SOURCE' })
   })
 
   it('rejects foreign course IDs, unknown notes and traversal-shaped note IDs', async () => {

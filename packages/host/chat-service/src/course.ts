@@ -62,53 +62,18 @@ export class CourseNotFoundError extends Error {
  */
 const MASTERY_ALPHA = 0.3
 
-const COURSE_ID_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-interface CourseIdentity { readonly id?: unknown; readonly courseId?: unknown; readonly course_id?: unknown }
-
-function uuidOf(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) return null
-  const record = value as CourseIdentity
-  for (const candidate of [record.id, record.courseId, record.course_id]) {
-    if (typeof candidate === 'string' && COURSE_ID_UUID_RE.test(candidate)) return candidate.toLowerCase()
+function courseDirOf(workspaceRoot: string, courseId: string): string {
+  if (courseId === '' || /[\/]/.test(courseId) || courseId.includes('..') || courseId.startsWith('.')) {
+    throw new CourseNotFoundError(courseId)
   }
-  return null
-}
-
-/**
- * B1：课程身份解析。历史契约 courseId = 项目根 basename（同名文件夹的两门课
- * 会共用同一个 chat 课程，会话与消息互相串入）。现在优先按课程 UUID 解析：
- * 读课程状态文件里的课程 id，与请求的 courseId 相等即认定本目录；仍兼容
- * basename 形式的旧客户端（升级前的会话历史按目录分片，不随 id 变化）。
- * 返回真实目录（平台大小写差异在此归一），无法解析返回 null。
- */
-export async function resolveCourseDir(workspaceRoot: string, courseId: string): Promise<string | null> {
-  const raw = courseId.trim()
-  if (raw === '' || /[\\/]/.test(raw) || raw.includes('..') || raw.startsWith('.')) return null
-  const direct = await stat(workspaceRoot).catch(() => null)
-  if (direct?.isDirectory() !== true) return null
-  const wanted = raw.toLowerCase()
-  const files = [join(stateDirOf(workspaceRoot), 'course.json'), join(workspaceRoot, 'syllora.json')]
-  for (const file of files) {
-    const text = await readFile(file, 'utf8').catch(() => null)
-    if (text === null) continue
-    let stored: { courses?: unknown[] } | null = null
-    try { stored = JSON.parse(text) as { courses?: unknown[] } } catch { continue }
-    for (const course of stored?.courses ?? []) {
-      if (uuidOf(course) === wanted) return workspaceRoot
-    }
-  }
-  return raw === basename(workspaceRoot) ? workspaceRoot : null
-}
-
-async function courseDirOf(workspaceRoot: string, courseId: string): Promise<string> {
-  const dir = await resolveCourseDir(workspaceRoot, courseId)
-  if (dir === null) throw new CourseNotFoundError(courseId)
-  return dir
+  // 项目即课程：courseId = 项目根 basename；不匹配视为课程不存在（避免跨项目串数据）。
+  const expected = basename(workspaceRoot)
+  if (courseId !== expected) throw new CourseNotFoundError(courseId)
+  return workspaceRoot
 }
 
 async function requireCourse(workspaceRoot: string, courseId: string): Promise<string> {
-  const dir = await courseDirOf(workspaceRoot, courseId)
+  const dir = courseDirOf(workspaceRoot, courseId)
   if (!(await stat(dir).catch(() => null))?.isDirectory()) throw new CourseNotFoundError(courseId)
   return dir
 }
@@ -126,7 +91,7 @@ interface BuildContext {
 
 export async function configForSession(workspaceRoot: string, courseId: string, sessionId: string | null | undefined, fallback: ResolvedChatConfig | null): Promise<ResolvedChatConfig | null> {
   if (sessionId === null || sessionId === undefined || sessionId === '') return fallback
-  const historyDir = join(stateDirOf(await courseDirOf(workspaceRoot, courseId)), 'history')
+  const historyDir = join(stateDirOf(courseDirOf(workspaceRoot, courseId)), 'history')
   // Event logs are authoritative for migrated/live Agent sessions. The
   // legacy SessionStore remains the fallback for sessions not yet migrated.
   const events = new SessionEventStore(historyDir)
@@ -213,7 +178,7 @@ interface MutableJob {
 }
 
 /**
- * UI-7：评测幂等账本（evalId → 已结算帧）。M4：真实 evalId 持久化到
+ * UI-7：评测幂等账本（evalId → 已结算帧）。��真实 evalId 持久化到
  * `.syllora/eval-ledger/<id>.json`——旧实现纯内存，宿主在 SM-2 已落盘、
  * 账本登记前崩溃后，同 evalId 重试会二次计分。TTL 10 分钟，超过 500 个文件
  * 按 mtime 清扫。匿名（无 evalId）提交无法被客户端重放匹配，不做记账。
@@ -336,7 +301,7 @@ export class JobManager {
   }
 }
 
-/** M1：模块级单例——Agent runner 每个 turn 都新建 createCourseService，
+/** ��模块级单例——Agent runner 每个 turn 都新建 createCourseService，
  * 实例级 jobs 表会让 UI sync 与 Agent syncSources 工具的同课程去重互相
  * 失明（双跑构建 = 双倍 LLM 计费 + 并发写课程文件）。跨实例共享后 UI-8
  * 去重对全部入口生效。 */
@@ -346,23 +311,6 @@ const jobs = new JobManager()
  * UI-7：evalSubmit 的实际执行体。`record` 由幂等包装器注入——每一帧在
  * 下发前登记进账本，命中重试时整体重放，SM-2/progress 不会二次 settle。
  */
-// CR-05：同一工作区、同一 evalId 的在途请求串行结算；等待者在前一个请求
-// 写完完整账本后重放，避免全局 evalId 集合串课程或把未完成账本覆盖掉。
-const evalSubmissions = new Map<string, Promise<void>>()
-async function acquireEvalSubmission(workspaceRoot: string, evalId: string): Promise<() => void> {
-  const key = evalLedgerFile(workspaceRoot, evalId)
-  const previous = evalSubmissions.get(key) ?? Promise.resolve()
-  let release!: () => void
-  const current = new Promise<void>(done => { release = done })
-  const tail = previous.then(() => current)
-  evalSubmissions.set(key, tail)
-  await previous
-  return () => {
-    release()
-    if (evalSubmissions.get(key) === tail) evalSubmissions.delete(key)
-  }
-}
-
 async function* runEvalSubmit(
   workspaceRoot: string,
   courseId: string,
@@ -786,42 +734,37 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       return { courseId, tasks: cards }
     },
     async *evalSubmit(workspaceRoot, courseId, taskId, answer, sessionId = null, evalId: string | null = null) {
-      // CR-05：同一工作区、同一 evalId 的在途请求串行结算（等待者在前一个请求写完
-      // 完整账本后重放，避免跨课程共用 evalId 或覆盖未完成账本）。
-      const release = evalId !== null && evalId !== '' ? await acquireEvalSubmission(workspaceRoot, evalId) : () => {}
-      try {
-        // UI-7 + M4：评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
-        // 若第一次的 settle（SM-2/progress）已落盘，重试就是重复计分。同一
-        // evalId（taskId+会话+作答的稳定指纹）在 TTL 窗口内直接重放已结算帧；
-        // 真实 evalId 走磁盘（宿主重启后仍可重放），匿名键留内存。
-        if (evalId !== null && evalId !== '') {
-          const prior = await loadLedgerFrames(workspaceRoot, evalId)
-          if (prior !== null) {
-            for (const frame of prior) yield frame
-            return
-          }
-        }
-        const frames: Array<Record<string, unknown>> = []
-        yield* runEvalSubmit(workspaceRoot, courseId, taskId, answer, sessionId, getConfig, (frame) => {
-          frames.push(frame)
-          return frame
-        }, evalId !== null && evalId !== ''
-          ? tail => saveLedgerFrames(workspaceRoot, evalId, [...frames, ...tail]).catch(error => {
-            // RV-18：尾帧账本落盘失败同样留告警（静默吞掉会让重试二次计分且无迹可查）。
-            console.warn(`[syllora] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
-          })
-          : undefined)
-        if (evalId !== null && evalId !== '') {
-          // RV-18：账本落盘失败不能静默——settle（SM-2/progress）已写盘而账本
-          // 缺失时，同 evalId 重试会二次计分。留告警让运维可见（客户端无从感知）。
-          await saveLedgerFrames(workspaceRoot, evalId, frames).catch(error => {
-            console.warn(`[syllora] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
-          })
+      // UI-7 + ��评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
+      // 若第一次的 settle（SM-2/progress）已落盘，重试就是重复计分。同一
+      // evalId（taskId+会话+作答的稳定指纹）在 TTL 窗口内直接重放已结算帧；
+      // 真实 evalId 走磁盘（宿主重启后仍可重放），匿名键留内存。
+      if (evalId !== null && evalId !== '') {
+        const prior = await loadLedgerFrames(workspaceRoot, evalId)
+        if (prior !== null) {
+          for (const frame of prior) yield frame
           return
         }
-        // RV-14：匿名提交的进程内账本已删除——键为自增 anon_N，无任何读取路径
-        // （重放只走磁盘 loadLedgerFrames），纯 write-only 死状态。
-      } finally { release() }
+      }
+      const frames: Array<Record<string, unknown>> = []
+      yield* runEvalSubmit(workspaceRoot, courseId, taskId, answer, sessionId, getConfig, (frame) => {
+        frames.push(frame)
+        return frame
+      }, evalId !== null && evalId !== ''
+        ? tail => saveLedgerFrames(workspaceRoot, evalId, [...frames, ...tail]).catch(error => {
+          // RV-18：尾帧账本落盘失败同样留告警（静默吞掉会让重试二次计分且无迹可查）。
+          console.warn(`[syllora] eval 幂等账本（尾帧）落盘失败（evalId=${evalId}）:`, error instanceof Error ? error.message : String(error))
+        })
+        : undefined)
+      if (evalId !== null && evalId !== '') {
+        // RV-18：账本落盘失败不能静默——settle（SM-2/progress）已写盘而账本
+        // 缺失时，同 evalId 重试会二次计分。留告警让运维可见（客户端无从感知）。
+        await saveLedgerFrames(workspaceRoot, evalId, frames).catch(error => {
+          console.warn(`[syllora] eval 幂等账本落盘失败（evalId=${evalId}），重试将二次结算:`, error instanceof Error ? error.message : String(error))
+        })
+        return
+      }
+      // RV-14：匿名提交的进程内账本已删除——键为自增 anon_N，无任何读取路径
+      // （重放只走磁盘 loadLedgerFrames），纯 write-only 死状态。
     },
 
     job(jobId) {

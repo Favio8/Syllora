@@ -23,13 +23,9 @@ import type {
   SyncResponse,
   SettingsPayload,
   ToolInventoryEntry,
-  NoteAiInput,
-  NoteAiAction,
   ProviderModelPayload,
   ProviderCatalogEntry,
   ProviderProtocol,
-  ConnectionTestResult,
-  ProviderExportPayload,
   SessionModelDirectory,
   SessionModelSelection,
   WorkspaceRegistryPayload,
@@ -56,12 +52,9 @@ export class ApiError extends Error {
 }
 
 /**
- * 宿主启动参数（token 等）。两种注入来源：
+ * FL-30：宿主启动参数（token 等）。两种注入来源：
  * 1. `syllora serve` 托管静态 UI 时由 index tap 注入（同源，生产路径）；
  * 2. `next dev` 时由根布局从 host.json 读取注入（开发路径）。
- * CR-16 之后生产路径不再注入 token（HTML 不含凭据），改用 `/api/session`
- * 换来的 HttpOnly 会话 Cookie；这里的 bootstrap token 只服务 `next dev` 与
- * 桌面壳注入的旧式启动参数。
  */
 function bootstrapToken(): string | null {
   const boot = (globalThis as unknown as { __SYLLORA__?: { token?: unknown } }).__SYLLORA__;
@@ -73,12 +66,11 @@ function authHeaders(): Record<string, string> {
   return token === null ? {} : { Authorization: `Bearer ${token}` };
 }
 
-/**
- * 笔记图片 URL。`<img>` 不能带 Authorization 头——CR-16 之后改由浏览器自动
- * 携带 `/api/session` 下发的会话 Cookie 授权，URL 里不再出现任何凭据。
- */
+/** 笔记图片的鉴权 URL。`<img>` 不能带 Authorization 头，所以 token 走 query（宿主支持 `?token=`）。 */
 export function noteAssetUrl(courseId: string, name: string): string {
-  return `/api/syllora/notes/asset?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(name)}`;
+  const base = `/api/syllora/notes/asset?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(name)}`;
+  const token = bootstrapToken();
+  return token === null ? base : `${base}&token=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -89,7 +81,6 @@ export function noteAssetUrl(courseId: string, name: string): string {
 async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/${method}`, {
     method: "POST",
-    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload === undefined ? {} : { payload }),
     signal,
@@ -117,7 +108,6 @@ async function rpc<T>(method: string, payload?: unknown, signal?: AbortSignal): 
 async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/syllora/${action}`, {
     method: "POST",
-    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ payload }),
     signal,
@@ -144,8 +134,6 @@ async function sylloraRpc<T>(action: string, payload: unknown = {}, signal?: Abo
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
-    // CR-16：/api/session 下发的 HttpOnly 会话 Cookie 必须让浏览器带上。
-    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
   });
   const text = await response.text();
@@ -179,7 +167,7 @@ async function uploadFiles<T>(path: string, files: File[], signal?: AbortSignal)
     // 目录选择器会提供相对路径；它能让同名资料在归档后仍可辨识来源。
     form.append("files", file, file.webkitRelativePath || file.name);
   }
-  const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: { ...authHeaders() }, body: form, signal });
+  const response = await fetch(path, { method: "POST", headers: { ...authHeaders() }, body: form, signal });
   const text = await response.text();
   // UI-25：同 request——非 JSON 响应转可读的 ApiError。
   let body: unknown = {};
@@ -210,7 +198,6 @@ export async function* streamSse<T extends { event: string }>(
 ): AsyncGenerator<T> {
   const response = await fetch(path, {
     method: "POST",
-    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
@@ -293,6 +280,23 @@ function parseSseBlock<T extends { event: string }>(block: string): T | null {
     return null;
   }
 }
+
+/** DocMind 文档解析设置（settings.docmind.*）：是否已配置 + 端点。 */
+export interface DocMindSettings {
+  configured: boolean;
+  endpoint: string;
+}
+
+/** settings.docmind.save 的入参（partial 语义：缺省字段保留现值）。 */
+export interface DocMindSaveInput {
+  accessKeyId?: string;
+  accessKeySecret?: string;
+  endpoint?: string | null;
+}
+
+/** settings.* 返回的完整 SettingsPayload 上额外带 docmind 段
+ *  （types/api.ts 尚未同步该段，前端先用并集类型读取）。 */
+export type SettingsPayloadWithDocMind = SettingsPayload & { docmind?: DocMindSettings };
 
 // ---------------------------------------------------------------------------
 // 端点封装
@@ -425,8 +429,6 @@ export const api = {
     defaultMode?: SettingsPayload["ui"]["defaultMode"];
     agentPreset?: string;
     agentSystemPrompt?: string;
-    /** 教学技能 id；空串＝不启用。 */
-    agentSkill?: string;
     permissionPreset?: string;
     plugins?: Record<string, boolean>;
   }) => rpc<SettingsPayload>("settings.update", payload),
@@ -602,26 +604,13 @@ export const api = {
   activateProvider: (providerId: string) =>
     rpc<SettingsPayload>("settings.activateProvider", { providerId }),
 
-  /** 需求七：连接测试（表单当前值即可测，未保存也能用）。 */
-  testConnection: (payload: {
-    baseUrl: string;
-    protocol?: ProviderProtocol;
-    apiKey?: string;
-    apiKeyEnv?: string;
-    providerId?: string;
-    model?: string;
-  }) => rpc<ConnectionTestResult>("settings.testConnection", payload),
+  /** DocMind 文档解析设置：只读探测是否已配置（configured + endpoint）。 */
+  docmindSettings: () =>
+    rpc<DocMindSettings>("settings.docmind.get"),
 
-  /** 需求七：供应商顺序（全序，服务端校验为已配置项的全排列）。 */
-  reorderProviders: (providerIds: string[]) =>
-    rpc<SettingsPayload>("settings.reorderProviders", { providerIds }),
-
-  /** 需求七：导出结构（不含明文密钥）。 */
-  exportProviders: () => rpc<ProviderExportPayload>("settings.exportProviders"),
-
-  /** 需求七：导入结构；密钥一律不导入，需逐项补 Key。 */
-  importProviders: (payload: unknown) =>
-    rpc<{ saved: SettingsPayload; imported: string[]; skipped: string[] }>("settings.importProviders", { payload }),
+  /** 保存 DocMind 凭据/端点：endpoint 传 null 表示用默认地址；缺省字段保留现值。 */
+  saveDocMind: (input: DocMindSaveInput) =>
+    rpc<SettingsPayloadWithDocMind>("settings.docmind.save", input),
 
   // ---------------------------------------------------------------------------
   // 笔记（Notes）：宿主把 Markdown 存在 {课程文件夹}/notes/{id}.md + notes/index.json。
@@ -638,11 +627,22 @@ export const api = {
       sylloraRpc<{ meta: NoteMeta }>("notes/update", { courseId, noteId, ...payload }),
     delete: (courseId: string, noteId: string) =>
       sylloraRpc<{ deleted: boolean }>("notes/delete", { courseId, noteId }),
-    /** 笔记 AI：一次一种动作（续写/总结/扩写/改写/润色/精简/自定义指令）→ 可直接粘进笔记的正文。 */
-    suggest: (courseId: string, payload: NoteAiInput) =>
-      sylloraRpc<{ text: string; sourceIds: string[]; action: NoteAiAction }>("notes/suggest", { courseId, ...payload }),
+    /** AI 续写：标题 + 光标前文 → 基于课程资料的续写正文。 */
+    suggest: (courseId: string, payload: { title: string; prefix: string }) =>
+      sylloraRpc<{ continuation: string; sourceIds: string[] }>("notes/suggest", { courseId, ...payload }),
     /** 上传笔记图片（base64）。返回落盘后的文件名，写进正文的相对引用里。 */
     uploadImage: (courseId: string, payload: { ext: string; data: string }) =>
       sylloraRpc<{ name: string }>("notes/uploadImage", { courseId, ...payload }),
   },
+
+  /** ��课程知识图谱（资料+电子书图谱化：章节/知识点节点 + 顺序/父子/归属边；agent 概念抽取见 graphBuild）。 */
+  graph: (courseId: string) =>
+    sylloraRpc<{
+      nodes: Array<{ id: string; label: string; kind: 'chapter' | 'point' | 'concept'; group?: string }>;
+      edges: Array<{ source: string; target: string; kind: 'order' | 'parent' | 'belongs' | 'related' }>;
+      books: Array<{ ebookId: string; fileName: string }>;
+    }>("course/graph", { courseId }),
+  /** ��agent 自动建谱 —— 对课程内已结构化电子书调用模型抽取概念与关联，落 graph.json。 */
+  graphBuild: (courseId: string) =>
+    sylloraRpc<{ jobId: string }>("course/graph-build", { courseId }),
 };

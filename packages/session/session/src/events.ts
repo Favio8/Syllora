@@ -149,8 +149,6 @@ export interface SessionProjection {
     agentPreset: string
     /** 自定义预设提示词；旧事件没有该字段，读取时按空串处理。 */
     agentSystemPrompt?: string
-    /** 教学技能 id；旧事件没有该字段，读取时按空串处理。 */
-    agentSkill?: string
     permissionPreset: 'read-only' | 'workspace-write' | 'danger-full-access'
     plugins: Record<string, boolean>
     cwd?: string
@@ -472,11 +470,9 @@ export class SessionEventStore {
         const permission = payload['permissionPreset']
         const plugins = payload['plugins']
         const systemPrompt = payload['agentSystemPrompt']
-        const skill = payload['agentSkill']
         agentConfig = {
           agentPreset: payload['agentPreset'] === 'general' ? 'general' : 'syllora-learning',
           agentSystemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
-          agentSkill: typeof skill === 'string' ? skill : '',
           permissionPreset: permission === 'read-only' || permission === 'danger-full-access' ? permission : 'workspace-write',
           plugins: typeof plugins === 'object' && plugins !== null
             ? Object.fromEntries(Object.entries(plugins).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'))

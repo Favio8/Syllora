@@ -42,16 +42,6 @@ async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<400;i
 async function initialize(s:Awaited<ReturnType<typeof setup>>,acceptPartial=false){const scan=await s.projects.handle('scan',{courseId:s.id}) as any;const files=scan.files.filter((f:any)=>f.status==='ready');const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint])),acceptPartial}) as any;return settle(s.projects,job.jobId)}
 const DOC='# 第一章\n\n单位矩阵的主对角线元素为一，其余元素为零。\n\n# 第二章\n\n矩阵乘法需要检查左矩阵列数与右矩阵行数是否相等。\n'
 describe('course folder initialization',()=>{
-  it('CR-14: retries loading projects after a damaged index is repaired without restarting',async()=>{
-    const s=await setup(),filename=join(s.app,'.syllora','projects.json')
-    const original=await readFile(filename,'utf8')
-    await writeFile(filename,'{broken')
-    // 同一实例先失败一次：load 必须清掉 ready 缓存，修好文件后无需重启即可重试。
-    const restarted=new SylloraProjects(s.app)
-    await expect(restarted.handle('state',{})).rejects.toThrow()
-    await writeFile(filename,original)
-    expect((await restarted.handle('state',{}) as any).courses[0].id).toBe(s.id)
-  })
   it('persists one stable identity and restores records after reopening and moving folders',async()=>{
     const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC)
     const first=await initialize(s);expect(first.job.state).toBe('succeeded');expect(first.state.courses[0].points).toHaveLength(2);expect(first.state.courses[0].scope).toEqual([])
@@ -440,50 +430,5 @@ describe('application-managed course directories',()=>{
     const result=await settle(s.projects,started.jobId)
     expect(result.job.state).toBe('succeeded');expect(result.state.courses[0].materials[0].accepted).toBe(true)
     expect(result.state.courses[0].materials[0].pageIssues).toEqual([{num:2,reason:'blank-page'}])
-  })
-})
-
-describe('PRD 需求一：课程顺序持久化',()=>{
-  async function threeCourses(){await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'order-'));roots.push(root)
-    const app=join(root,'app'),projects=new SylloraProjects(app,{config:async()=>config})
-    const a=join(root,'甲课'),b=join(root,'乙课'),c=join(root,'丙课');await mkdir(a);await mkdir(b);await mkdir(c)
-    const first=await projects.handle('openCourse',{path:a}) as {id:string}
-    const second=await projects.handle('openCourse',{path:b}) as {id:string}
-    const third=await projects.handle('openCourse',{path:c}) as {id:string}
-    return {root,projects,first:first.id,second:second.id,third:third.id}
-  }
-  const orderOf=async(projects:SylloraProjects)=>((await projects.handle('state',{}) as any).projects as Array<{id:string}>).map(p=>p.id)
-
-  it('persists an explicit course order and survives a restart',async()=>{
-    const s=await threeCourses()
-    // remember() 置顶：最后打开的排最前。
-    expect(await orderOf(s.projects)).toEqual([s.third,s.second,s.first])
-    const saved=await s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,s.third]}) as {saved:boolean;order:string[]}
-    expect(saved.saved).toBe(true)
-    expect(saved.order).toEqual([s.first,s.second,s.third])
-    expect(await orderOf(s.projects)).toEqual([s.first,s.second,s.third])
-    // 重启后顺序保持（写在 projects.json，不是内存态）。
-    const restarted=new SylloraProjects(join(s.root,'app'),{config:async()=>config})
-    expect(await orderOf(restarted)).toEqual([s.first,s.second,s.third])
-  })
-
-  it('rejects an order that is not a permutation of the open courses',async()=>{
-    const s=await threeCourses()
-    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.second]})).rejects.toThrow()
-    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.first,s.third]})).rejects.toThrow()
-    await expect(s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,randomUUID()]})).rejects.toThrow()
-    // 顺序未被半途改写。
-    expect(await orderOf(s.projects)).toEqual([s.third,s.second,s.first])
-  })
-
-  it('keeps a newly opened course on top regardless of the saved order',async()=>{
-    const s=await threeCourses()
-    await s.projects.handle('reorderCourses',{courseIds:[s.first,s.second,s.third]})
-    const d=join(s.root,'丁课');await mkdir(d)
-    const fourth=await s.projects.handle('openCourse',{path:d}) as {id:string}
-    // 待确认事项 1（建议值）：新打开课程仍置顶，手动排序只调整既有课程相对顺序。
-    expect((await orderOf(s.projects))[0]).toBe(fourth.id)
-    const tail=(await orderOf(s.projects)).slice(1)
-    expect(tail).toEqual([s.first,s.second,s.third])
   })
 })

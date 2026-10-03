@@ -16,10 +16,8 @@
 import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import InteractiveViz from "./InteractiveViz";
-import ChartViz from "./ChartViz";
-import DiagramViz from "./DiagramViz";
 import { splitVizSegments } from "@/src/lib/vizSegments";
-import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, normalizeMathDelimiters } from "@/src/lib/markdownPlugins";
+import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS } from "@/src/lib/markdownPlugins";
 
 function codeLanguage(children: React.ReactNode): string {
   const first = Array.isArray(children) ? children[0] : children;
@@ -170,7 +168,7 @@ export default function MarkdownView({
       </p>
     );
   }
-  const segments = useMemo(() => splitVizSegments(normalizeMathDelimiters(content)), [content]);
+  const segments = useMemo(() => splitVizSegments(content), [content]);
   return (
     <div
       data-markdown-view=""
@@ -182,10 +180,6 @@ export default function MarkdownView({
             key={seg.key}
             code={seg.code}
           />
-        ) : seg.kind === "chart" ? (
-          <ChartViz key={seg.key} code={seg.code} closed={seg.closed} streaming={streaming} />
-        ) : seg.kind === "diagram" ? (
-          <DiagramViz key={seg.key} code={seg.code} closed={seg.closed} streaming={streaming} />
         ) : (
           <InteractiveViz
             key={seg.key}

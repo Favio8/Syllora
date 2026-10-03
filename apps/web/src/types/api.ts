@@ -6,23 +6,6 @@
  */
 
 /** 笔记元数据（后端 NoteMeta 对齐）。 */
-/** 笔记 AI 的动作：续写 / 总结 / 扩写 / 改写 / 润色 / 精简 / 自定义指令。 */
-export type NoteAiAction = "continue" | "summarize" | "expand" | "rewrite" | "polish" | "shorten" | "custom";
-
-/** 笔记 AI 入参：action 缺省 continue（旧调用方只传 title+prefix 时行为不变）。 */
-export interface NoteAiInput {
-  title: string;
-  action?: NoteAiAction;
-  /** 光标前文（续写用）。 */
-  prefix?: string;
-  /** 选中的一段（选段类动作的处理对象）。 */
-  selection?: string;
-  /** 整篇正文（总结等需要全文的动作）。 */
-  body?: string;
-  /** 自定义指令原文。 */
-  instruction?: string;
-}
-
 export interface NoteMeta {
   id: string;
   title: string;
@@ -88,8 +71,6 @@ export interface SettingsPayload {
     apiKeyConfigured: boolean;
   };
   providers: ProviderPayload[];
-  /** 需求七：供应商展示顺序（provider id 全序）。 */
-  providerOrder: string[];
   ui: { defaultMode: "quick" | "feynman" | "debug" };
   agent: {
     preset: string;
@@ -97,31 +78,9 @@ export interface SettingsPayload {
     systemPrompt: string;
     maxPromptChars: number;
     presets: Array<{ id: string; name: string; description: string; defaultPrompt: string }>;
-    /** 当前启用的教学技能 id；空串＝不启用。 */
-    skill: string;
-    /** 可选教学技能清单（正文在宿主侧 skills.ts）。 */
-    skills: Array<{ id: string; name: string; description: string }>;
   };
   permissions: { preset: string; presets: Array<{ id: string; name: string; sandboxMode: "read-only" | "workspace-write" | "danger-full-access"; approvalPolicy: "deny" | "ask" | "never"; description: string }> };
   plugins: { inventory: Array<{ id: string; name: string; enabled: boolean; source: "builtin" | "workspace"; reason?: string }> };
-}
-
-/** 需求七：连接测试结果分类（错误可操作）。 */
-export type ConnectionFailureKind = "unauthorized" | "not-found" | "protocol" | "model-missing" | "timeout" | "network" | "invalid-config";
-
-export interface ConnectionTestResult {
-  ok: boolean;
-  kind: ConnectionFailureKind | null;
-  message: string;
-  modelIds: string[];
-}
-
-/** 需求七：导出结构（不含明文密钥）。 */
-export interface ProviderExportPayload {
-  version: 1;
-  activeProviderId: string;
-  providers: Array<Pick<ProviderPayload, "id" | "name" | "model" | "baseUrl" | "protocol" | "temperature" | "maxConcurrency" | "models" | "apiKeyConfigured">>;
-  credentialsExcluded: true;
 }
 
 /** `tools.list`：Agent 当前可调用的工具（技能）清单；宿主按插件与运行能力决定可用性。 */
@@ -149,7 +108,7 @@ export interface WorkspaceRegistryPayload {
   items: WorkspaceItem[];
 }
 
-/** 打开/接管一个本地项目的响应（M1：course/session 字段在 M2/M3 回归）。 */
+/** 打开/接管一个本地项目的响应（��course/session 字段在 M2/M3 回归）。 */
 export interface OpenWorkspaceResponse {
   workspace: WorkspaceItem;
   created: boolean;

@@ -1,33 +1,34 @@
 {
-    "name":  "@syllora/chat-service",
-    "version":  "0.1.0",
-    "description":  "Syllora chat host: config.yaml/credentials resolution, dsh DeepSeekAdapter tool-client adapter, and the session/stream service wired to TutorSession",
-    "license":  "MIT",
-    "type":  "module",
-    "exports":  {
-                    ".":  {
-                              "types":  "./lib/types/index.d.ts",
-                              "default":  "./lib/types/index.js"
-                          },
-                    "./src/*":  "./src/*",
-                    "./package.json":  "./package.json"
-                },
-    "dependencies":  {
-                         "@syllora/agent":  "workspace:^",
-                         "@deepseek-ai/dsh-credentials":  "workspace:^",
-                         "@deepseek-ai/dsh-llm":  "workspace:^",
-                         "@deepseek-ai/dsh-llm-deepseek":  "workspace:^",
-                         "@syllora/llm-anthropic":  "workspace:^",
-                         "@syllora/session":  "workspace:^",
-                         "@syllora/tools":  "workspace:^",
-                         "js-yaml":  "^4.1.0",
-                         "@syllora/course-builder":  "workspace:^",
-                         "@syllora/learning":  "workspace:^"
-                     },
-    "peerDependencies":  {
-                             "@deepseek-ai/cordis":  "workspace:^"
-                         },
-    "devDependencies":  {
-                            "@deepseek-ai/cordis":  "workspace:^"
-                        }
+    "name": "@syllora/chat-service",
+    "version": "0.1.0",
+    "description": "Syllora chat host: config.yaml/credentials resolution, dsh DeepSeekAdapter tool-client adapter, and the session/stream service wired to TutorSession",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./lib/types/index.d.ts",
+            "default": "./lib/types/index.js"
+        },
+        "./src/*": "./src/*",
+        "./package.json": "./package.json"
+    },
+    "dependencies": {
+        "@alicloud/docmind-api20220711": "^1.4.16",
+        "@deepseek-ai/dsh-credentials": "workspace:^",
+        "@deepseek-ai/dsh-llm": "workspace:^",
+        "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
+        "@syllora/agent": "workspace:^",
+        "@syllora/course-builder": "workspace:^",
+        "@syllora/learning": "workspace:^",
+        "@syllora/llm-anthropic": "workspace:^",
+        "@syllora/session": "workspace:^",
+        "@syllora/tools": "workspace:^",
+        "js-yaml": "^4.1.0"
+    },
+    "peerDependencies": {
+        "@deepseek-ai/cordis": "workspace:^"
+    },
+    "devDependencies": {
+        "@deepseek-ai/cordis": "workspace:^"
+    }
 }

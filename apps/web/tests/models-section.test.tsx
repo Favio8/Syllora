@@ -77,7 +77,6 @@ function makePayload(providers: SettingsPayload["providers"]): SettingsPayload {
   return {
     version: 1,
     activeProviderId: providers.find((p) => p.apiKeyConfigured)?.id ?? "",
-    providerOrder: ["default"],
     llm: {
       provider: "deepseek",
       model: "deepseek-reasoner",
@@ -89,7 +88,7 @@ function makePayload(providers: SettingsPayload["providers"]): SettingsPayload {
     },
     providers,
     ui: { defaultMode: "quick" },
-    agent: { preset: "default", systemPrompt: "", maxPromptChars: 8000, presets: [], skill: "", skills: [] },
+    agent: { preset: "default", systemPrompt: "", maxPromptChars: 8000, presets: [] },
     permissions: { preset: "workspace-write", presets: [] },
     plugins: { inventory: [] },
   };

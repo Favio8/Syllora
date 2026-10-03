@@ -131,33 +131,14 @@
 .agent-message{min-width:0}
 .workbench-chat-status{display:flex;align-items:center;gap:8px;padding:8px 38px;font-size:10px;color:var(--muted)}
 .workbench-composer{padding:16px 38px;border-top:1px solid var(--line);flex-shrink:0;background:var(--white)}
-.workbench-composer form{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:11px;padding:12px 14px 10px;background:var(--white)}
-/* 自动增高由 JS 控制（下边界固定，只向上长）；这里去掉手动拖拽角。 */
-.integrated-shell .workbench-composer textarea{background:transparent;border:0;border-radius:0;resize:none;padding:0;min-height:30px;max-height:180px;font-size:12px;line-height:1.8;outline:none;box-shadow:none;color:var(--ink);overflow-y:auto}
+.workbench-composer form{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:11px;padding:14px;background:var(--white)}
+.integrated-shell .workbench-composer textarea{background:transparent;border:0;border-radius:0;resize:vertical;padding:0;min-height:58px;max-height:160px;font-size:12px;line-height:1.8;outline:none;box-shadow:none;color:var(--ink)}
 .workbench-composer form:focus-within{border-color:var(--blue)}
-/* 工具条在输入框内：左组工具/权限，右组模型/发送，与发送键同一水平线。 */
-.composer-toolbar{display:flex;align-items:flex-end;gap:10px;margin-top:8px}
-.composer-tools{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-.composer-submit{display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:0}
-.integrated-shell .composer-toolbar button.button{display:inline-flex;width:auto;align-items:center;font-size:10px;padding:7px 10px;border:1px solid var(--line);background:var(--sidebar);color:var(--muted);gap:7px}
-.integrated-shell .composer-toolbar button.button:hover:not(:disabled){color:var(--blue);border-color:var(--blue)}
-.integrated-shell .composer-toolbar .dropdown-trigger{display:inline-flex;width:auto;align-items:center;gap:6px;font-size:10px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--sidebar);color:var(--muted)}
-.integrated-shell .composer-toolbar .dropdown-trigger:hover{color:var(--blue);border-color:var(--blue)}
-.composer-permission-slot,.composer-model-slot{display:inline-flex;min-width:0}
-/* 需求四：模型座位此前用 Tailwind 的 hover:bg-bg-card，但该 token 下的类未生效，
-   悬停毫无反馈（点开一次菜单后用户就只看到"之前的悬浮效果没了"）。这里按工具条
-   其他按键的口径给同款悬停：文字/边框转蓝、底色提亮；抑制态不响应。 */
-.composer-toolbar .composer-model-seat:hover:not(:disabled){background:var(--white);border-color:var(--blue);color:var(--blue)}
-.composer-toolbar .composer-model-seat:disabled{opacity:.55}
-/* 悬停提示：显示在按键上方（贴着工具条），纯 CSS，不占布局。 */
-.composer-toolbar [data-tip]{position:relative}
-.composer-toolbar [data-tip]::after{
-  content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);
-  padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--white);
-  font-size:10px;line-height:1.5;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:60;
-}
-.composer-toolbar [data-tip]:hover::after{opacity:1}
+.workbench-composer-controls{display:flex;align-items:center;justify-content:flex-end;gap:16px;margin-top:8px}
+.workbench-composer-controls small{font-size:9px;color:var(--muted)}
 .integrated-shell .workbench-composer .composer-send{background:var(--blue);color:var(--white);padding:0;border:0;width:28px;height:28px}
+.integrated-shell .workbench-composer .composer-actions{margin-top:10px;display:flex;gap:8px}
+.integrated-shell .workbench-composer .composer-actions button{display:inline-flex;width:auto;font-size:10px;padding:7px 10px;border:1px solid var(--line);background:var(--sidebar);color:var(--muted);gap:7px}
 .workbench-chat-welcome{display:flex;gap:14px;padding:5px 0 28px;color:var(--muted)}
 .workbench-chat-welcome strong{color:var(--ink);font-size:12px;font-weight:600}
 .workbench-chat-welcome small{font-size:10px;margin-left:9px;color:var(--muted)}
@@ -351,43 +332,17 @@
 .primary-btn:hover{background:var(--blue-deep)}
 .primary-btn:disabled{opacity:.45;cursor:not-allowed}
 
-/* 「Agent 管理」弹窗：三项各一行，细节进二级面板（不再平铺全部设置）。 */
+/* 「Agent 管理」弹窗 */
 .sy-modal.sy-agent-manage{width:min(620px,100%);max-height:88dvh}
 .sy-agent-field{display:block;margin:16px 0}
 .sy-agent-field>span{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
 .sy-agent-field>span small{font-weight:400;color:var(--muted);margin-left:6px}
 .sy-agent-field textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:12.5px;line-height:1.8;resize:vertical;background:var(--white);color:var(--ink)}
-.sy-agent-field textarea:focus-visible{outline:none;border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
-/* 一级行：点进去看细节（插件/技能），不是把内容直接列出来。 */
-.sy-modal .sy-agent-entry{display:flex;width:100%;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink);text-align:left}
-.sy-modal .sy-agent-entry:hover{border-color:var(--blue);color:var(--blue)}
-.sy-modal .sy-agent-entry strong{display:block;text-align:left;font-size:12.5px}
-.sy-modal .sy-agent-entry small{display:block;text-align:left;color:var(--muted);font-size:11px;margin-top:2px}
-.sy-modal .sy-agent-back{display:inline-flex;align-items:center;gap:6px;margin:2px 0 10px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--muted);font-size:12px}
-.sy-modal .sy-agent-back:hover{color:var(--blue);border-color:var(--blue)}
-.sy-agent-plugins{display:grid;gap:8px}
-.sy-modal .sy-agent-plugin{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer}
-.sy-modal .sy-agent-plugin input{margin-top:3px;flex-shrink:0}
-.sy-modal .sy-agent-plugin strong{display:block;font-size:12.5px}
-.sy-modal .sy-agent-plugin small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-/* 技能面板：单选行（教学技能）+ 折叠的工具清单。 */
-.sy-modal .sy-agent-radios{display:grid;gap:8px}
-.sy-modal .sy-agent-radio{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer}
-.sy-modal .sy-agent-radio.is-selected{border-color:var(--blue);background:var(--blue-light)}
-.sy-modal.sy-agent-manage .sy-agent-radio input[type=radio]{width:auto;height:auto;margin-top:3px;flex-shrink:0;padding:0;border:0;background:transparent}
-/* syllora.css 的 .sy-app input:not([type=checkbox]):not([type=file]) 是 (0,3,1)（:not 各计一个属性选择器），
-   会把这个单选按钮撑成 width:100%；上面的选择器 (0,4,1) 才压得住。 */
-.sy-modal .sy-agent-radio strong{display:block;font-size:12.5px}
-.sy-modal .sy-agent-radio small{display:block;color:var(--muted);font-size:11px;margin-top:2px;line-height:1.6}
-.sy-agent-tools{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
-.sy-agent-tools>summary{cursor:pointer;width:fit-content;font-size:12px;color:var(--muted)}
-.sy-agent-tools>summary:hover{color:var(--blue)}
-.sy-agent-tools .sy-agent-skills{margin-top:12px;max-height:40dvh}
-/* 技能：只读清单，按策略分组。 */
-.sy-agent-skills{display:grid;gap:14px;max-height:52dvh;overflow:auto;padding-right:4px}
-.sy-agent-skills h3{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin-bottom:7px}
-.sy-agent-skills h3 small{font-size:10px;color:var(--muted)}
-.sy-agent-skill{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--white);margin-bottom:6px}
-.sy-agent-skill strong{display:block;font-size:12px;font-weight:500;line-height:1.7}
-.sy-agent-skill small{display:block;color:var(--muted);font-size:10.5px;margin-top:3px;overflow-wrap:anywhere}
+.sy-agent-field textarea:focus-visible{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light)}
+.sy-agent-radios,.sy-agent-plugins{display:grid;gap:8px}
+.sy-agent-radio,.sy-agent-plugin{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);cursor:pointer}
+.sy-agent-radio.is-selected{border-color:var(--blue);background:var(--blue-light)}
+.sy-agent-radio input,.sy-agent-plugin input{margin-top:3px;flex-shrink:0}
+.sy-agent-radio strong,.sy-agent-plugin strong{display:block;font-size:12.5px}
+.sy-agent-radio small,.sy-agent-plugin small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
 .sy-agent-error{color:#a12727;font-size:12px;margin:8px 0}

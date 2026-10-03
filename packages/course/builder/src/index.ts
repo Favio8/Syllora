@@ -10,8 +10,8 @@ export type { BuildReport } from './builder.ts'
 export { extractSourceText, extractTextToMarkdown, extractPdfPages, ExtractionError, EXTRACTED_EXTENSIONS } from './extract.ts'
 export { LlmTaskGenerator, TaskGenerationError, DEFAULT_MAX_RETRIES } from './task-gen.ts'
 export type { TaskGenerator } from './builder.ts'
-export { structuredCall, tryStructuredCall, extractJsonObject, extractXmlToolCall, salvageStructuredFields, ShapeFailureError } from './structured.ts'
-export type { StructuredCallClient, StructuredAttempt, SalvagedFields } from './structured.ts'
+export { structuredCall, extractJsonObject } from './structured.ts'
+export type { StructuredCallClient } from './structured.ts'
 export {
   DependencyInferrer,
   sanitizeDependencies,

@@ -13,10 +13,8 @@ import { join, resolve, sep } from 'node:path'
 export interface StaticHostOptions {
   /** Static dist root（apps/web 的 export 产物目录）。 */
   root: string
-  /** 注入 `window.__SYLLORA__` 的启动参数；null 不注入。 */
+  /** 注入 `window.__SYLLORA__` 的启动参数（token 等）；null 不注入。 */
   bootstrap?: Record<string, unknown> | null
-  /** CR-16：未携带会话 Cookie 时回退交付的票据页；null 表示不做事先换票。 */
-  bootstrapPage?: string | null
 }
 
 export interface StaticHit {
@@ -28,15 +26,8 @@ export interface StaticHit {
 }
 
 export interface StaticHost {
-  /** 处理一个 GET/HEAD 路径；返回 null 表示交回调用方的默认 404。
-   *  `handoff.sessionCookie` 非空表示请求已持有会话凭据（CR-16），此时交付
-   *  真正的 SPA 而不是票据页。 */
-  respond(pathname: string, handoff?: { sessionCookie?: string }): Promise<StaticHit | null>
-}
-
-/** 从票据页里取回注入的 CSP nonce（页面由本模块生成，字符集可控）。 */
-function nonceOf(page: string): string {
-  return /<script nonce="([0-9a-f]+)">/.exec(page)?.[1] ?? ''
+  /** 处理一个 GET/HEAD 路径；返回 null 表示交回调用方的默认 404。 */
+  respond(pathname: string): Promise<StaticHit | null>
 }
 
 const MIME: Record<string, string> = {
@@ -63,9 +54,10 @@ function contentTypeOf(path: string): string {
   return dot >= 0 ? MIME[path.slice(dot).toLowerCase()] ?? 'application/octet-stream' : 'application/octet-stream'
 }
 
-/** 注入启动参数：紧跟 `<head>` 之后（旧导出没有 `<head>` 时整体前置）。注意
- *  CR-16 之后这里只放非凭据参数（发现文件桥）。访问 token 绝不再进 HTML，
- *  宿主的 token 门禁与 /api/session 的换票链路见 bin.ts。 */
+/** 注入启动参数：紧跟 `<head>` 之后（旧导出没有 `<head>` 时整体前置）。
+ *  RV-8：`<script>` 上下文里 JSON.stringify 不转义 `</script>`/`<!--`——
+ *  bootstrap 当前只有 hex token，这里统一把 `<` 转义为 `\u003c`，杜绝未来
+ *  字段携带用户数据时的脚本逃逸。 */
 function withBootstrapTap(html: string, bootstrap: Record<string, unknown> | null): string {
   if (bootstrap === null) return html
   const json = JSON.stringify(bootstrap).replace(/</g, '\\u003c')
@@ -76,44 +68,13 @@ function withBootstrapTap(html: string, bootstrap: Record<string, unknown> | nul
     : tap + html
 }
 
-/**
- * CR-16：会话票据页。HTML 里绝不内嵌访问 token——页面脚本把启动链接的
- * URL fragment 或用户输入中的 token 作为头部提交给 `/api/session`，换取 HttpOnly
- * 会话 Cookie，之后由 Cookie 授权 `/api/*`。未持凭据的本机进程 `curl /`
- * 只能拿到一个不含任何凭据的表单页。
- * `nonce` 用于脚本 CSP 白名单（调用方保证只含随机十六进制字符）。
- */
-export function sessionBootstrapPage(nonce: string): string {
-  // 只接受终端登录链接的 fragment 或用户输入，HTTP 不提供匿名凭据出口。
-  const script = [
-    'const note=text=>{document.querySelector("p").textContent=text};',
-    'const run=async token=>{',
-    '  if(!token){note("请使用终端中的登录链接，或填写本地访问令牌。");return;}',
-    '  try{',
-    "    const granted=await fetch('/api/session',{method:'POST',headers:{'x-syllora-token':token}});",
-    '    if(!granted.ok)throw new Error("会话换票被拒绝（HTTP "+granted.status+"）");',
-    '  }catch(error){note("无法建立本机会话，请检查访问令牌或重新使用终端中的登录链接。");return;}',
-    "  location.replace('/');",
-    '};',
-    'document.querySelector("form").addEventListener("submit",event=>{event.preventDefault();const input=document.querySelector("input");const token=input.value.trim();input.value="";void run(token)});',
-    'const token=new URLSearchParams(location.hash.slice(1)).get("token");',
-    'if(token){history.replaceState(null,"",location.pathname+location.search);void run(token)}else{void run("")};',
-  ].join('\n')
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Syllora</title></head><body><p>正在建立本机会话…</p><form><label>本地访问令牌 <input type="password" autocomplete="off" required></label><button type="submit">连接 Syllora</button></form><script nonce="${nonce}">${script}</script><noscript><p>请启用 JavaScript，或以 <code>Authorization: Bearer &lt;token&gt;</code> 调用接口。</p></noscript></body></html>`
-}
-
-/** 仅注入非敏感的会话端点元数据。 */
-export function sessionHandshakeBootstrap(sessionUrl: string): Record<string, unknown> {
-  return { sessionUrl }
-}
-
 export async function createStaticHost(options: StaticHostOptions): Promise<StaticHost | null> {
   const root = resolve(options.root)
   if ((await stat(root).catch(() => null))?.isDirectory() !== true) return null
   const indexCache = new Map<string, string>()
 
   return {
-    async respond(pathname: string, handoff: { sessionCookie?: string } = {}): Promise<StaticHit | null> {
+    async respond(pathname: string): Promise<StaticHit | null> {
       // 只接受安全路径：解码后必须仍然落在 dist 根内（防穿越，403 语义）。
       let decoded: string
       try {
@@ -137,24 +98,8 @@ export async function createStaticHost(options: StaticHostOptions): Promise<Stat
       }
       const file = await readFile(filePath).catch(() => null)
       if (file === null) return null
-      // CR-16：没有会话 Cookie 的首次请求交付票据页——页面从发现文件桥取
-      // token、换成 HttpOnly 会话 Cookie 后再 location.replace('/') 回到真正的
-      // SPA。HTML 本身不含任何凭据，本机 curl 拿不到可用 token。
-      const isHtml = filePath.toLowerCase().endsWith('.html')
-      if (isHtml && options.bootstrapPage != null && (handoff.sessionCookie ?? '') === '') {
-        return {
-          status: 200,
-          body: options.bootstrapPage,
-          contentType: MIME['.html']!,
-          headers: {
-            'X-Content-Type-Options': 'nosniff',
-            'Cache-Control': 'no-store',
-            'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonceOf(options.bootstrapPage) + "'; connect-src 'self'; style-src 'unsafe-inline'",
-          },
-        }
-      }
       let body: Buffer | string = file
-      if (isHtml) {
+      if (filePath.toLowerCase().endsWith('.html')) {
         // index.html 按 (root, mtime) 缓存 tap 注入结果，避免每请求重读重注入。
         const cacheKey = `${filePath}:${(await stat(filePath)).mtimeMs}`
         let injected = indexCache.get(cacheKey)

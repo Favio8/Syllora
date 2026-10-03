@@ -33,6 +33,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
+  sourceIds: string[];
+  /** 阅读助手回答上下文：资料模式 / 电子书模式（与后端 domain.ReadingContext 对齐）。 */
+  reading?: { materialId: string; revision: string; selection: string; sourceIds: string[]; mode: 'explain' | 'search' } | { ebookId: string; selection: string; mode: 'explain' | 'search' };
 }
 
 export interface Course {
@@ -43,7 +46,7 @@ export interface Course {
   symbol: string;
   icon?: CourseIconId;
   archived?: boolean;
-  color: 'blue' | 'green' | 'orange' | 'purple' | 'rose' | 'slate';
+  color: 'blue' | 'green' | 'orange';
   chapter: string;
   tasks: Task[];
   points: KnowledgePoint[];
@@ -104,7 +107,6 @@ export interface ReadingAssistance {
 
 export interface ReadingService {
   document(courseId: string, materialId: string): Promise<ReadingDocument>;
-  assist(document: ReadingDocument, selection: string, mode: 'explain' | 'search', signal?:AbortSignal, options?: { onWaiting?: (message: string) => void }): Promise<ReadingAssistance>;
-  /** 需求六：选中文字 + 自定义提示词的流式直答（不参考知识库、不标注来源）。 */
-  ask(document: ReadingDocument | null, selection: string, prompt: string, signal?:AbortSignal, options?: { onDelta?: (delta: string) => void }): Promise<{ text: string }>;
+  assist(document: ReadingDocument, selection: string, mode: 'explain' | 'search', signal?:AbortSignal): Promise<ReadingAssistance>;
+  assistEbook(courseId: string, ebookId: string, markdown: string, selection: string, mode: 'explain' | 'search', signal?:AbortSignal): Promise<ReadingAssistance>;
 }

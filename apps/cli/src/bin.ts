@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { onClientDisconnect } from './lib/client-disconnect.ts'
 /**
  * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
@@ -13,7 +12,7 @@ import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { join, dirname, resolve } from 'node:path'
+import { join, dirname, resolve, basename } from 'node:path'
 import { mkdir, open, lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,14 +49,9 @@ import {
   setCredential,
   setSharedConfigRoot,
   settingsPayload,
-  streamReadingAsk,
   updateSettings,
-  testConnection,
-  reorderProviders,
-  exportProviders,
-  importProviders,
-  verifyCredentialsReadable,
-  resolveCourseDir,
+  docmindConfigPayload,
+  setDocMindCredential,
   agentEventToFrame,
   LearningAgentService,
 } from '@syllora/chat-service'
@@ -69,7 +63,7 @@ import { hostRpc, authHeaders, defaultClientDeps } from './lib/client.ts'
 import { UsageError } from './lib/args.ts'
 import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
 import { installHostFileLogging } from './lib/host-logger.ts'
-import { createStaticHost, sessionBootstrapPage, sessionHandshakeBootstrap } from './lib/static-host.ts'
+import { createStaticHost } from './lib/static-host.ts'
 import type { StaticHost } from './lib/static-host.ts'
 import { quizCommand } from './commands/quiz.ts'
 import { reviewCommand } from './commands/review.ts'
@@ -229,37 +223,13 @@ function tokenMatches(presented: string, expected: string): boolean {
   )
 }
 
-/** 从请求提取 token：`Authorization: Bearer` / `x-syllora-token` / `?token=`（会话 Cookie 由 sessionCookieOf 单独解析）。 */
+/** 从请求提取 token：`Authorization: Bearer` / `x-syllora-token` / `?token=`。 */
 function requestToken(request: import('node:http').IncomingMessage, url: URL): string {
   const auth = request.headers.authorization ?? ''
   if (auth.startsWith('Bearer ')) return auth.slice(7).trim()
   const header = request.headers['x-syllora-token']
   if (typeof header === 'string' && header.trim() !== '') return header.trim()
   return url.searchParams.get('token')?.trim() ?? ''
-}
-
-/** CR-16：会话 Cookie 名（每次启动轮换会话密钥，进程内有效）。 */
-const SESSION_COOKIE = 'syllora_session'
-
-/** 解析请求携带的会话 Cookie。 */
-function sessionCookieOf(request: import('node:http').IncomingMessage): string {
-  const raw = request.headers.cookie
-  if (typeof raw !== 'string' || raw === '') return ''
-  for (const part of raw.split(';')) {
-    const index = part.indexOf('=')
-    if (index < 0) continue
-    if (part.slice(0, index).trim() !== SESSION_COOKIE) continue
-    return part.slice(index + 1).trim()
-  }
-  return ''
-}
-
-/** 请求是否已授权：访问 token（头/查询参数）或 /api/session 换来的会话 Cookie。 */
-function authorizedBy(request: import('node:http').IncomingMessage, url: URL, token: string | null, session: string): boolean {
-  if (token === null) return true
-  if (tokenMatches(requestToken(request, url), token)) return true
-  const cookie = sessionCookieOf(request)
-  return cookie !== '' && tokenMatches(cookie, session)
 }
 
 /** H-1：agentEventToFrame 的产物 → SSE（帧名，data 负载）。chat/stream 的
@@ -576,18 +546,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   // Bearer 校验（同机进程不再可无凭据调用全部 RPC）。--insecure-no-token 为
   // 显式逃生口（host.json 的 token 记 null，便于排查）。
   const token = options.insecureNoToken === true ? null : randomBytes(24).toString('hex')
-  // CR-16：会话密钥（每次启动轮换）+ 票据页 nonce。票据页 HTML 里不含访问
-  // token，只带 nonce（CSP 白名单）与会话换票路径。
-  const sessionSecret = randomBytes(24).toString('hex')
-  const bootstrapNonce = randomBytes(16).toString('hex')
   // FL-21：同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
-  // 纯 API 行为。CR-16：index.html 不再注入访问 token（旧实现让任意本机进程
-  // `curl /` 就能提取 token 并调用全部 /api/*）；改为注入票据页回退与登录
-  // 链接，页面从终端登录链接取得凭据并换取 HttpOnly 会话 Cookie。
+  // 纯 API 行为。token 经 index tap 注入同源页面（window.__SYLLORA__）。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
-    bootstrap: token === null ? null : sessionHandshakeBootstrap('/api/session'),
-    bootstrapPage: token === null ? null : sessionBootstrapPage(bootstrapNonce),
+    bootstrap: token === null ? null : { token },
   })
   const ctx = new Context()
   await ctx.plugin(Storage)
@@ -614,8 +577,6 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
   await mkdir(settingsRoot, { recursive: true })
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
-  // CR-07：启动时校验凭据可解密（错配/损坏留明确告警，不等到第一次对话才炸）。
-  await verifyCredentialsReadable(join(settingsRoot, '.syllora', 'credentials.json'))
   // 设置页把供应商写在共享设置目录，对话/构课解析的是课程目录：登记共享根，
   // 让 chat-service 的所有配置解析路径都能回落（只补 chat/stream 一条会漏掉
   // 恢复重放、队列回合与会话内选过模型的分支）。
@@ -632,14 +593,10 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
    * （`courseDirOf` 的等值校验）。切课不会重新 openCourse，lastOpenedPath 可能
    * 仍停留在上一门课——按基名在已注册工作区里定位课程根，找不到才回落。
    */
-  async function workspaceForCourse(courseId: string): Promise<string> {
-    const target = courseId.trim()
+  async function workspaceForCourse(courseId: string): Promise<string> {    const target = courseId.trim()
     if (target !== '' && !target.includes('/') && !target.includes('\\') && !target.includes('..') && !target.startsWith('.')) {
-      // B1：先按课程身份（状态文件里的 UUID）在已注册工作区里定位，再回落基名
-      // ——同名文件夹的两门课不能共用同一个 chat 课程。
       for (const item of registry.list()) {
-        const dir = await resolveCourseDir(item.path, target).catch(() => null)
-        if (dir !== null) return dir
+        if (basename(item.path) === target) return item.path
       }
     }
     return registry.lastOpenedPath
@@ -665,7 +622,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       ingestUrl: async (courseId, url, title) => courseService.ingestUrl(await workspaceForCourse(courseId), courseId, url, title),
       createCards: async (courseId, payload) => courseService.createCards(await workspaceForCourse(courseId), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
       dynamicCards: async (courseId, payload) => courseService.dynamicCards(await workspaceForCourse(courseId), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
-      // M4：evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
+      // ��evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
       // 在这里静默丢参导致磁盘幂等账本（.syllora/eval-ledger/）永不写入。
       // 接口要求同步返回 AsyncGenerator，所以不能先 await 再返回：这里用 async
       // 生成器委托，把课程根解析放进迭代体内（调用方拿到生成器即刻不阻塞）。
@@ -809,7 +766,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       get: async () => { requireWorkspaceRootForSettings(settingsRoot, '读取设置'); return settingsPayload(settingsRoot) as unknown as Record<string, unknown> },
       update: async partial => { requireWorkspaceRootForSettings(settingsRoot, '更新设置'); return updateSettings(settingsRoot, partial) as unknown as Record<string, unknown> },
       catalog: async () => providerCatalog() as unknown as Array<Record<string, unknown>>,
-      // M6：设置页「从端点获取」永远实时探测；sessionModels 的自动发现才走缓存。
+      // ��设置页「从端点获取」永远实时探测；sessionModels 的自动发现才走缓存。
       // 密钥解析优先级：表单新填 > 已加密存储的凭据（按 providerId 取，与 chat /
       // sessionModels 同一来源）> 环境变量。旧实现只认前两者中的第一项和
       // process.env——编辑既有 provider 时表单密钥按设计留空，于是「从端点获取」
@@ -835,19 +792,15 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       remove: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '删除模型供应商'); return deleteProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       activate: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '激活模型供应商'); return activateProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(settingsRoot, '保存 API Key'); return setCredential(settingsRoot, providerId, apiKey) as unknown as Record<string, unknown> },
-      // 需求七：连接测试按 discover 同一优先级解析密钥（表单新填 > 已加密存储 > 环境变量）。
-      test: async input => {
-        let apiKey = input.apiKey?.trim() ?? ''
-        const providerId = input.providerId?.trim() ?? ''
-        if (apiKey === '' && providerId !== '' && settingsRoot !== '') {
-          const resolved = await loadChatConfig(settingsRoot, { providerId }).catch(() => null)
-          apiKey = resolved?.apiKey ?? ''
-        }
-        return testConnection({ ...input, apiKey: apiKey === '' ? null : apiKey }) as unknown as Record<string, unknown>
+      docmind: {
+        get: async () => { requireWorkspaceRootForSettings(settingsRoot, '读取 DocMind 配置'); return docmindConfigPayload(settingsRoot) },
+        save: async input => {
+          requireWorkspaceRootForSettings(settingsRoot, '保存 DocMind 密钥')
+          await setDocMindCredential(settingsRoot, input as Parameters<typeof setDocMindCredential>[1])
+          // 落库后回读真实解析结果（environment 变量优先级更高，如实反映现状）。
+          return docmindConfigPayload(settingsRoot)
+        },
       },
-      reorder: async providerIds => { requireWorkspaceRootForSettings(settingsRoot, '调整供应商顺序'); return reorderProviders(settingsRoot, providerIds) as unknown as Record<string, unknown> },
-      exportProviders: async () => { requireWorkspaceRootForSettings(settingsRoot, '导出供应商配置'); return exportProviders(settingsRoot) as unknown as Record<string, unknown> },
-      importProviders: async payload => { requireWorkspaceRootForSettings(settingsRoot, '导入供应商配置'); return importProviders(settingsRoot, payload) as unknown as Record<string, unknown> },
     },
     diagnosticsService: {
       logs: () => readHostDiagnostics(),
@@ -1015,35 +968,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end()
       return
     }
-    // CR-16：凭据换票端点。本机进程（浏览器/桌面壳/CLI）把发现文件里的 token
-    // 放在请求头里，换一枚 HttpOnly 会话 Cookie；此后 /api/* 可由 Cookie 授权。
-    // 换票本身仍要求持有 token，且只回环可达（Origin 门禁已在前）。
-    if (url.pathname === '/api/session') {
-      if (request.method !== 'POST') {
-        response.writeHead(405)
-        response.end(JSON.stringify({ error: { code: 'method-not-allowed', message: 'method not allowed', details: null } }))
-        return
-      }
-      if (token === null) {
-        response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=none; HttpOnly; SameSite=Strict; Path=/` })
-        response.end(JSON.stringify({ ok: true, session: 'disabled' }))
-        return
-      }
-      if (!tokenMatches(requestToken(request, url), token)) {
-        response.writeHead(401)
-        response.end(JSON.stringify({ error: { code: 'unauthorized', message: '会话换票需要有效的访问令牌', details: null } }))
-        return
-      }
-      response.writeHead(200, { 'Set-Cookie': `${SESSION_COOKIE}=${sessionSecret}; HttpOnly; SameSite=Strict; Path=/` })
-      response.end(JSON.stringify({ ok: true, session: 'granted' }))
-      return
-    }
-    // FL-30/CR-16：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
-    // 宿主签发的凭据。凭据可以是 Authorization/x-syllora-token 头，或 /api/session
-    // 下发的 HttpOnly 会话 Cookie（旧版把 token 内嵌进静态 HTML，任意本机进程
-    // curl / 即可提取 token 并调用全部 /api/*；现在 HTML 不含任何凭据）。
-    // 静态资源（UI 资产）不设门禁，公开可读。
-    if (url.pathname.startsWith('/api/') && token !== null && !authorizedBy(request, url, token, sessionSecret)) {
+    // FL-30：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
+    // 持有宿主签发的 token；静态资源（UI 资产）不设 token，公开可读。
+    if (url.pathname.startsWith('/api/') && token !== null && !tokenMatches(requestToken(request, url), token)) {
       response.writeHead(401)
       response.end(JSON.stringify({ error: { code: 'unauthorized', message: `缺少或错误的访问令牌（token 记录于 ${join(hostHome(), 'host.json')}，请求头 Authorization: Bearer <token>）`, details: null } }))
       return
@@ -1052,12 +979,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
-          // 会话 Cookie 必须"校验通过"才当作持凭据：Cookie 不区分端口，宿主重启
-          // 换了会话密钥后，旧 Cookie 仍会被浏览器带上——旧实现只看"非空"，于是
-          // 交付真 SPA 而 /api/* 全部 401，页面卡在"缺少或错误的访问令牌"，用户
-          // 只能清 Cookie 才能恢复。校验不过就回到票据页，重新换票即可自愈。
-          const sessionCookie = token !== null && tokenMatches(sessionCookieOf(request), sessionSecret) ? sessionSecret : ''
-          const hit = await staticHost.respond(url.pathname, { sessionCookie })
+          const hit = await staticHost.respond(url.pathname)
           if (hit === null) {
             response.writeHead(404)
             response.end(JSON.stringify({ error: { code: 'not-found', message: `no such file '${url.pathname}'`, details: null } }))
@@ -1085,6 +1007,23 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
             const code=error instanceof SylloraError?error.code:'INTERNAL_ERROR'
             const status=code==='INVALID_REQUEST'?400:code==='SOURCE_CHANGED'?409:code==='LIMIT_EXCEEDED'?413:code==='NOT_FOUND'?404:500
             response.writeHead(status);response.end(JSON.stringify({error:{code,message:error instanceof SylloraError?error.message:'原文件读取失败',details:null}}))
+          }
+        })()
+        return
+      }
+      if(url.pathname==='/api/syllora/ebook-file') {
+        void (async()=>{
+          try {
+            const {name,contentType,data}=await syllora.readEbookFile(url.searchParams.get('courseId')??'',url.searchParams.get('ebookId')??'',url.searchParams.get('path')??'')
+            const asciiName=name.replace(/[^\x20-\x7e]|["\\]/g,'_')
+            const encodedName=encodeURIComponent(name).replace(/['()*]/g,c=>`%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+            response.writeHead(200,{'Content-Type':contentType,'Content-Length':String(data.length),'Content-Disposition':`inline; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,'Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            response.end(request.method==='HEAD'?undefined:data)
+          } catch(error) {
+            if(response.headersSent||response.writableEnded||response.destroyed)return
+            const code=error instanceof SylloraError?error.code:'INTERNAL_ERROR'
+            const status=code==='INVALID_REQUEST'?400:code==='NOT_FOUND'?404:500
+            response.writeHead(status);response.end(JSON.stringify({error:{code,message:error instanceof SylloraError?error.message:'电子书文件读取失败',details:null}}))
           }
         })()
         return
@@ -1147,7 +1086,15 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     void (async () => {
       try {
-        const body = await readRequestBody(request, method === 'syllora/import' ? 29 * 1024 * 1024 : undefined)
+        // 电子书投喂：与资料库 20MiB 不同，整本教材走独立 150MiB 闸口（syllora.ts
+        // EBOOK_MAX_BYTES），base64 上限 200MiB；此处对齐放大读取上限。
+        const body = await readRequestBody(
+          request,
+          method === 'syllora/import' ? 29 * 1024 * 1024
+            : method === 'syllora/ebook/ingest' ? 210 * 1024 * 1024
+            : undefined,
+          method === 'syllora/ebook/ingest' ? 120_000 : undefined,
+        )
         // FL-04：这里原本包了一层 `try { ... } catch (error) { }` 的空 catch，
         // 把 `dispatch` 内部抛出的异常（而非返回的错误信封）整个吞掉：响应永不
         // `end()`，请求挂死成 socket hang up——恰好是下方边界注释声称要防的场景。
@@ -1158,13 +1105,6 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         }
         if (method === 'agents/answer/stream') {
           await handleAgentAnswerStream(request, response, body)
-          return
-        }
-        // 需求六：辅助阅读「直接提问」——不检索知识库、不标注来源的流式回答。
-        // 放在 syllora/ 通用分发之前：通用分发只认已注册动作表，且它的载荷
-        // 由 syllora.handle 消费，这条路由自己解包、自己写 SSE。
-        if (method === 'syllora/reading-ask') {
-          await handleReadingAsk(request, response, body)
           return
         }
         // 评测提交：Web 客户端用斜杠 `eval/submit`，CLI 自带命令用点号 `eval.submit`，
@@ -1235,9 +1175,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   /** Minimal DSH-compatible JSON-RPC/ACP bridge. It delegates every method to Host dispatch. */
   async function handleAcp(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
-    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
+    request.once('aborted', () => abortController.abort('client'))
+    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
     let rpcRequest: AcpRequest
     try { rpcRequest = parseAcpRequest(JSON.parse(body === '' ? '{}' : body) as unknown) } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : -32700
@@ -1384,11 +1323,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         abortPending(`上传中断: ${error.message}`)
       })
       busboy.on('close', () => settleBusboy())
-      // CR-01：旧实现用 `request.once('close')` 判定「客户端已消失」——现代
-      // Node（≥16）请求体完成即触发 'close'，正常上传也命中 clientGone：临时
-      // 文件被删、响应不发、后续构建不触发，整个上传端点对正常请求失效。
-      // 改用「请求体未完整送达」判定（同 CR-15 的 onClientDisconnect）。
-      onClientDisconnect(request, response, () => {
+      request.once('close', () => {
+        // 客户端已消失：掐断 busboy 与在途写流后结算——响应无人接收，跳过后续
+        // 构建/响应（临时文件由下方收尾循环清理）。
         clientGone = true
         abortPending('上传中断: 客户端断连')
         busboy.destroy()
@@ -1509,9 +1446,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
    */
   async function handleChatStream(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
-    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
+    request.once('aborted', () => abortController.abort('client'))
+    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { courseId?: unknown; message?: unknown; mode?: unknown; sessionId?: unknown; turnId?: unknown; conceptId?: unknown; fileRefs?: unknown; effort?: unknown; requestId?: unknown }
     try {
       const parsed = JSON.parse(body === '' ? '{}' : body) as typeof input
@@ -1612,9 +1548,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   /** `POST /api/agents/answer/stream` resumes one durable ask turn. */
   async function handleAgentAnswerStream(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
     const abortController = new AbortController()
-    // CR-15：断连监听必须在 handler 入口立即注册（旧实现注册在 body 读取之后，
-    // 现代 Node 下 'close' 早已触发、监听器永不执行，abort/取消清理全程失效）。
-    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
+    request.once('aborted', () => abortController.abort('client'))
+    request.once('close', () => { if (!response.writableEnded) abortController.abort('client') })
     let input: { agentId?: unknown; answer?: unknown; requestId?: unknown }
     try { input = JSON.parse(body === '' ? '{}' : body) as typeof input } catch {
       response.writeHead(400)
@@ -1666,77 +1601,6 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     response.end()
   }
 
-  /**
-   * `POST /api/syllora/reading-ask` (SSE)：辅助阅读「直接提问」。
-   *
-   * 与 chat/stream 的区别：不检索课程知识库、不落盘任何记录、不标注来源——
-   * 帧形制仍与 chat/stream 同一套（meta / token / error / done），token 帧
-   * 携带 `{ delta }`，客户端边收边追加。请求体形如
-   * `{ payload: { courseId, prompt, selection?, documentTitle? } }`（同其余
-   * `/api/syllora/*` 端点）。
-   */
-  async function handleReadingAsk(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, body: string): Promise<void> {
-    const abortController = new AbortController()
-    // CR-15：断连监听必须在 handler 入口立即注册（理由同 handleChatStream）。
-    onClientDisconnect(request, response, () => { if (!response.writableEnded) abortController.abort('client') })
-    let input: { courseId?: unknown; prompt?: unknown; selection?: unknown; documentTitle?: unknown }
-    try {
-      const parsed = JSON.parse(body === '' ? '{}' : body) as { payload?: unknown }
-      // 其余 /api/syllora/* 端点都走 { payload } 信封；这里同样解包，仅在缺
-      // 信封时容忍顶层直传（老客户端/手工 curl 不至于 400）。
-      input = (typeof parsed.payload === 'object' && parsed.payload !== null ? parsed.payload : parsed) as typeof input
-    } catch {
-      response.writeHead(400)
-      response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'request body is not valid JSON', details: null } }))
-      return
-    }
-    const courseId = typeof input.courseId === 'string' ? input.courseId.trim() : ''
-    const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : ''
-    const selection = typeof input.selection === 'string' ? input.selection.trim() : ''
-    const documentTitle = typeof input.documentTitle === 'string' ? input.documentTitle.trim() : ''
-    if (courseId === '' || prompt === '' || prompt.length > 4000 || selection.length > 4000) {
-      response.writeHead(400)
-      response.end(JSON.stringify({ error: { code: 'invalid-request', message: 'courseId 与 prompt 必填，prompt/selection 各不超过 4000 字符', details: null } }))
-      return
-    }
-    // 与 chat/stream 同一解析：工作台切课不会重新 openCourse，按 courseId 定位
-    // 课程根；模型配置通常写在共享设置目录，由 loadChatConfig 内部回落。
-    const workspaceRoot = await workspaceForCourse(courseId)
-    if (workspaceRoot === '') {
-      response.writeHead(409)
-      response.end(JSON.stringify({ error: { code: 'workspace-not-found', message: '尚未打开工作区', details: null } }))
-      return
-    }
-    const config = await loadChatConfig(workspaceRoot).catch(() => null)
-    response.writeHead(200, {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    })
-    // 与 chat/stream 一致：先 flush 响应头，首个 token 之前客户端就能拿到流。
-    response.flushHeaders?.()
-    const writeFrame = (event: string, data: unknown): void => {
-      if (response.writableEnded || response.destroyed) return
-      response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-    }
-    writeFrame('meta', { courseId, mode: 'reading-ask', documentTitle })
-    try {
-      for await (const chunk of streamReadingAsk(config, { prompt, selection, documentTitle }, abortController.signal)) {
-        if (abortController.signal.aborted) break
-        if (chunk.kind === 'token') writeFrame('token', { delta: chunk.delta ?? '' })
-        else if (chunk.kind === 'error') writeFrame('error', { code: 'READING_ASK_FAILED', message: chunk.message ?? 'AI 直答未完成，请重试。' })
-      }
-    } catch (error) {
-      if (abortController.signal.aborted) { response.end(); return }
-      // BUG-005：错误帧同样可能携带上游凭据回显，出帧前净化。
-      const message = sanitizeErrorMessage(error instanceof Error ? error.message : String(error))
-      console.error('[syllora] syllora/reading-ask 失败:', message)
-      writeFrame('error', { code: 'READING_ASK_FAILED', message })
-    }
-    writeFrame('done', { usage: {}, turnId: null })
-    response.end()
-  }
-
   await new Promise<void>((resolve, reject) => {
     server.once('error', (error: NodeJS.ErrnoException) => {
       // FL-41：端口被占时的默认 EADDRINUSE 栈对用户不可读——给出行动指引。
@@ -1754,10 +1618,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       instanceLock.noteActualPort(actualPort)
       void writeHostConfig(actualPort, token).then(() => {
         console.log(`[syllora] host listening on http://127.0.0.1:${actualPort} (home: ${hostHome()}, logs: ${hostLogger.logDir}${token === null ? ', auth: DISABLED' : ''})`)
-        const loginUrl = `http://127.0.0.1:${actualPort}/${token ? `#token=${token}` : ''}`
-        // 登录链接只写终端，不经过文件日志；fragment 不会随 HTTP 请求发给服务器。
-        if (token) process.stdout.write(`[syllora] browser login: ${loginUrl}\n`)
-        if (options.open === true) void openBrowser(loginUrl)
+        if (options.open === true) void openBrowser(`http://127.0.0.1:${actualPort}`)
         resolve()
       }).catch(reject)
     })

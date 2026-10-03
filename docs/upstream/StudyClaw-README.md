@@ -273,7 +273,7 @@ studyclaw-next/
 
 ## 路线图
 
-- [x] M0–M4：工作区注册表、课程构建、事件流会话、23 工具与审批、Agent Runtime（对齐 dsh）、三栏控制台、Rubric + SM-2 学习闭环
+- [x] M0–��工作区注册表、课程构建、事件流会话、23 工具与审批、Agent Runtime（对齐 dsh）、三栏控制台、Rubric + SM-2 学习闭环
 - [x] npm 打包与发布链路：CLI 单 Bundle、静态托管、发布三道门禁、供应链 CVE 处理（`@studyclaw/cli@0.1.1-beta` 已实发至 registry.npmjs.org）
 - [x] 吉祥物 Clawzy、交互演示块、选择题本地快判、评测快路由
 - [x] **桌面壳（Electron + sidecar，免装 Node）**：Windows 安装包验证通过，macOS 有 CI 整机冒烟（Linux 仅出包、未跑应用）

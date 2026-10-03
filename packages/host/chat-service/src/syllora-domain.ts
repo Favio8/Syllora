@@ -1,7 +1,10 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
 import { DEFAULT_REVIEW_HOURS, learningSettings, validReviewHours, type EvidenceRuleSnapshot, type LearningSettings } from './syllora-policy.js'
 import { currentSession, sessionMetrics, type LearningEvent, type LearningSession, type SessionJob, type SourceVersion } from './syllora-sessions.js'
-export interface ReadingContext {materialId:string;revision:string;selection:string;sourceIds:string[];mode:'explain'|'search'}
+/** 阅读上下文：资料模式带 materialId/revision/sourceIds；电子书模式带 ebookId（��。 */
+export type ReadingContext =
+  | { materialId: string; revision: string; selection: string; sourceIds: string[]; mode: 'explain' | 'search' }
+  | { ebookId: string; selection: string; mode: 'explain' | 'search' }
 export interface LearningActivity {id:string;courseId:string;at:number;kind:'task'|'chat'|'reading';minutes:number;taskId?:string;planVersion:number}
 export const RULE_VERSION = 'syllora-v1'
 export function ruleSnapshot(course:Course):EvidenceRuleSnapshot { const settings=learningSettings(course);return {version:RULE_VERSION,settingsRevision:settings.revision,reviewHours:[...settings.reviewHours]} }

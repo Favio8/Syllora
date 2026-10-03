@@ -154,14 +154,11 @@ export interface HostServices {
     remove(providerId: string): Promise<Record<string, unknown>>
     activate(providerId: string): Promise<Record<string, unknown>>
     credential(providerId: string, apiKey: string): Promise<Record<string, unknown>>
-    /** 需求七：连接测试（表单当前值，未保存也能测）。 */
-    test(input: { baseUrl: string; protocol?: 'openai' | 'anthropic'; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; model?: string | null }): Promise<Record<string, unknown>>
-    /** 需求七：供应商顺序持久化（全序）。 */
-    reorder(providerIds: string[]): Promise<Record<string, unknown>>
-    /** 需求七：导出（不含明文密钥）。 */
-    exportProviders(): Promise<Record<string, unknown>>
-    /** 需求七：导入（密钥一律不导入）。 */
-    importProviders(payload: unknown): Promise<Record<string, unknown>>
+    /** DocMind 文档解析（电子书投喂上游）：独立于 LLM 供应商的凭据。 */
+    docmind: {
+      get(): Promise<{ configured: boolean; endpoint: string }>
+      save(input: { accessKeyId?: string; accessKeySecret?: string; endpoint?: string | null }): Promise<{ configured: boolean; endpoint: string }>
+    }
   }
   /**
    * Host-side diagnostics. Logs live under the host home (`logs/host-*.log`),
@@ -555,8 +552,6 @@ const handlers = {
       agentPreset: z.string().optional(),
       // 自定义预设提示词：长度上限与 config.ts 的 MAX_AGENT_PROMPT_CHARS 一致（此处留余量，精确校验在 settings.ts）。
       agentSystemPrompt: z.string().max(20000).optional(),
-      // 教学技能 id（见 chat-service/skills.ts）；空串=不启用，精确校验在 settings.ts。
-      agentSkill: z.string().max(64).optional(),
       permissionPreset: z.string().optional(),
       plugins: z.record(z.string(), z.boolean()).optional(),
     }),
@@ -623,38 +618,20 @@ const handlers = {
       return ok(await services.settingsService.credential(payload.providerId, payload.apiKey))
     },
   },
-  // 需求七：供应商配置完备化——连接测试 / 排序 / 导入导出（无明文密钥）。
-  'settings.testConnection': {
-    payload: z.object({
-      baseUrl: z.string().min(1),
-      protocol: z.enum(['openai', 'anthropic']).optional(),
-      apiKey: z.string().nullish(),
-      apiKeyEnv: z.string().nullish(),
-      providerId: z.string().nullish(),
-      model: z.string().nullish(),
-    }),
-    async run(payload: { baseUrl: string; protocol?: 'openai' | 'anthropic'; apiKey?: string | null; apiKeyEnv?: string | null; providerId?: string | null; model?: string | null }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
-      return ok(await services.settingsService.test(payload))
-    },
-  },
-  'settings.reorderProviders': {
-    payload: z.object({ providerIds: z.array(z.string().min(1)).min(1).max(200) }),
-    async run(payload: { providerIds: string[] }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
-      return ok(await services.settingsService.reorder(payload.providerIds))
-    },
-  },
-  'settings.exportProviders': {
+  'settings.docmind.get': {
     payload: null,
-    async run(_payload: void, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
-      return ok(await services.settingsService.exportProviders())
+    async run(_payload: void, services: HostServices): Promise<RpcResponse<{ configured: boolean; endpoint: string }>> {
+      return ok(await services.settingsService.docmind.get())
     },
   },
-  'settings.importProviders': {
-    // 导入体由域层 schema 严格校验（版本号/字段/范围）；这里只限制总体大小，
-    // 防止超大 JSON 压垮宿主。密钥字段即便出现也会被域层丢弃。
-    payload: z.object({ payload: z.unknown() }),
-    async run(payload: { payload: unknown }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
-      return ok(await services.settingsService.importProviders(payload.payload))
+  'settings.docmind.save': {
+    // 只接受本次表单提交的字段；缺省字段保留现值（partial 语义与前端 saveDocMind 一致）。
+    payload: z.object({ accessKeyId: z.string().min(1).optional(), accessKeySecret: z.string().min(1).optional(), endpoint: z.string().nullish() }),
+    async run(
+      payload: { accessKeyId?: string; accessKeySecret?: string; endpoint?: string | null },
+      services: HostServices,
+    ): Promise<RpcResponse<{ configured: boolean; endpoint: string }>> {
+      return ok(await services.settingsService.docmind.save(payload))
     },
   },
   'courses.syllabus': {

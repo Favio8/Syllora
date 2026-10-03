@@ -47,7 +47,7 @@ export { ToolError, ToolRejected, ToolResult } from './result.ts'
 export type { ToolStatus } from './result.ts'
 export type { ToolContext } from './handlers.ts'
 export type { ToolActions, ToolActionContext, ToolHandlerResult, ToolProviders } from './handlers.ts'
-export { courseSourceRoot, isInplaceCourse, resolveSourceRef, sourceExcludedDirs, INPLACE_SOURCE_EXCLUDED_DIRS } from './paths.ts'
+export { courseSourceRoot, isInplaceCourse, resolveSourceRef, INPLACE_SOURCE_EXCLUDED_DIRS } from './paths.ts'
 export { withCourseLock, parseProgressTable } from './handlers.ts'
 export { workspaceStateDirOf, sylloraHome, migrateLegacyHome } from './runtime-paths.ts'
 

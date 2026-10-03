@@ -82,13 +82,6 @@
 .sy-nw-body{flex:1;min-height:0;display:grid;grid-template-columns:240px minmax(0,1fr) 332px}
 .sy-nw-list{display:flex;flex-direction:column;gap:2px;min-width:0;border-right:1px solid var(--sy-line);padding:12px;overflow:auto}
 .sy-nw-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--sy-line);font-size:12px;color:var(--muted)}
-/* 需求七：笔记页内切换课程（左栏顶部下拉）。 */
-.sy-nw-course{margin-bottom:10px}
-.sy-nw-course .dropdown-trigger{width:100%;justify-content:space-between}
-/* 需求一：笔记页的应用内确认框（替代 window.confirm）。 */
-.sy-confirm-inline{max-width:420px}
-.sy-confirm-inline p{margin:0 0 14px;font-size:13px;line-height:1.9;color:var(--muted)}
-.sy-confirm-inline .sy-danger{background:#a12727;border-color:#a12727;color:var(--white)}
 .sy-nw-list-head small{color:var(--muted);font-size:10px}
 .sy-nw-list-head button{border:0;padding:2px 6px;background:transparent;color:var(--muted)}
 .sy-nw-list-head button:hover{color:var(--sy-blue)}
@@ -101,7 +94,7 @@
 .sy-nw-item.is-selected>button:first-child strong{color:var(--sy-blue)}
 .sy-nw-del{border:0!important;padding:4px!important;background:transparent;color:var(--muted)}
 .sy-nw-del:hover{color:#b42318}
-.sy-nw-editor{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 22px;overflow:hidden}
+.sy-nw-editor{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 22px;overflow:auto}
 .sy-nw-empty{margin:auto}
 .sy-nw-title-input{border:0;border-bottom:1px solid transparent;font-size:20px;font-weight:600;padding:4px 0;outline:0}
 .sy-nw-title-input:focus{border-bottom-color:var(--sy-line)}
@@ -113,25 +106,6 @@
 .sy-nw-textarea{flex:1;min-height:320px;resize:none;border:1px solid var(--sy-line);border-radius:10px;padding:14px;font-size:14px;line-height:1.75;outline:0;font-family:inherit}
 .sy-nw-textarea:focus{border-color:var(--sy-blue)}
 .sy-nw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:22px}
-.sy-nw-composer{display:flex;flex-direction:column;gap:0;border:1px solid var(--sy-line);border-radius:11px;padding:12px 14px 10px;background:var(--white);flex-shrink:0;margin-top:4px}
-.sy-nw-composer textarea{background:transparent;border:0;border-radius:0;resize:none;padding:0;min-height:26px;max-height:150px;font-size:13px;line-height:1.7;outline:none;box-shadow:none;color:var(--ink);overflow-y:auto;font-family:inherit}
-.sy-nw-composer:focus-within{border-color:var(--sy-blue)}
-.sy-nw-selchip{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;border:1px solid var(--sy-blue);border-radius:8px;background:var(--blue-light);color:var(--ink);font-size:11.5px}
-.sy-nw-selchip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sy-nw-selchip button{border:0;background:transparent;color:var(--muted);padding:2px;line-height:1}
-.sy-nw-selchip button:hover{color:var(--sy-blue)}
-.sy-nw-composer-toolbar{display:flex;align-items:center;gap:10px;margin-top:8px}
-.sy-nw-composer-tools{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
-.sy-nw-composer-submit{display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:0}
-.sy-nw-composer-toolbar .button{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;padding:6px 9px;border:1px solid var(--sy-line);border-radius:7px;background:var(--white);color:var(--muted)}
-.sy-nw-composer-toolbar .button:hover:not(:disabled){color:var(--sy-blue);border-color:var(--sy-blue)}
-.sy-nw-model-slot{display:inline-flex;min-width:0}
-.sy-nw-composer-send,.sy-nw-send{background:var(--sy-blue);color:#fff;border:0;width:28px;height:28px;padding:0;border-radius:8px}
-.sy-nw-composer .sy-nw-send:disabled{opacity:.45}
-/* 悬停提示：显示在按键上方（与主界面输入框同一套） */
-.sy-nw-composer-toolbar [data-tip]{position:relative}
-.sy-nw-composer-toolbar [data-tip]::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--white);font-size:10px;line-height:1.5;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:60}
-.sy-nw-composer-toolbar [data-tip]:hover::after{opacity:1}
 .sy-nw-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .sy-nw-links-title{font-size:10px;color:var(--muted);font-weight:500}
 .sy-nw-link-tag{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--sy-blue);background:#e8f0fe;padding:2px 7px;border-radius:5px;font-weight:500}
@@ -142,23 +116,32 @@
 .sy-nw-link-pick-head button{border:0;background:transparent;color:var(--muted)}
 .sy-nw-link-opt{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:7px 8px;font-size:12px;text-align:left;border-radius:6px;color:var(--ink)}
 .sy-nw-link-opt:hover{background:#e8f0fe;color:var(--sy-blue)}
-.sy-nw-graph{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;border-left:1px solid var(--sy-line);padding:14px 12px;background:var(--white);overflow:hidden}
+.sy-nw-ai{display:flex;flex-direction:column;gap:10px;border-left:1px solid var(--sy-line);padding:18px 16px;background:var(--white);overflow:auto}
+.sy-nw-ai-head{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:var(--ink)}
+
+/* AI 助手面板 */
+.sy-nw .sy-primary{border:0;background:var(--sy-blue);color:#fff;border-radius:8px;padding:7px 14px;font-size:13px}
+.sy-nw .sy-primary:disabled{opacity:.5}
+.sy-nw .sy-primary:hover{background:#002585}
+.sy-nw-ai-run{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:0;background:var(--sy-blue);color:#fff;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:500}
+.sy-nw-ai-run:hover{background:#002585}
+.sy-nw-ai-run:disabled{opacity:.6}
 .sy-nw-ai-card{border:1px solid var(--sy-line);border-radius:10px;background:var(--white);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
-.sy-nw-ai-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink)}
-.sy-nw-ai-card-head small{font-weight:400;color:var(--muted);font-size:11px}
-.sy-nw-ai-result{width:100%;min-height:88px;max-height:220px;resize:vertical;border:1px solid var(--sy-line);border-radius:8px;padding:9px 10px;font:inherit;font-size:13px;line-height:1.7;background:var(--white);color:var(--ink)}
+.sy-nw-ai-text{margin:0;font-size:13px;line-height:1.7;color:var(--ink);white-space:pre-wrap}
+.sy-nw-ai-src{display:flex;align-items:center;gap:4px;margin:0;font-size:11px;color:var(--muted)}
 .sy-nw-ai-btns{display:flex;gap:8px}
 .sy-nw-ai-btns button{display:flex;align-items:center;gap:6px}
+.sy-nw-ai-btns button small{font-size:10px;background:rgba(255,255,255,.25);padding:0 5px;border-radius:4px}
 .sy-nw-ai-btns button:not(.sy-primary){border:1px solid var(--sy-line);background:var(--white);color:var(--ink);border-radius:8px;padding:7px 14px;font-size:13px}
 .sy-nw-ai-btns button:not(.sy-primary):hover{border-color:var(--sy-blue);color:var(--sy-blue)}
-
+.sy-nw-ai-hint{margin:0;font-size:11.5px;color:var(--muted);line-height:1.6}
 
 .sy-graph-detail .sy-graph-follow{display:block;margin-top:2px;color:#002fa7}
 
 /* 笔记富文本编辑器（TipTap） */
 .sy-nw-editor-root{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
-.sy-nw-editor-content{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.sy-nw-prose{flex:1;min-height:180px;max-height:none;overflow:auto;padding:14px;border:1px solid var(--sy-line);border-radius:10px;font-size:14px;line-height:1.75;outline:0}
+.sy-nw-editor-content{flex:1;min-height:0;display:flex;flex-direction:column}
+.sy-nw-prose{flex:1;min-height:320px;max-height:none;overflow:auto;padding:14px;border:1px solid var(--sy-line);border-radius:10px;font-size:14px;line-height:1.75;outline:0}
 .sy-nw-prose:focus{border-color:var(--sy-blue)}
 .sy-nw-prose h1{font-size:22px;font-weight:700;margin:10px 0 6px}
 .sy-nw-prose h2{font-size:18px;font-weight:600;margin:9px 0 5px}
@@ -195,60 +178,47 @@
 .sy-nw-imgrow{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:5px 10px 5px 22px;font-size:11.5px;color:var(--ink);text-align:left;cursor:pointer}
 .sy-nw-imgrow:hover{color:var(--sy-blue);background:var(--blue-light)}
 
-/* =====================================================================
-   需求三：学习面板视觉统一（DM Sans + 设计令牌 + 卡片化）
-   面板结构已迁到 components/panel/StudyPanel.tsx，类名仍沿用 sy-*，
-   这里把面板内的字号/字体/卡片落到与中栏一致的设计语言上。
-   规则：禁止 9–10px 正文字号；辅助信息 11px；正文 12px；区块标题 12–13px/600。
-   ===================================================================== */
-.study-panel{background:var(--white)}
-.study-panel .panel-caption{font-size:11px;color:var(--muted)}
-.study-panel :is(.sy-panel,.panel-body){font-family:var(--body-font);color:var(--ink)}
-.study-panel .panel-body :is(p,li,span,small,em,strong,label,summary,button,input,select,textarea,h2,h3,h4){font-family:var(--body-font)}
-.study-panel .panel-body :is(small,em){font-size:11px;line-height:1.75}
-.study-panel .panel-body p{font-size:12px;line-height:1.85;color:var(--muted)}
-.study-panel .panel-body h2,.study-panel .panel-body h3,.study-panel .panel-body h4{font-size:12px;font-weight:600;color:var(--ink)}
-.study-panel .panel-card-head h3{font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.01em}
-.study-panel .panel-body .sy-muted{font-size:11px;line-height:1.8;color:var(--muted)}
-/* 禁止 9–10px：面板内任何正文字号下限提到 11px（图标间距类不在此列）。 */
-.study-panel .panel-body :is(.sy-kicker,.sy-task small,.sy-task em,.sy-point small,.sy-point em,.sy-material small,.sy-review small,.sy-source-link,.sy-badge,.sy-action small,.sy-change,.sy-diff-item,.sy-diff-tag,.task-main small,.task-main strong,.outline-item small,.outline-item strong,.evidence,.panel-footnote,.panel-file small,.panel-file strong,.review-card p,.review-card h4,.upload-zone strong,.upload-zone span,.panel-empty p,.panel-empty h4,.panel-description,.sy-empty-metric,.sy-diff-summary,.sy-courses+.sy-section-title){font-size:11px}
-.study-panel .panel-body .sy-empty-metric{font-size:18px}
-.study-panel .panel-body .sy-badge{font-size:11px}
-/* 卡片化：1px 边框 + 圆角 10px + 内边距 18–20px，无重阴影；区块间距 18–22px。 */
-.panel-card{border:1px solid var(--line);border-radius:10px;padding:18px 20px;background:var(--white);margin-bottom:18px}
-.panel-card:last-child{margin-bottom:0}
-.panel-card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.panel-card-head>span{font-size:11px;color:var(--muted)}
-.panel-card h4{font-size:12px;font-weight:600;margin:0 0 8px}
-.panel-card-quiet{border-style:dashed;background:var(--sidebar)}
-.panel-inline-action{display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--ink);font-size:12px}
-.panel-inline-action:hover{border-color:var(--blue);color:var(--blue)}
-.panel-fold{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--sidebar);margin-bottom:18px}
-.panel-fold>summary{cursor:pointer;font-size:12px;font-weight:500;color:var(--ink)}
-.panel-fold[open]>summary{margin-bottom:12px}
-.panel-subsection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.panel-empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:26px 12px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;background:var(--sidebar)}
-.panel-empty-state strong{font-size:12px;font-weight:600;color:var(--ink)}
-.panel-empty-state p{font-size:11px;line-height:1.8;color:var(--muted)}
-.panel-plan-list{display:flex;flex-direction:column}
-.panel-tabs.segment{display:flex;gap:4px;padding:10px 16px;background:var(--sidebar);border-bottom:1px solid var(--line)}
-.panel-tabs.segment button{flex:1;border-radius:6px;padding:8px 10px;font-size:12px;color:var(--muted);background:transparent}
-.panel-tabs.segment button.active{background:var(--white);color:var(--blue);font-weight:600}
-.panel-tabs.segment button.active:after{display:none}
-/* 控件统一：输入/下拉 1px var(--line)、圆角 7px、内边距 9–11px。 */
-.study-panel .panel-body :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border:1px solid var(--line);border-radius:7px;padding:9px 11px;font-size:12px;background:var(--white);color:var(--ink)}
-.study-panel .panel-body button{border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-size:12px;background:var(--white);color:var(--ink)}
-.study-panel .panel-body button:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
-.study-panel .panel-body .button.primary,.study-panel .panel-body .sy-primary{background:var(--blue);border-color:var(--blue);color:white}
-.study-panel .panel-body .sy-source-link{border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin:4px 4px 0 0;color:var(--blue);background:var(--white)}
-.study-panel .panel-body .sy-estimate{width:64px;padding:6px 8px}
-/* 暗色：面板表面与卡片按暗色令牌分层；主按钮文字色 #15233c。 */
-:root[data-theme=dark] .study-panel{background:var(--dark-surface);border-color:var(--line)}
-:root[data-theme=dark] .study-panel .panel-card{background:var(--dark-raised);border-color:var(--line)}
-:root[data-theme=dark] .study-panel .panel-card-quiet,:root[data-theme=dark] .study-panel .panel-fold{background:var(--dark-soft);border-color:var(--line)}
-:root[data-theme=dark] .study-panel .panel-empty-state{background:var(--dark-soft);border-color:var(--line)}
-:root[data-theme=dark] .study-panel .panel-body :is(input:not([type=checkbox]):not([type=radio]),select,textarea),:root[data-theme=dark] .study-panel .panel-body button{background:var(--dark-surface);color:var(--ink);border-color:var(--line)}
-:root[data-theme=dark] .panel-tabs.segment{background:var(--dark-canvas);border-color:var(--line)}
-:root[data-theme=dark] .panel-tabs.segment button.active{background:var(--dark-raised);color:var(--blue)}
-:root[data-theme=dark] .study-panel .panel-body .button.primary,:root[data-theme=dark] .study-panel .panel-body .sy-primary{background:var(--blue);border-color:var(--blue);color:#15233c}
-:root[data-theme=dark] .study-panel .panel-body .sy-source-link{background:var(--dark-raised)}
+/* ��笔记页左栏 列表↔图谱 切换（图谱从右栏学习面板挪到笔记页） */
+.sy-nw-list-switch{display:flex;gap:2px;align-items:center}
+.sy-nw-list-switch button{border:0;padding:3px 7px;border-radius:6px;background:transparent;color:var(--muted);font-size:10px;cursor:pointer}
+.sy-nw-list-switch button:hover{color:var(--sy-blue)}
+.sy-nw-list-switch button.is-active{background:#eef4ff;color:var(--sy-blue);font-weight:600}
+.sy-nw-body.is-graph{grid-template-columns:minmax(400px,46%) minmax(0,1fr) 332px}
+.sy-nw-list .sy-graph{flex:1;min-height:0}
+
+/* ��图谱 tab —— 顶部「重新生成图谱」动作条 */
+.sy-graph-tab{display:flex;flex-direction:column;height:100%;min-height:0}
+.sy-graph-actions{display:flex;align-items:center;padding:10px 14px 0}
+.sy-graph-rebuild{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--sy-line);background:transparent;border-radius:6px;padding:5px 9px;font-size:11px;color:var(--muted);cursor:pointer}
+.sy-graph-rebuild:hover:not(:disabled){border-color:var(--sy-blue);color:var(--sy-blue)}
+.sy-graph-rebuild:disabled{opacity:.55;cursor:not-allowed}
+
+/* M8 需求#4：图谱并入大纲 —— 章节清单（左）+ 图谱聚焦（右） */
+.sy-outline-graph{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0}
+.sy-outline-graph-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sy-outline-graph-head h2{margin:0;font-size:14px}
+.sy-outline-graph-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.sy-outline-chapters{flex:none;max-height:176px;display:flex;flex-direction:column;gap:6px;overflow:auto;border:1px solid var(--sy-line);border-radius:8px;padding:10px 12px}
+.sy-outline-chapters h3{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 4px;font-size:12px}
+.sy-outline-chapters h3 small{color:var(--muted);font-size:10px;font-weight:400}
+.sy-outline-chapters h3,.sy-outline-chapters h4{margin:0}
+.sy-outline-book h4{font-size:11px;color:var(--muted);margin:8px 0 4px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sy-outline-book ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.sy-outline-book li button{border:0;background:transparent;width:100%;text-align:left;padding:4px 6px;border-radius:5px;font-size:12px;color:var(--sy-ink);cursor:pointer}
+.sy-outline-book li button:hover{background:#eef2fa}
+.sy-outline-book li.is-focus button{background:#e6f0ff;color:var(--sy-blue);font-weight:600}
+.sy-outline-graph-canvas{position:relative;flex:1;min-height:320px;border:1px solid var(--sy-line);border-radius:8px;overflow:hidden}
+.sy-outline-graph-canvas .sy-graph{position:absolute;inset:0}
+.sy-outline-graph-empty{display:block;margin:0;padding:18px}
+.sy-graph-focusbar{position:absolute;top:8px;left:8px;z-index:5;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--sy-line);border-radius:6px;padding:4px 8px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.sy-graph-focusbar span{color:var(--sy-blue);font-weight:600}
+.sy-graph-focusbar button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:11px}
+.sy-graph-focusbar button:hover{color:var(--sy-blue)}
+
+/* 需求#4 修订：上下布局 —— 章节目录在上（chips，可展开），图谱占满下方全宽 */
+.sy-outline-count{color:var(--muted);font-weight:400;margin-left:6px}
+.sy-outline-chips{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+.sy-outline-chips button{border:1px solid var(--sy-line);background:#fff;border-radius:999px;padding:3px 10px;font-size:11.5px;line-height:1.5;color:var(--sy-ink);cursor:pointer;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sy-outline-chips button:hover{border-color:var(--sy-blue);color:var(--sy-blue)}
+.sy-outline-chips button.is-focus{background:#e6f0ff;border-color:var(--sy-blue);color:var(--sy-blue);font-weight:600}
+.sy-outline-chips .sy-outline-more{border-style:dashed;color:var(--muted)}

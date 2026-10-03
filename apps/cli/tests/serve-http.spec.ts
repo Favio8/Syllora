@@ -6,8 +6,7 @@
  *   2. RPC 无 token / 错 token → 401，正确 token → 200（门禁顺序）；
  *   3. 恶意 Origin → 403（先于 token 判定）；
  *   4. GET /api/* → 405（方法守卫）；
- *   5. 静态托管：/ 交付票据页（CR-16：页面不含凭据）、无扩展名路由 SPA
- *      回落、编码穿越不泄漏；
+ *   5. 静态托管：/ 注入 token tap、无扩展名路由 SPA 回落、编码穿越不泄漏；
  *   5b. 编码穿越（裸 socket 版）：直发未经客户端归一化的路径，验证服务端自身；
  *   6. 上传路由边界：无工作区 → 409（先于 busboy 解析）；
  *   7. C-1 回归：优雅关停（SIGINT）后 host.json 与 host.lock 真正删除；
@@ -345,100 +344,21 @@ describe("serve HTTP 边界（集成）", () => {
     expect(res.status).toBe(405);
   }, 15_000);
 
-  it("CR-16：静态页面不再内嵌访问 token（本机进程 curl / 拿不到凭据）", async () => {
+  it("静态托管：token tap 注入、SPA 回落、资源 MIME", async () => {
     const page = await fetch(`${base()}/`, { signal: AbortSignal.timeout(8_000) });
     expect(page.status).toBe(200);
     const html = await page.text();
-    // 票据页：不含任何凭据（旧实现把 token 注入 window.__SYLLORA__，任意本机
-    // 进程 curl / 即可提取 token 并调用全部 /api/*）。
-    expect(html).not.toContain(host!.token);
-    expect(html).toContain("/api/session");
-    expect(page.headers.get("cache-control")).toBe("no-store");
+    expect(html).toContain("window.__SYLLORA__");
+    expect(html).toContain(host!.token);
 
-    // 换票端点要求持有 token：无凭据 → 401，正确凭据 → 下发 HttpOnly 会话 Cookie。
-    const denied = await fetch(`${base()}/api/session`, { method: "POST", signal: AbortSignal.timeout(8_000) });
-    expect(denied.status).toBe(401);
-    const granted = await fetch(`${base()}/api/session`, {
-      method: "POST",
-      headers: { "x-syllora-token": host!.token },
-      signal: AbortSignal.timeout(8_000),
-    });
-    expect(granted.status).toBe(200);
-    const cookie = granted.headers.get("set-cookie") ?? "";
-    expect(cookie).toContain("syllora_session=");
-    expect(cookie).toContain("HttpOnly");
-
-    // 持会话 Cookie 可取真正的 SPA。
-    const session = cookie.split(";")[0]!;
-    const spa = await fetch(`${base()}/`, { headers: { cookie: session }, signal: AbortSignal.timeout(8_000) });
+    const spa = await fetch(`${base()}/some/deep/route`, { signal: AbortSignal.timeout(8_000) });
+    expect(spa.status).toBe(200);
     expect(await spa.text()).toContain("sc-ui");
-
-    // 会话 Cookie 同样能授权 /api/*。
-    const api = await fetch(`${base()}/api/workspaces.list`, {
-      method: "POST",
-      headers: { "content-type": "application/json", cookie: session },
-      body: "{}",
-      signal: AbortSignal.timeout(8_000),
-    });
-    expect(api.status).toBe(200);
-
-    // 伪造 Cookie 不放行。
-    const forged = await fetch(`${base()}/api/workspaces.list`, {
-      method: "POST",
-      headers: { "content-type": "application/json", cookie: "syllora_session=deadbeef" },
-      body: "{}",
-      signal: AbortSignal.timeout(8_000),
-    });
-    expect(forged.status).toBe(401);
 
     const js = await fetch(`${base()}/app.js`, { signal: AbortSignal.timeout(8_000) });
     expect(js.status).toBe(200);
     expect(js.headers.get("content-type")).toContain("javascript");
   }, 15_000);
-
-  it("失效的会话 Cookie 回落到票据页（宿主重启换密钥后自愈）", async () => {
-    // Cookie 不区分端口：宿主重启换了会话密钥后，浏览器仍会带上旧 Cookie。
-    // 旧实现只看"Cookie 非空"就交付真 SPA，于是页面加载成功但所有 /api/* 401，
-    // 用户卡在"缺少或错误的访问令牌"且没有恢复入口。
-    const stale = await fetch(`${base()}/`, { headers: { cookie: "syllora_session=deadbeef" }, signal: AbortSignal.timeout(8_000) });
-    expect(stale.status).toBe(200);
-    const html = await stale.text();
-    expect(html).toContain("/api/session");
-    expect(html).not.toContain("sc-ui");
-  }, 15_000);
-
-  it("SPA 回落：无扩展名路由返回票据页（未持会话）", async () => {
-    const spa = await fetch(`${base()}/some/deep/route`, { signal: AbortSignal.timeout(8_000) });
-    expect(spa.status).toBe(200);
-    expect(await spa.text()).toContain("/api/session");
-  }, 15_000);
-
-  it("CR-01/CR-15：正常完成的请求不会被误判为客户端断连", async () => {
-    // CR-15：SSE 回合在客户端保持连接、正常读完的情况下必须跑完并回 done 帧。
-    // 旧实现把断连监听注册在 body 读取之后，现代 Node 下 'close' 已触发、
-    // 监听器永不执行；而 CR-01 的 upload 端点更严重——正常上传被判成
-    // 「客户端已消失」，临时文件被删、响应不发。
-    // 这里用真实 POST（请求体完整送达后连接仍由服务端收尾）验证两处判定。
-    const res = await fetch(`${base()}/api/workspaces.list`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-syllora-token": host!.token },
-      body: JSON.stringify({ payload: {} }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    expect(res.status).toBe(200);
-    expect((await res.json() as { ok?: boolean }).ok).toBe(true);
-
-    // upload 路由（multipart，`/api/courses/<id>/sources`）：显式无边界体的
-    // POST 在旧实现下会先命中 clientGone，响应永不发出。现在必须拿到明确的
-    // 结构化响应（无工作区 409，或解析失败 400），而不是超时。
-    const upload = await fetch(`${base()}/api/courses/it-course/sources`, {
-      method: "POST",
-      headers: { "content-type": "multipart/form-data; boundary=x", "x-syllora-token": host!.token },
-      body: "--x--",
-      signal: AbortSignal.timeout(15_000),
-    });
-    expect([400, 409]).toContain(upload.status);
-  }, 30_000);
 
   it("编码穿越不泄漏文件内容（403 或被归一化为 SPA 回落）", async () => {
     // 实测两种服务端形态都安全：
@@ -451,8 +371,7 @@ describe("serve HTTP 边界（集成）", () => {
       // 任何形态都不得带出穿越目标的文件内容。
       expect([200, 400, 403]).toContain(res.status);
       expect(body).not.toContain("root:");
-      // CR-16：未持会话的 200 是票据页（不含 sc-ui），持会话才是真 SPA。
-      if (res.status === 200) expect(body).toContain("/api/session");
+      if (res.status === 200) expect(body).toContain("sc-ui");
     }
   }, 15_000);
 
@@ -467,8 +386,7 @@ describe("serve HTTP 边界（集成）", () => {
       // 解码失败/空路径 → 400；带扩展名未命中 → 404。任何形态都不得泄内容。
       expect([200, 400, 403, 404]).toContain(status);
       expect(body).not.toContain("root:");
-      // CR-16：同上——200 是票据页，凭据不在页面里。
-      if (status === 200) expect(body).toContain("/api/session");
+      if (status === 200) expect(body).toContain("sc-ui");
     }
   }, 15_000);
 

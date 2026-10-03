@@ -7,8 +7,8 @@ import { workspaceStateDirOf } from './runtime-paths.ts'
  * @module @syllora/tools/src/paths
  */
 
-import { readFile, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
 import { ToolRejected } from './result.ts'
 
 export const SOURCE_ROOT_BINDING_NAME = '.source-root.json'
@@ -83,22 +83,9 @@ export async function courseSourceRoot(courseDir: string): Promise<string> {
 
 /**
  * Whether the course uses its original project directory as the material root.
- * CR-22：`.source-root.json` 全仓库没有任何生产代码写入，此判定恒 false，
- * 使 `INPLACE_SOURCE_EXCLUDED_DIRS` 成为死代码——默认布局下可读
- * `courses/<其他课程>/notes.md`、`tasks/` 等，`search_sources` 还会扫
- * node_modules。排除集是与布局无关的（都为「不该被当学习资料」的目录），
- * 不再以该标志为生效条件；本函数保留给仍依赖 in-place 语义的调用方。
  */
 export async function isInplaceCourse(courseDir: string): Promise<boolean> {
   return (await stat(join(courseDir, SOURCE_ROOT_BINDING_NAME)).catch(() => null))?.isFile() ?? false
-}
-
-/**
- * CR-22：参与资料扫描时的排除目录集。排除项与课程布局无关，直接生效；
- * `inPlace` 形参保留以兼容既有调用方（当前不再改变结果）。
- */
-export function sourceExcludedDirs(_inPlace?: boolean): ReadonlySet<string> {
-  return INPLACE_SOURCE_EXCLUDED_DIRS
 }
 
 /**
@@ -140,8 +127,7 @@ export async function resolveSourceRef(courseDir: string, ref: string): Promise<
   if (parts.some(isEightDotThreeSegment)) {
     throw new ToolRejected('路径段疑似 Windows 8.3 短名别名（如 SYLLOR~1），已拒绝')
   }
-  // CR-22：排除集直接生效（详见 sourceExcludedDirs 的注释）。
-  const excluded: ReadonlySet<string> = sourceExcludedDirs()
+  const excluded = (await isInplaceCourse(courseDir)) ? INPLACE_SOURCE_EXCLUDED_DIRS : new Set<string>()
   if (parts.some(part => part.startsWith('.') || excluded.has(part))) {
     throw new ToolRejected('不允许访问隐藏文件/目录或课程内部状态目录')
   }
@@ -154,22 +140,5 @@ export async function resolveSourceRef(courseDir: string, ref: string): Promise<
   if (target !== root && !target.startsWith(prefix)) {
     throw new ToolRejected('path 超出课程资料根目录')
   }
-  // CR-21：词法 containment 不解析符号链接——资料根里植入指向外部的链接（或
-  // 中间目录 junction）+ 客户端携带该 ref，即可把外部文件读进 LLM 上下文
-  // （read_source 与 fileContextOf 都在出口补了 realpath 复核；这里再收一道口，
-  // 让所有 resolveSourceRef 的调用方都拿到已解析的路径）。目标不存在时按原样
-  // 返回：写侧/新建路径的语义不受影响，由调用方按需处理。
-  const realRoot = await realpath(root).catch(() => root)
-  const realTarget = await realpath(target).catch(() => null)
-  if (realTarget === null) return target
-  if (realTarget !== realRoot && !isWithinPath(realRoot, realTarget)) {
-    throw new ToolRejected('path 不能通过符号链接越界')
-  }
-  return realTarget
-}
-
-/** realpath 产物之间的包含判定（异盘相对产物为绝对形态，显式排除）。 */
-function isWithinPath(root: string, target: string): boolean {
-  const relPath = relative(root, target)
-  return relPath !== '' && !isAbsolute(relPath) && relPath !== '..' && !relPath.startsWith('..' + sep)
+  return target
 }

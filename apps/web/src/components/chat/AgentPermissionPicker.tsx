@@ -38,7 +38,6 @@ export default function AgentPermissionPicker({ disabled = false, onSaved }: { d
     className="composer-permission"
     value={preset}
     disabled={disabled || busy || presets.length === 0}
-    placeholder="权限：加载中…"
     options={presets.map(item => ({ value: item.id, label: `权限：${item.name}`, description: item.description }))}
     onChange={value => void choose(value)}
   />;

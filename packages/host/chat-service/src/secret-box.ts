@@ -12,7 +12,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { join, dirname } from 'node:path'
-import { link, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { migrateLegacyHome } from '@syllora/tools'
 const KEY_BYTES = 32
 
@@ -25,41 +25,17 @@ export function masterKeyPath(): string {
 /** Load or lazily create the per-user master key (hex-encoded 256-bit). */
 export async function ensureMasterKey(): Promise<Buffer> {
   const path = masterKeyPath()
-  const existing = await readFile(path, 'utf8').catch(error => {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw error
-  })
-  if (existing !== null) return parseMasterKey(existing, path)
+  const existing = await readFile(path, 'utf8').catch(() => null)
+  if (existing !== null) {
+    const hex = existing.trim()
+    if (/^[0-9a-f]{64}$/i.test(hex)) return Buffer.from(hex, 'hex')
+    //损坏的密钥文件直接重建会锁死旧密文，因此这里显式报错而不是覆盖。
+    throw new Error(`master.key 内容无效（应为 64 位十六进制）: ${path}`)
+  }
   await mkdir(dirname(path), { recursive: true })
   const fresh = randomBytes(KEY_BYTES)
-  // 先完整写入私有临时文件，再以不覆盖目标的硬链接原子发布。
-  // 直接 wx 创建目标会让并发读取者看见尚未写完的空文件。
-  const temporary = `${path}.${randomBytes(12).toString('hex')}.tmp`
-  try {
-    const handle = await open(temporary, 'wx', 0o600)
-    try {
-      await handle.writeFile(fresh.toString('hex') + '\n', 'utf8')
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    try {
-      await link(temporary, path)
-      return fresh
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      return parseMasterKey(await readFile(path, 'utf8'), path)
-    }
-  } finally {
-    await rm(temporary, { force: true })
-  }
-}
-
-/** 校验 master.key 内容；损坏时显式报错，绝不覆盖（覆盖会锁死旧密文）。 */
-function parseMasterKey(raw: string, path: string): Buffer {
-  const hex = raw.trim()
-  if (/^[0-9a-f]{64}$/i.test(hex)) return Buffer.from(hex, 'hex')
-  throw new Error(`master.key 内容无效（应为 64 位十六进制）: ${path}`)
+  await writeFileAtomicRestricted(path, fresh.toString('hex') + '\n')
+  return fresh
 }
 
 /** The only writer for master.key and credentials.json: random tmp name,
@@ -151,22 +127,3 @@ export async function unsealCredentials(raw: string): Promise<UnsealResult> {
 }
 
 export { writeFileAtomicRestricted }
-
-/**
- * CR-07 启动校验：宿主启动时读一次凭据，确认 master.key 能解开它。
- * 旧实现只把失败留给第一次真实调用，损坏/错配要等到用户发消息才炸；
- * 这里在启动时留一条明确告警（不中断启动——凭据可以被界面重新写入）。
- * 无凭据文件或明文旧文件直接跳过（明文由 settings 层迁移）。
- */
-export async function verifyCredentialsReadable(credentialsPath: string): Promise<void> {
-  const raw = await readFile(credentialsPath, 'utf8').catch(() => null)
-  if (raw === null || raw.trim() === '') return
-  try {
-    const parsed = await unsealCredentials(raw)
-    if (!parsed.wasPlaintext) await ensureMasterKey()
-  } catch {
-    console.warn(
-      `[secret-box] 凭据文件无法解密，请在设置中重新填写 API Key：${credentialsPath}`,
-    )
-  }
-}

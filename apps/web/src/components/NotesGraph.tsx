@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { forceX, forceY } from "d3-force";
 import { api } from "../lib/api";
 import { buildNotesGraph, computeDegrees, matchedNoteIds } from "../lib/notesGraph";
+import type { NotesGraph as NotesGraphData } from "../lib/notesGraph";
 import type { NoteMeta } from "../types/api";
 import type { ForceGraphMethods } from "react-force-graph-2d";
 
@@ -63,7 +64,7 @@ interface GraphLink {
   target: string;
 }
 
-export default function NotesGraph({ courseId, refreshKey, fill = false }: { courseId: string; refreshKey: number; fill?: boolean }) {
+export default function NotesGraph({ courseId, refreshKey, overrideGraph, title = "笔记知识图谱", focusNodeId = null }: { courseId: string; refreshKey: number; overrideGraph?: NotesGraphData | null; title?: string; focusNodeId?: string | null }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -76,9 +77,9 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 300, h: 360 });
 
-  // 加载笔记
+  // 加载笔记（overrideGraph 提供外部图数据时不再拉笔记）
   useEffect(() => {
-    if (!courseId) { setNotes([]); return; }
+    if (!courseId || overrideGraph) { setNotes([]); return; }
     let alive = true;
     setLoading(true);
     setError("");
@@ -86,9 +87,9 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
       .catch((cause: unknown) => { if (!alive) return; setNotes([]); setError(cause instanceof Error ? cause.message : "无法读取笔记"); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [courseId, refreshKey]);
+  }, [courseId, refreshKey, overrideGraph]);
 
-  const graph = useMemo(() => buildNotesGraph(notes), [notes]);
+  const graph = useMemo(() => overrideGraph ?? buildNotesGraph(notes), [overrideGraph, notes]);
   const degrees = useMemo(() => computeDegrees(graph), [graph]);
   const matched = useMemo(() => matchedNoteIds(graph.nodes, query), [graph.nodes, query]);
 
@@ -168,6 +169,23 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
     const t = setTimeout(() => { raf = requestAnimationFrame(follow); }, 320);
     return () => { clearTimeout(t); cancelAnimationFrame(raf); };
   }, [selectedId, graphData]);
+
+  // 外部「选章聚焦」（需求 #4）：同步选中并放大到该节点（相对当前倍率放大，避免把已缩小的图又拉远）。
+  useEffect(() => {
+    setSelectedId(focusNodeId ?? null);
+  }, [focusNodeId]);
+  useEffect(() => {
+    if (!focusNodeId) return;
+    const t = setTimeout(() => {
+      const fg = fgRef.current;
+      const node = (graphData.nodes as unknown as Array<{ id: string; x?: number; y?: number }>).find((n) => n.id === focusNodeId);
+      if (fg && node && typeof node.x === "number" && typeof node.y === "number") {
+        const current = typeof fg.zoom === "function" ? fg.zoom() : 1;
+        fg.zoom(Math.max(1.4, current * 1.8), 400);
+      }
+    }, 620);
+    return () => clearTimeout(t);
+  }, [focusNodeId, graphData]);
 
   // 容器尺寸
   useEffect(() => {
@@ -286,8 +304,7 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
   const h = dims.h || (fullscreen ? 600 : 360);
 
   const graphEl = (
-    <div className="sy-graph-canvas-wrap" ref={containerRef} onDoubleClick={() => setFullscreen(true)} title="双击放大图谱"
-      style={fullscreen || fill ? { flex: 1, height: "100%", minHeight: 200 } : { flex: "0 1 auto", height: 360, minHeight: 200 }}>
+    <div className="sy-graph-canvas-wrap" ref={containerRef} style={{ flex: fullscreen ? 1 : "0 1 auto", height: fullscreen ? "100%" : 360, minHeight: 200 }}>
       {graph.nodes.length > 0 && (
         <ForceGraph2D
           ref={fgRef}
@@ -339,19 +356,19 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
         {query && <button type="button" className="sy-graph-clear" aria-label="清除搜索" onClick={() => setQuery("")}><X size={12} /></button>}
       </label>
       <button type="button" aria-label="重置视图" title="重置视图" onClick={() => fgRef.current?.zoomToFit(400, 60)}><RotateCcw size={12} /></button>
-      <button type="button" aria-label={fullscreen ? "退出放大" : "放大图谱"} title={fullscreen ? "退出放大" : "放大图谱（双击画布同样可以）"} onClick={() => setFullscreen(!fullscreen)}>
+      <button type="button" aria-label={fullscreen ? "退出全屏" : "全屏"} title={fullscreen ? "退出全屏" : "全屏"} onClick={() => setFullscreen(!fullscreen)}>
         {fullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
       </button>
     </div>
   );
 
   const body = (
-    <div className="sy-graph" style={fullscreen || fill ? { flex: 1, display: "flex", flexDirection: "column", gap: 9, minHeight: 0 } : {}}>
+    <div className="sy-graph" style={fullscreen ? { flex: 1, display: "flex", flexDirection: "column", gap: 9, minHeight: 0 } : {}}>
       {toolbar}
       {error && <p className="sy-muted" role="alert">{error}</p>}
-      {loading && notes.length === 0 && <p className="sy-muted">正在读取笔记…</p>}
-      {!loading && notes.length === 0 && <p className="sy-muted">暂无笔记。打开左栏「笔记」新建第一篇，正文里用 <code>[[笔记标题]]</code> 就会连出线。</p>}
-      {notes.length > 0 && graphEl}
+      {!overrideGraph && loading && notes.length === 0 && <p className="sy-muted">正在读取笔记…</p>}
+      {!overrideGraph && !loading && notes.length === 0 && <p className="sy-muted">暂无笔记。打开左栏「笔记」新建第一篇，正文里用 <code>[[笔记标题]]</code> 就会连出线。</p>}
+      {(overrideGraph || notes.length > 0) && graphEl}
       <p className="sy-graph-hint">{notes.length > 0 ? `${graph.nodes.length} 篇 · ${graph.edges.length} 条关联` : ""}</p>
       {selected && (
         <div className="sy-graph-detail" data-testid="notes-graph-detail" key={selected.id}>
@@ -366,15 +383,16 @@ export default function NotesGraph({ courseId, refreshKey, fill = false }: { cou
 
   if (!courseId) return <p className="sy-muted">请先打开一门课程</p>;
 
-  // 放大：弹窗叠在面板之上（面板里的图谱保持原样，关掉弹窗即回到原视图）。
-  const enlarged = (
+  if (fullscreen) {
+    return (
       <div className="sy-overlay" onClick={() => setFullscreen(false)}>
         <div className="sy-modal" style={{ width: "90vw", height: "85vh", maxWidth: 1100, display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-          <header><h2>笔记知识图谱</h2><button type="button" aria-label="退出放大" onClick={() => setFullscreen(false)}><Minimize2 size={19} /></button></header>
+          <header><h2>{title}</h2><button type="button" aria-label="退出全屏" onClick={() => setFullscreen(false)}><Minimize2 size={19} /></button></header>
           <div style={{ flex: 1, minHeight: 0, padding: "0 24px 24px" }}>{body}</div>
         </div>
       </div>
-  );
+    );
+  }
 
-  return <>{body}{fullscreen ? enlarged : null}</>;
+  return body;
 }
