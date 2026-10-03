@@ -236,6 +236,15 @@ function pieces(block: Block): Block[] {
   }
   return result
 }
+/**
+ * 导出资料残留的行内 HTML（PPT/PDF 转换产物里大量 `<em><strong>u</strong></em>`）在解析阶段就剥掉：
+ * 只留标签内的文字，块级标签（表格等）保持原样。**刻意不转成 Markdown 强调**——原文里强调标记已经
+ * 层层嵌套，转出来就是 `*****i***` 这种噪声，比裸标签更难读；纯文本对引用校验也更友好。
+ */
+function normalizeInlineMarkup(text: string): string {
+  if (!text.includes('<')) return text
+  return text.replace(/<\/?(?:strong|b|em|i|u|s|del|ins|span|font|small|big|mark|sub|sup|code|abbr|cite|q|time|var|kbd|samp)\b[^>]*>/gi, '')
+}
 export function structuredSources(materialId: string, version: string, parts: Array<{ text: string; anchor: string; name?: string }>): Source[] {
   const groups: Block[] = []
   for (const part of parts) {
@@ -252,7 +261,8 @@ export function structuredSources(materialId: string, version: string, parts: Ar
       } else groups.push(block)
     }
   }
-  const sources: Source[] = groups.map(b => ({ id: sha(`${materialId}:${b.anchor}:${b.section}:${b.start}:${b.end}:${b.text}`), materialId, version, anchor: `${b.anchor} · 字符 ${b.start + 1}–${b.end}`, text: b.text, section: b.section, context: b.context, kind: b.kind, start: b.start, end: b.end }))
+  // 身份哈希用**原始**文本（口径不变就不换 id），展示与校验用的 text 做一次行内标记归一化。
+  const sources: Source[] = groups.map(b => ({ id: sha(`${materialId}:${b.anchor}:${b.section}:${b.start}:${b.end}:${b.text}`), materialId, version, anchor: `${b.anchor} · 字符 ${b.start + 1}–${b.end}`, text: normalizeInlineMarkup(b.text), section: b.section, context: b.context, kind: b.kind, start: b.start, end: b.end }))
   sources.forEach((s,i) => { if (i) s.previousId = sources[i-1]!.id; if (i+1 < sources.length) s.nextId = sources[i+1]!.id })
   return sources
 }

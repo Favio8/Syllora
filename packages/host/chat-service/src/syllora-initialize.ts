@@ -148,7 +148,11 @@ export async function initializeFolder(options: {
     const materialId = old?.id ?? stableId(course.id+':'+path), fingerprint = candidate.fingerprint, shortName = path.split(/[\\/]/).at(-1) ?? path
     // 缓存版本要跟着"切片口径"走：v3 之前的产物是每页一个 section，命中缓存就绕过了
     // structuredSources，会让旧格式原样复用（性能收益对存量资料完全不生效）。口径一改就升版本。
-    const cachePath = join(cacheDir,`${sha('parse-v4:'+path+':'+fingerprint+':'+materialId)}.json`)
+    // v5：section 改为「清洗后的章节号标题」（`1.6 不含独立源的等效`），并按加粗小节行切块——
+    // v4 的产物把每页小标题与整句正文都当章节，一部教材会切成几百个伪章节。
+    // v6：片段正文在解析阶段归一化行内 HTML（`<em><strong>u</strong></em>` → `***u***`），
+    // v5 的产物把裸标签带进讲义引用与资料正文，公式段完全不可读。
+    const cachePath = join(cacheDir,`${sha('parse-v6:'+path+':'+fingerprint+':'+materialId)}.json`)
     let parsed = await jsonFile<{material:Material;body:string;chars:number}>(cachePath)
     let parsedNow = false
     if (!parsed) {
