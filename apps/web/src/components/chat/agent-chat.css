@@ -9,7 +9,7 @@
  * 这里不改动 syllora.css，而是在 .sy-agent-chat 子树内用 `all: revert-layer`
  * 把属性回退到上一层（即 Tailwind 的 base/utilities 层），相当于给聊天区开一个
  * 干净的 Tailwind 岛；内联 style（如 composer 的 minHeight）不受影响。
- * 选择器刻意比旧规则更具体（两个 :not() 属性选择器），且本文件晚于 syllora.css
+ * 选择器刻意比旧规则更具体（两个:not 属性选择器），且本文件晚于 syllora.css
  * 加载，平级冲突时也由本文件胜出。
  */
 .sy-agent-chat {

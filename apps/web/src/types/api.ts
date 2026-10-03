@@ -108,11 +108,11 @@ export interface WorkspaceRegistryPayload {
   items: WorkspaceItem[];
 }
 
-/** 打开/接管一个本地项目的响应（��course/session 字段在 M2/M3 回归）。 */
+/** 打开/接管一个本地项目的响应（course/session 字段在 / 回归）。 */
 export interface OpenWorkspaceResponse {
   workspace: WorkspaceItem;
   created: boolean;
-  /** FL-18：自动建课骨架失败的原因（缺省 = 无警告）。 */
+  /** 自动建课骨架失败的原因（缺省 = 无警告）。 */
   courseWarning?: string | null;
 }
 
@@ -334,7 +334,7 @@ export interface JobView {
   jobId: string;
   status: "queued" | "running" | "done" | "failed";
   progress: { total: number; finished: number; currentFile: string | null };
-  /** FL-05：degraded 摘要（抽取失败/零概念块/差卡被闸）随 job 结果透出。 */
+  /** degraded 摘要（抽取失败/零概念块/差卡被闸）随 job 结果透出。 */
   result: { syllabusVersion: string; tasksGenerated: number; degraded?: string[] } | null;
   error: string | null;
 }
@@ -347,7 +347,7 @@ export interface SyncResponse {
   added: string[];
   changed: string[];
   skipped: number;
-  /** 无可用模型时后端不启动 job，可能为 null（FL-19 类型对齐）。 */
+  /** 无可用模型时后端不启动 job，可能为 null（类型对齐）。 */
   buildJobId: string | null;
 }
 /** 单次工具调用摘要（chat SSE `tool` / `tool-start` 事件）。 */
@@ -397,6 +397,6 @@ export type EvalEvent =
       data: { ef: number; efNew: number; nextReviewAt: string; masteryDelta: number };
     }
   | { event: "done"; data: { taskId: string } }
-  /** FL-09：服务端非阻断告警帧（如 AUDIT_WRITE_FAILED），评分流程继续。 */
+  /** 服务端非阻断告警帧（如 AUDIT_WRITE_FAILED），评分流程继续。 */
   | { event: "warning"; data: { code: string; message: string } }
   | { event: "error"; data: { code: string; message: string } };

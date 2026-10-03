@@ -55,7 +55,7 @@ async function awaitBuild(
       if (job.status === "done") {
         const tasksGenerated = job.result?.tasksGenerated ?? 0;
         report(`✓ 知识索引构建完成（syllabus 生成，共 ${tasksGenerated} 张题卡）`);
-        // FL-05：degraded（抽取失败/零概念块/差卡被闸）此前全线不可见——
+        // degraded（抽取失败/零概念块/差卡被闸）此前全线不可见——
         // 用户永远不知道"资料只摄取了一半"。逐条透出。
         const degraded = job.result?.degraded ?? [];
         if (degraded.length > 0) {
@@ -115,7 +115,7 @@ export default function MaterialsDialog({
   // FE-4：轮询生命周期绑定——关闭/卸载后不再 setState 空转最长 30 分钟。
   const buildPollSignalRef = useRef({ aborted: false });
   useEffect(() => () => { buildPollSignalRef.current.aborted = true; }, []);
-  // W-12：上传取消句柄——弹窗关闭/卸载时 abort 在途 multipart fetch。旧实现
+  // 上传取消句柄——弹窗关闭/卸载时 abort 在途 multipart fetch。旧实现
   // 无 signal/超时：大文件上传网络挂起时 busy 永久 true，只能刷新页面。
   const uploadAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => { uploadAbortRef.current?.abort(); uploadAbortRef.current = null; }, []);
@@ -184,11 +184,11 @@ export default function MaterialsDialog({
     }
     setBusy(true);
     setUploading(true); // 爪爪 uploading 姿态
-    // W-12：本次上传的取消句柄（弹窗关闭/卸载时 abort）。
+    // 本次上传的取消句柄（弹窗关闭/卸载时 abort）。
     const uploadAbort = new AbortController();
     uploadAbortRef.current = uploadAbort;
     try {
-      // FL-12：旧实现只解构 {added, buildJobId}——超限被拒的文件（rejected）
+      // 旧实现只解构 {added, buildJobId}——超限被拒的文件（rejected）
       // 与构建失败原因（buildError）静默消失，用户看到"已归档 N 份"却不知道
       // 有文件没进来。
       const { added, buildJobId, buildError, rejected } = await api.uploadSources(activeCourseId, pickedFiles, uploadAbort.signal);
@@ -208,7 +208,7 @@ export default function MaterialsDialog({
           : []),
         ...(buildError !== undefined ? ["", `✗ 构建失败：${buildError}`] : []),
         ...(buildError === undefined && buildJobId !== null ? ["", "后台开始构建课程索引…"] : []),
-        // W-9：未配置模型时旧实现只显示"✓ 已归档 N 份"——不告知没有启动构建
+        // 未配置模型时旧实现只显示"✓ 已归档 N 份"——不告知没有启动构建
         // （静默部分失败），用户以为课程已在索引。显式给出下一步。
         ...(buildError === undefined && buildJobId === null
           ? ["", "⚠ 尚未配置模型：资料已归档，但未自动构建课程索引。在设置中配置模型后发送 /build。"]
@@ -237,7 +237,7 @@ export default function MaterialsDialog({
       setBuildStatus("done");
       await Promise.all([refreshPanelData(), refreshCourseList()]);
     } catch (cause) {
-      // W-12：用户关闭弹窗导致的取消不是失败——静默（不闪错误横幅）。
+      // 用户关闭弹窗导致的取消不是失败——静默（不闪错误横幅）。
       if (uploadAbort.signal.aborted) return;
       // list 顺序与 added 一一对应，我们据此判断“重名”仅用于提示；
       // 后端已保证绝不覆盖。inplace 拒绝也走统一错误协议。
@@ -349,7 +349,7 @@ ${msg}`);
         build: null,
       });
       if (created.buildJobId) {
-        // FL-19：轮询绑定弹窗生命周期——关闭弹窗立即停止（旧实现僵尸轮询）。
+        // 轮询绑定弹窗生命周期——关闭弹窗立即停止（旧实现僵尸轮询）。
         const outcome = await awaitBuild(created.buildJobId, created.course, (msg) => {
           setNotice((prev) => `${prev ?? ""}\n${msg}`);
         }, buildPollSignalRef.current);
@@ -376,7 +376,7 @@ ${msg}`);
 
   const supportedCount = (candidates ?? []).filter((c) => c.supported).length;
 
-  // W-10：焦点圈闭——打开聚焦首个控件、Tab 层内循环、Escape 关闭（与遮罩点击
+  // 焦点圈闭——打开聚焦首个控件、Tab 层内循环、Escape 关闭（与遮罩点击
   // 同语义）、关闭后焦点还原。
   const dialogRef = useRef<HTMLElement>(null);
   useFocusTrap({ containerRef: dialogRef, onEscape: onClose });

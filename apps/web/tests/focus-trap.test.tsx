@@ -1,5 +1,5 @@
 /**
- * useFocusTrap 单测（W-10）：Tab 循环 / Escape / 焦点还原 / 嵌套栈顶仲裁。
+ * useFocusTrap 单测：Tab 循环 / Escape / 焦点还原 / 嵌套栈顶仲裁。
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";

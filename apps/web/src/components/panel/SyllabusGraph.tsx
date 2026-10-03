@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 大纲「关系图视图」（T3.4，ui_design_spec §4.2；P3 迭代）：React Flow DAG，
+ * 大纲「关系图视图」（T3.4，ui_design_spec §4.2； 迭代）：React Flow DAG，
  * dagre 自动分层布局（rankdir=LR，先修在左、后继在右）。
  *
  * - 节点 = 概念，按章节色板着色（色点 + 图例点击高亮该章概念）；

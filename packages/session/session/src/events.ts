@@ -117,7 +117,7 @@ const turnEndReasonSchema = z.discriminatedUnion('kind', [
 ])
 
 /** Runtime validation for first-party events with a stable payload contract.
- * Open-ended plugin events still use append()/appendUnknown(). */
+ * Open-ended plugin events still use append/appendUnknown. */
 const knownPayloadSchemas: Partial<Record<SessionEventName, z.ZodTypeAny>> = {
   'session/model': z.object({ provider: z.string().min(1), model: z.string().min(1), effort: z.string().min(1).optional(), cleared: z.boolean().optional() }).passthrough(),
   'session/fork': z.object({ parentSessionId: z.string().min(1), forkSeq: z.number().int().nonnegative() }).passthrough(),
@@ -206,7 +206,7 @@ function eventPath(historyDir: string, sessionId: string): string {
 }
 
 /**
- * P0-6 容错回放：逐行扫描，坏行/序号断裂处截断——不再让一行半写数据把整个
+ *  容错回放：逐行扫描，坏行/序号断裂处截断——不再让一行半写数据把整个
  * 会话锁死。`damaged` 表示截断点之后仍有内容（append 时据此自愈重建）。
  */
 function scanRowsTolerant(text: string, sessionId: string): { rows: SessionEventEnvelope[]; damaged: boolean } {
@@ -230,7 +230,7 @@ function scanRowsTolerant(text: string, sessionId: string): { rows: SessionEvent
   return { rows, damaged: false }
 }
 
-/** P0-6 自愈追加语义：健康文件走纯 `fs.appendFile`+fsync，坏文件一次性原子重建并备份原件。 */
+/** 自愈追加语义：健康文件走纯 `fs.appendFile`+fsync，坏文件一次性原子重建并备份原件。 */
 function serializeRows(rows: ReadonlyArray<SessionEventEnvelope>): string {
   return rows.map(row => JSON.stringify(row)).join('\n') + '\n'
 }
@@ -313,7 +313,7 @@ export class SessionEventStore {
       // 写入后的健康状态）；未命中才按重读结果走 新建/追加/自愈。
       const cacheHit = currentStat !== null && cached !== undefined && currentStat.size === cached.size && currentStat.mtimeMs === cached.mtimeMs
       if (cacheHit || (rawForHeal !== null && !damaged)) {
-        // P0-6：健康路径不再整文件重写（大日志下 O(n)/次且断电丢整本），
+        // 健康路径不再整文件重写（大日志下 O(n)/次且断电丢整本），
         // 改为纯追加 + 每批 fsync——半行损坏在下次读取时被容错截断。
         // RV-10：但"最后一个 JSON 字节写完、尾 \n 前中断"（断电/kill -9 精确
         // 卡点，或外部格式化器去掉尾换行）时 scanRowsTolerant 仍判健康——直接

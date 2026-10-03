@@ -1,6 +1,6 @@
 /**
  * WorkspaceRegistry behavior suite, ported from the dsh-workspace test
- * coverage with session accounting removed (M1 scope). Runs against the real
+ * coverage with session accounting removed （scope). Runs against the real
  * storage stack (cordis + storage hub + JSON backend in a temp dir), so every
  * case also pins durability of the underlying medium.
  */

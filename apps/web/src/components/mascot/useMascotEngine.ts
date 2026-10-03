@@ -39,7 +39,7 @@ import {
 } from "./tables";
 import type { MascotState, MascotTier } from "./types";
 
-/** idle 超过多久进入睡眠（P1 sleeping 态，取代 PR-1 的冻结退订）。 */
+/** idle 超过多久进入睡眠（sleeping 态，取代 PR-1 的冻结退订）。 */
 const SLEEP_AFTER_MS = 5 * 60_000;
 
 /** waking 惊醒过渡时长（设计文档 §7.2：约 1.8s）。 */
@@ -181,7 +181,7 @@ export function useMascotEngine(
 
   /**
    * 帧回调：pose 目标 → 弹簧积分 → setAttribute。
-   * 结构与原型 frame() 逐条对应；icon 档裁剪点见各注释。
+   * 结构与原型 frame 逐条对应；icon 档裁剪点见各注释。
    */
   const frame = useMemo(() => {
     return (now: number, dt: number): void => {
@@ -201,7 +201,7 @@ export function useMascotEngine(
         wakeRuntime(R, now);
       }
 
-      // P1 sleeping：idle 静置超时 → 入睡（睁眼值冻结、清眨眼队列，闭眼由
+      // sleeping：idle 静置超时 → 入睡（睁眼值冻结、清眨眼队列，闭眼由
       // pose 的 lid=0.06 压下）；恢复由 visibilitychange / state 变更触发唤醒
       if (!R.sleeping && R.seenState === "idle" && now - R.stateAt > SLEEP_AFTER_MS) {
         R.sleeping = true;
@@ -291,7 +291,7 @@ export function useMascotEngine(
         }
       }
 
-      // hop（celebrate 起跳；reduce/icon 禁用——评审 P2 项）
+      // hop（celebrate 起跳；reduce/icon 禁用——评审  项）
       let hop = 0;
       if (!reduce && !icon && R.hopAt >= 0) {
         const offset = hopY(R.hopAt, now);
@@ -299,7 +299,7 @@ export function useMascotEngine(
         else hop = offset;
       }
 
-      // ── DOM 写入（与原型 frame() 的 setAttribute 逐条对应） ──
+      // ── DOM 写入（与原型 frame 的 setAttribute 逐条对应） ──
       const set = (node: SVGGElement | null, attr: string, value: string): void => {
         if (node) node.setAttribute(attr, value);
       };

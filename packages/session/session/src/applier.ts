@@ -2,9 +2,9 @@ import { workspaceStateDirOf } from '@syllora/tools'
 /**
  * SyncApplier: applies the hidden `[SYLLORA_SYNC]` payload — concept
  * mastery updates rewrite `progress.md` (atomic), memory hints produce a
- * course-evidence audit line (dual-track global promotion is a M2
+ * course-evidence audit line (dual-track global promotion is a 
  * simplification: hints stay course-scoped). Ported from Python
- * `session.py::SyncApplier` / `memory.py::MemoryEngine.register` (reduced).
+ * `session.py：SyncApplier` / `memory.py：MemoryEngine.register` (reduced).
  * @module @syllora/session/src/applier
  */
 
@@ -140,7 +140,7 @@ export class SyncApplier {
     const facts = await this.conceptFacts()
     const text = await readFile(path, 'utf8').catch(() => null)
     if (text === null) {
-      // No board yet: create one with the updated concepts (best-effort M2 form).
+      // No board yet: create one with the updated concepts (best-effort  form).
       const header = ['| concept_id | name | chapter | mastery | evals | pass_rate | ef | next_review_at | misattribution |',
         '|---|---|---|---|---|---|---|---|---|']
       const rows = updates.map(update => {

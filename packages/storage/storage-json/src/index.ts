@@ -20,7 +20,7 @@ export const inject = ['storage']
 
 /**
  * Plugin configuration.
- * `root` has NO default on purpose: a `process.cwd()` fallback would scatter
+ * `root` has NO default on purpose: a `process.cwd` fallback would scatter
  * unit files wherever the process happens to start; assemblies state the
  * location explicitly.
  */
@@ -37,8 +37,8 @@ export const Config: z<Config> = z.object({
 /** JSON backend: owns the file-tree root and serves the `kv` facet. */
 export class JsonStorageBackend implements StorageBackend {
   private readonly open = new Map<string, KvUnit>()
-  // Reserved synchronously at open() entry so a concurrent open of the same
-  // unit fails, and close() can await opens still in flight.
+  // Reserved synchronously at open entry so a concurrent open of the same
+  // unit fails, and close can await opens still in flight.
   private readonly opening = new Map<string, Promise<KvUnit>>()
   private closed = false
 
@@ -66,7 +66,7 @@ export class JsonStorageBackend implements StorageBackend {
     const unit = await openJsonUnit(descriptor, path, () => this.open.delete(descriptor.name))
     if (this.closed) {
       // The backend closed while this open was in flight: do not hand out a
-      // live unit past close().
+      // live unit past close.
       await unit.close()
       throw new StorageError('closed', 'json backend is closed')
     }

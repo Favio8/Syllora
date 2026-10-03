@@ -104,7 +104,7 @@ export default function Syllora() {
   // 笔记整页工作区 + 「图谱」刷新计数：新建/保存/删除后 +1，右栏图谱据此重拉笔记。
   const [notesMode,setNotesMode] = useState(false);
   const [notesEpoch,setNotesEpoch] = useState(0);
-  // ��课程知识图谱（章节+知识点，复用右栏 NotesGraph；agent 概念抽取见 buildGraph）。
+  // 课程知识图谱（章节+知识点，复用右栏 NotesGraph；agent 概念抽取见 buildGraph）。
   const [courseGraph,setCourseGraph] = useState<NotesGraphData|null>(null);
   const [graphNodesRaw,setGraphNodesRaw] = useState<Array<{id:string;label:string;kind:string;group?:string}>>([]);
   const [graphBooks,setGraphBooks] = useState<Array<{ebookId:string;fileName:string}>>([]);
@@ -179,18 +179,20 @@ export default function Syllora() {
   const saveTimer = useRef<number | null>(null);
   // 「继续」在导入资料这一步要直接唤起系统文件选择框。输入框必须常驻挂在
   // 组件顶层：放在「资料」标签页里时，setTab('materials') 之后 React 还没
-  // 重渲染，ref 仍指向旧树上的节点，.click() 会落空——这正是原来「点了没反应」
+  // 重渲染，ref 仍指向旧树上的节点，.click 会落空——这正是原来「点了没反应」
   // 的成因之一。
   const fileInput = useRef<HTMLInputElement>(null);
   const course = data?.courses.find(c=>c.id===selected);
-  // ��拉取课程图谱（章节+知识点），右栏「图谱」tab 展示；无数据时显示占位。
+  // 拉取课程图谱（章节+知识点），右栏「图谱」tab 展示；无数据时显示占位。
   useEffect(() => {
-    if (!course) { setCourseGraph(null); return }
+    // 切课程先清空：新图返回前不得继续显示上一门课的图谱（含章节与知识点）。
+    setCourseGraph(null); setGraphNodesRaw([]); setGraphBooks([]);
+    if (!course) return;
     let alive = true;
     api.graph(course.id).then(res => { if (!alive) return; applyGraph(res); }).catch(() => { if (alive) { setCourseGraph(null); setGraphNodesRaw([]); } });
     return () => { alive = false };
   }, [course?.id]);
-  // M8 agent 建谱：提交任务 → 等它不再是 running → 重新拉图谱。
+  // agent 建谱：提交任务 → 等它不再是 running → 重新拉图谱。
   const buildGraph = useCallback(async () => {
     if (!course || graphBuilding) return;
     setGraphBuilding(true);
@@ -361,14 +363,16 @@ export default function Syllora() {
   };
   useEffect(()=>{setEditMinutes({})},[course?.draft?.id]);
   const exposureError=useLearningExposures(course,rpc,tab);
-  const uiData=data?projectWorkspace(data):null;
-  const displayCourse=uiData?.courses.find(item=>item.id===selected);
+  // projectWorkspace 每次返回全新对象（map/filter/Intl 实例都在里面），不 memo 就会随
+  // 1.5s 轮询与每次按键重建整棵投影：下游 useMemo 全部失效、子组件全量重渲染。
+  const uiData=useMemo(()=>data?projectWorkspace(data):null,[data]);
+  const displayCourse=useMemo(()=>uiData?.courses.find(item=>item.id===selected),[uiData,selected]);
   // 原生窗口按钮区（Electron titleBarOverlay）：底色不再"实测合成"。
-  //  - 旧实现沿祖先找背景色、再把 .sy-overlay 遮罩按 alpha 合成，而观察器只监听
-  //    body 的直接子节点（无 subtree），弹窗在应用树内开合时永不重算——一次灰色
-  //    值就粘住，表现为顶栏明明是白的、三个按钮底下却是灰的。
-  //  - 顶栏在两个外壳、两种主题下恒为 var(--white)（浅色 #fff / 深色 #171f2e），
-  //    所以直接按主题推固定色 + 固定高度，不需要测量，也就不需要任何监听。
+  // - 旧实现沿祖先找背景色、再把 .sy-overlay 遮罩按 alpha 合成，而观察器只监听
+  // body 的直接子节点（无 subtree），弹窗在应用树内开合时永不重算——一次灰色
+  // 值就粘住，表现为顶栏明明是白的、三个按钮底下却是灰的。
+  // - 顶栏在两个外壳、两种主题下恒为 var(--white)（浅色 #fff / 深色 #171f2e），
+  // 所以直接按主题推固定色 + 固定高度，不需要测量，也就不需要任何监听。
   // 高度固定成 WINDOW_CONTROL_HEIGHT：它决定原生按钮的大小，不跟顶栏高度走。
   useEffect(()=>{
     const theme=data?.uiPreferences?.theme??'light';

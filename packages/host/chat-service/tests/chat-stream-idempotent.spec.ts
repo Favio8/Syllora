@@ -310,7 +310,7 @@ describe('chatStream requestId 幂等（UI-1）', () => {
     for await (const event of chatStream(ws, basename(ws), { message: '解释覆写', mode: 'quick', requestId: 'req_pre_abort_001', signal: controller.signal }, config)) {
       kinds.push(event.kind)
     }
-    // 不请求 LLM、不产出任何帧、不落 user/input（旧实现 abort() 后仍 send+跑完整 turn）。
+    // 不请求 LLM、不产出任何帧、不落 user/input（旧实现 abort 后仍 send+跑完整 turn）。
     expect(llmCallCount).toBe(before)
     expect(kinds).toEqual([])
     const sessions = await listSessions(ws, basename(ws))

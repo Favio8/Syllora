@@ -1,6 +1,6 @@
 /**
- * FL-43：打包安装验证（dsh `release:verify-packed-install` 同职）——把打好的
- * tgz 真的装一遍并运行。FL-20（files glob 覆盖不到产物）之所以潜伏至今，
+ * 打包安装验证（dsh `release:verify-packed-install` 同职）——把打好的
+ * tgz 真的装一遍并运行。（files glob 覆盖不到产物）之所以潜伏至今，
  * 正是因为从来没人装过打好的包；本脚本是这类缺陷的永久门禁。
  *
  * 步骤：定位 artifacts/ 下最新的 @syllora/cli tgz → 临时目录 `npm install`
@@ -34,7 +34,7 @@ console.log(`[release:verify] 验证 ${latest}`)
 const tarballPath = tarball.path
 
 // 1. tarball 结构断言交给安装树（跨平台无 tar 依赖）：装完后 bin 入口必须
-//    存在、lib/types 中间产物不得泄漏（files glob 配置错误在此现形）。
+// 存在、lib/types 中间产物不得泄漏（files glob 配置错误在此现形）。
 
 // 2. 真装一遍（隔离临时目录，纯 npm 语义，无 workspace 魔法）。
 const installDir = mkdtempSync(join(tmpdir(), 'syllora-packed-'))

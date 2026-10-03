@@ -57,7 +57,7 @@ export class CourseNotFoundError extends Error {
 }
 
 /**
- * FL-25：掌握度的指数平滑系数。单次评测对掌握度的影响上限为 α（即一次答错最多
+ * 掌握度的指数平滑系数。单次评测对掌握度的影响上限为 α（即一次答错最多
  * 回退 30%，不再出现旧实现 `Math.min(旧值, score*0.9)` 的"一错归零"）。
  */
 const MASTERY_ALPHA = 0.3
@@ -160,7 +160,7 @@ export interface JobView {
   readonly jobId: string
   readonly status: 'queued' | 'running' | 'done' | 'failed'
   readonly progress: { total: number; finished: number; currentFile: string | null }
-  /** FL-05：degraded（抽取失败/零概念块/差卡被闸）必须透出——用户有权知道"资料只摄取了一半"。 */
+  /** degraded（抽取失败/零概念块/差卡被闸）必须透出——用户有权知道"资料只摄取了一半"。 */
   readonly result: { syllabusVersion: string; tasksGenerated: number; degraded: string[] } | null
   readonly error: string | null
 }
@@ -178,7 +178,7 @@ interface MutableJob {
 }
 
 /**
- * UI-7：评测幂等账本（evalId → 已结算帧）。��真实 evalId 持久化到
+ * UI-7：评测幂等账本（evalId → 已结算帧）。真实 evalId 持久化到
  * `.syllora/eval-ledger/<id>.json`——旧实现纯内存，宿主在 SM-2 已落盘、
  * 账本登记前崩溃后，同 evalId 重试会二次计分。TTL 10 分钟，超过 500 个文件
  * 按 mtime 清扫。匿名（无 evalId）提交无法被客户端重放匹配，不做记账。
@@ -284,7 +284,7 @@ export class JobManager {
         job.progress = { total, finished, currentFile: currentFile || null }
       }, undefined, concurrency)
       job.progress = { total: report.added.length + report.modified.length, finished: report.added.length + report.modified.length, currentFile: null }
-      // FL-05：degraded 一并透出（旧实现只回 version + tasksGenerated，
+      // degraded 一并透出（旧实现只回 version + tasksGenerated，
       // "抽取失败/零概念块/差卡被闸"对用户完全不可见）。
       job.result = { syllabusVersion: report.version, tasksGenerated: report.tasksGenerated, degraded: report.degraded }
       job.status = 'done'
@@ -301,7 +301,7 @@ export class JobManager {
   }
 }
 
-/** ��模块级单例——Agent runner 每个 turn 都新建 createCourseService，
+/** 模块级单例——Agent runner 每个 turn 都新建 createCourseService，
  * 实例级 jobs 表会让 UI sync 与 Agent syncSources 工具的同课程去重互相
  * 失明（双跑构建 = 双倍 LLM 计费 + 并发写课程文件）。跨实例共享后 UI-8
  * 去重对全部入口生效。 */
@@ -342,7 +342,7 @@ async function* runEvalSubmit(
         score: correct ? 1 : 0,
         passed: correct,
         rubricHits: Object.fromEntries((task.evaluation_criteria.rubric).map(criterion => [criterion, correct])),
-        // FL-27：schema 允许 rubric 2~4 条（learning/index.ts 的 dynamicBatch
+        // schema 允许 rubric 2~4 条（learning/index.ts 的 dynamicBatch
         // `min(2).max(4)`），旧文案硬编码"四个"在 2/3 条时会撒谎。
         feedback: correct
           ? (rationale !== '' ? `回答正确。${rationale}` : `回答正确：${task.evaluation_criteria.rubric.length} 个采分点全部命中。`)
@@ -369,7 +369,7 @@ async function* runEvalSubmit(
       result = await evaluator.evaluate(task, answer, memory.slice(0, 2000))
       gradedBy = 'rubric'
     }
-    // FL-27：答案键路径不再把"单一布尔"伪装成 rubric 逐条命中帧（多采分点
+    // 答案键路径不再把"单一布尔"伪装成 rubric 逐条命中帧（多采分点
     // 的诊断价值归零）——MCQ 本地快判只发结论，rubric 帧仅属于 LLM 判分路径。
     if (gradedBy !== 'answer_key') {
       for (const [index, [criterion, hit]] of Object.entries(result.rubricHits).entries()) {
@@ -377,7 +377,7 @@ async function* runEvalSubmit(
       }
     }
     // Update the task history + progress board (SM-2) under the course lock
-    // (P1-6)：读板→upsert→存板的整个 RMW 在临界区内，避免并发评测丢更新。
+    // 读板→upsert→存板的整个 RMW 在临界区内，避免并发评测丢更新。
     const boardPath = join(stateDirOf(dir), 'progress.md')
     const schedule = await withCourseLock(dir, async () => {
       const board = await loadProgressBoard(boardPath)
@@ -390,7 +390,7 @@ async function* runEvalSubmit(
       const priorEf = record?.ef ?? 2.5
       const priorStreak = result.passed ? record?.streak ?? 0 : 0
       const nextLocal = reviewSchedule(priorEf, priorStreak, result.score)
-      // FL-34：`Date.now() + days * 86_400_000` 用固定毫秒长累加，跨夏令时切换
+      // `Date.now + days * 86_400_000` 用固定毫秒长累加，跨夏令时切换
       // 会偏移一小时，配合 `localDateKey` 的本地日期取法可能整体错一天。
       // 改为按日历天推进，交给 Date 自己处理 DST。
       const dueDate = new Date()
@@ -406,7 +406,7 @@ async function* runEvalSubmit(
         conceptId: task.concept_id,
         name: record?.name ?? task.concept_id,
         chapter: record?.chapter ?? '',
-        // FL-25：旧实现失败分支 `Math.min(旧值, score*0.9)` 在 score=0 时把掌握度直接
+        // 旧实现失败分支 `Math.min(旧值, score*0.9)` 在 score=0 时把掌握度直接
         // 归零——学到 80% 的概念一次失误即清零；成功分支 `Math.max` 又只增不减，第二次
         // 只得 0.65 也锁在 0.95，长期虚高。改为指数平滑：单次最多回退 30%，不再断崖；
         // 无历史记录（首次评测）时直接用本次得分作为基线。
@@ -423,7 +423,7 @@ async function* runEvalSubmit(
       return { next: nextLocal, nextReviewAt: dueDateKey, priorEf, masteryDelta: Math.round((newMastery - priorMastery) * 1000) / 1000 }
     })
     const { next, nextReviewAt, priorEf, masteryDelta } = schedule
-    // M4 窗口修复：result/sm2/done 三帧只依赖此刻已就绪的本地数据，settle 一
+    // 窗口修复：result/sm2/done 三帧只依赖此刻已就绪的本地数据，settle 一
     // 完成就构造并交给 onSettled 持久化幂等账本。账本若等整条流被消费完才落
     // 盘，SSE 中断/宿主崩溃把生成器悬停在某个 yield 上时账本永不落盘，同
     // evalId 重试会二次 settle（SM-2/掌握度重复计分）。
@@ -434,8 +434,8 @@ async function* runEvalSubmit(
     ]
     if (onSettled !== undefined) await onSettled(tailFrames)
     // 追加评测审计事件到会话事件流。路径必须与 chat 运行时一致：
-    // `<课程根>/.syllora/history`（P1-1——旧代码漏掉 .syllora 段，
-    // exists() 恒 false，审计被静默跳过）。评分结果已落 progress.md，
+    // `<课程根>/.syllora/history`（——旧代码漏掉 .syllora 段，
+    // exists 恒 false，审计被静默跳过）。评分结果已落 progress.md，
     // 审计写入失败不阻断 result/sm2/done，但必须以 warning 帧显式告知
     // 客户端（F-10：静默吞错升级为可见告警）。
     const historyDir = join(stateDirOf(dir), 'history')
@@ -444,11 +444,11 @@ async function* runEvalSubmit(
     // 会话是否"存在"以事件流文件（session_<id>.events.jsonl）为准——legacy
     // SessionStore 的 meta 文件命名是 session_<id>.jsonl，二者不同源。
     if (auditSessionId !== null && !(await eventStore.exists(auditSessionId))) {
-      // FL-08（V5 同路径）：指定会话的事件流已不存在（fork/归档/清场）→ 不复用。
+      // （V5 同路径）：指定会话的事件流已不存在（fork/归档/清场）→ 不复用。
       auditSessionId = null
     }
     if (auditSessionId === null) {
-      // FL-08：HANDOFF 约定「无会话则 newSession」。旧实现无会话（纯做题用户
+      // HANDOFF 约定「无会话则 newSession」。旧实现无会话（纯做题用户
       // 从未聊天）时只 console.warn 后跳过——eval 不进任何 history 行，热力图
       // /日详情恒为 0。这里就地补一个做题记录会话，保证评分必留痕（评分本身
       // 已先落 progress.md，不受此处影响）。
@@ -462,7 +462,7 @@ async function* runEvalSubmit(
     if (auditSessionId !== null) {
       try {
         // append 自建事件流文件（SessionEventStore.pathFor 统一命名），刚补建的
-        // 会话无需先有 exists() 为 true 的前置。
+        // 会话无需先有 exists 为 true 的前置。
         await eventStore.append(auditSessionId, {
           ts: utcTs(),
           type: 'eval',
@@ -524,7 +524,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       const dir = await requireCourse(workspaceRoot, courseId)
       const config = await getConfig()
       const generator = requireGenerator({ workspaceRoot, config })
-      // FL-06：粒度重切必须与正常构建同一 builder 口径。旧实现用裸
+      // 粒度重切必须与正常构建同一 builder 口径。旧实现用裸
       // `new CourseBuilder(dir, …)`（缺省 sourceRoot → 只扫 `<dir>/sources`），
       // 项目根的就地资料不随粒度重切，且重切末尾的 checksum 覆写会把根资料
       // 误判为"新增"，下次构建重复跑 LLM 出题。
@@ -692,7 +692,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
         source_ref: { file: 'manual', chunk_id: chunkStamp },
       }
       const generated = await generator.generateTasks(chunk, payload.count ?? 1)
-      // P1-6 + F-14：池内读改写上锁；与既有 task_id 冲突的手动卡重编号，
+      // + F-14：池内读改写上锁；与既有 task_id 冲突的手动卡重编号，
       // 避免评测 find(task_id) 命中错误题卡。
       const tasks = await withCourseLock(dir, async () => {
         const pool = await loadTaskPool(dir)
@@ -734,7 +734,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
       return { courseId, tasks: cards }
     },
     async *evalSubmit(workspaceRoot, courseId, taskId, answer, sessionId = null, evalId: string | null = null) {
-      // UI-7 + ��评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
+      // UI-7 + 评测幂等账本。SSE 中断后客户端用手动"重试"重发同一作答——
       // 若第一次的 settle（SM-2/progress）已落盘，重试就是重复计分。同一
       // evalId（taskId+会话+作答的稳定指纹）在 TTL 窗口内直接重放已结算帧；
       // 真实 evalId 走磁盘（宿主重启后仍可重放），匿名键留内存。
@@ -806,7 +806,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
         // Windows absolute paths use backslashes; splitting only on "/" would
         // keep the whole path as the file name and make the copy target invalid.
         const name = source.split(/[\\/]/).pop() ?? 'import.txt'
-        // FL-07：copyFile 直写目标会覆盖项目根同名文件；与上传路径同语义，
+        // copyFile 直写目标会覆盖项目根同名文件；与上传路径同语义，
         // 重名自动加序号落盘（L10：目标名已被独占预留，失败需清理空文件）。
         const target = await uniqueDestinationPathIn(dir, name)
         const copied = await copyFile(source, target).then(() => true).catch(() => false)
@@ -825,7 +825,7 @@ export function createCourseService(getConfig: () => Promise<ResolvedChatConfig 
           granularity: 'fine', chapters: [], adjacency: {},
         }, null, 2) + '\n', 'utf8')
       }
-      // FL-07：配了真实模型时旧实现在 RPC 内同步 build（分钟级阻塞 HTTP，前端
+      // 配了真实模型时旧实现在 RPC 内同步 build（分钟级阻塞 HTTP，前端
       // 只转圈且硬返 buildJobId:null 轮询永不执行）。改为与其他入口一致的异步
       // job；未配置模型时保持同步空转构建（无 LLM、毫秒级，纯产出骨架）。
       if (generator !== null && config !== null) {
@@ -857,7 +857,7 @@ async function enumerateFiles(root: string): Promise<{ root: string; files: Arra
   // node_modules/.git 被全量 walk+stat 后再 slice(0,500)（先累积后截断，瞬态
   // 内存无界；本仓库 node_modules 下实测 8,923 个 .md/.txt，打开文件面板即
   // 全量命中）。复用 builder 同款排除集 + 深度/数量双上限、达上限即止。
-  // 符号链接条目的 isDirectory() 为 false，天然不成环。
+  // 符号链接条目的 isDirectory 为 false，天然不成环。
   const MAX_DEPTH = 6
   const MAX_FILES = 500
   const collect = async (dir: string, depth: number): Promise<void> => {
@@ -895,7 +895,7 @@ function slugId(title: string): string {
 }
 
 /**
- * FL-07：在 dir 内为 filename 找不冲突的唯一名（重名追加 -1/-2，与上传路径同语义）。
+ * 在 dir 内为 filename 找不冲突的唯一名（重名追加 -1/-2，与上传路径同语义）。
  * L10：目标名以 `wx` 独占创建空文件预留——旧「readdir 查重 → rename」的检查-使用
  * 窗口内，并发导入可能选中同一名字并静默互覆；预留后并发方立刻 EEXIST 递增序号。
  * 返回后目标名已预留：调用方必须向其写入（copyFile/rename 覆盖空文件），失败时

@@ -1,6 +1,6 @@
 /**
  * apiproxy dispatch integration: the full host seam (real storage stack +
- * registry) behind the M1 method table. Covers idempotent open, the
+ * registry) behind the  method table. Covers idempotent open, the
  * last-opened pointer, courses projection, rename conflict codes, reorder
  * and remove responses, and the invalid-path mapping.
  */

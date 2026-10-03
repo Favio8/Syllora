@@ -12,18 +12,18 @@ import { courseSourceRoot, isEightDotThreeSegment, isInplaceCourse, INPLACE_SOUR
 import { ToolRejected } from './result.ts'
 import { MAX_FILE_BYTES, MAX_NOTE_CHARS, MAX_READ_LINES, MAX_TOOL_MESSAGE_CHARS } from './specs.ts'
 
-/** Per-course in-process lock. P1-6：旧实现返回的是"上一个等待者"的 promise，
+/** Per-course in-process lock.：旧实现返回的是"上一个等待者"的 promise，
  * 临界区从未真正互斥。现在返回值挂到"上一个持有者完成后才结算"的链上，
  * 并发 read-modify-write 不再互相覆盖丢行。 */
 const courseLocks = new Map<string, Promise<void>>()
 
-/** FL-36：跨进程文件锁。进程内 Promise 链在"桌面端 + 用户另开 CLI/第二个
+/** 跨进程文件锁。进程内 Promise 链在"桌面端 + 用户另开 CLI/第二个
  * 宿主"的跨进程并发下完全失效（progress.md 丢更新复发），所以在进程内链的
  * 临界区里再套一层 `<课程>/.syllora/course.lock` 文件锁：`wx` 独占创建 +
  * 写入 pid，持有者死亡后由后来者自愈抢走。
- * BUG-003/NEW-001：锁令牌改为 `pid:nonce` 并在获取后读回确认——`wx` 成功到
+ * BUG-003/：锁令牌改为 `pid:nonce` 并在获取后读回确认——`wx` 成功到
  * 写入之间锁文件为空，可能被后来者判"陈旧"抢走；nonce 让确认比对可精确判定
- * 锁是否仍归本进程。NEW-008：轮询改随机化指数退避，高并发不再同频空转。 */
+ * 锁是否仍归本进程。：轮询改随机化指数退避，高并发不再同频空转。 */
 const COURSE_LOCK_POLL_MS = 40
 const COURSE_LOCK_POLL_MAX_MS = 1_000
 const COURSE_LOCK_TIMEOUT_MS = 30_000
@@ -206,7 +206,7 @@ function isWithin(root: string, target: string): boolean {
 }
 
 /** Resolve symlinks for generic filesystem tools before reading or writing.
- *  BUG-001/NEW-004（TOCTOU）：返回解析后的真实路径，调用方必须用它完成后续
+ *  BUG-001/（TOCTOU）：返回解析后的真实路径，调用方必须用它完成后续
  *  IO——只校验不返回时，"检查用解析路径、使用用原始路径"之间符号链接可被
  *  替换，攻击者可在竞态窗口内把读取/写入重定向到工作区外。 */
 async function safeExistingPath(ctx: ToolContext, target: string): Promise<string> {
@@ -262,7 +262,7 @@ export async function handlerSearchFiles(ctx: ToolContext, args: Record<string, 
     // PERF-11：整树扫描必须感知取消，超时/停止后不再继续烧 CPU/IO。
     if (ctx.signal?.aborted) return
     for (const entry of await readdir(dir, { withFileTypes: true })) {
-      // NEW-006：每个条目前都检查取消；进行中的文件读取也挂上 signal，
+      // 每个条目前都检查取消；进行中的文件读取也挂上 signal，
       // 大文件扫描在回合取消后立即停止而不是读完全量。
       if (ctx.signal?.aborted) return
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
@@ -685,7 +685,7 @@ export async function handlerGetCourseState(ctx: ToolContext, _args: Record<stri
   ]
 }
 
-/** `get_memory`: global profile (Memory.md) + course pool note (M2 simplified). */
+/** `get_memory`: global profile (Memory.md) + course pool note （simplified). */
 export async function handlerGetMemory(ctx: ToolContext, _args: Record<string, unknown>): Promise<[string, Record<string, unknown>]> {
   const memoryPath = join(workspaceStateDirOf(ctx.workspaceRoot), 'Memory.md')
   const memory = await readFile(memoryPath, 'utf8').catch(() => null)

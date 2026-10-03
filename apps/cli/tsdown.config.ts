@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown'
 
 /**
- * FL-20：CLI 打包为自包含单文件 bundle（dsh 同范式：`tsc -b` 先产出
+ * CLI 打包为自包含单文件 bundle（dsh 同范式：`tsc -b` 先产出
  * `lib/types/bin.js`，tsdown 把它连同全部 workspace 闭包聚合成扁平
  * `lib/bin.js`——`files: ["lib/*.js"]` 的 glob 从此必然命中，`bin` 指向的
  * 入口及其依赖一起进 tarball，npm 安装即可运行）。

@@ -1,5 +1,5 @@
 /**
- * C-6 回归：wireStdin 的 resume() 让 stdin 句柄常驻事件循环——交互命令
+ * C-6 回归：wireStdin 的 resume 让 stdin 句柄常驻事件循环——交互命令
  * （quiz/review/chat）跑完后进程永不退出（代理实测挂起；此前测试全部注入
  * 自定义 prompt，wireStdin 零覆盖故长期潜伏）。
  * 修复：wired 后 unref；prompt 等待期间 ref、结算后 unref。

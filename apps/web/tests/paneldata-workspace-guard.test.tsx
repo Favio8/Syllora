@@ -1,5 +1,5 @@
 /**
- * W-6 回归：refreshCourseList 落地前必须校验 workspacePath——chat sync/done
+ *  回归：refreshCourseList 落地前必须校验 workspacePath——chat sync/done
  * 触发的课程列表刷新与用户切项目竞态时，旧工作区的 courses 晚到会覆盖新工作区
  * 且不自愈（Console effect 已先跑完）。与 runPanelRefresh 的课程守卫同口径。
  */
@@ -27,7 +27,7 @@ vi.mock("../src/lib/api", () => ({ api: apiMocks }));
 
 import { refreshCourseList } from "../src/lib/panelData";
 
-describe("refreshCourseList 切工作区守卫（W-6）", () => {
+describe("refreshCourseList 切工作区守卫（）", () => {
   it("await 期间切工作区：旧工作区 courses 不覆盖新工作区", async () => {
     storeState.setCourses.mockClear();
     let resolveList!: (value: { courses: unknown[] }) => void;

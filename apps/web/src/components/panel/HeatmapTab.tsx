@@ -29,7 +29,7 @@ export default function HeatmapTab() {
   const [detail, setDetail] = useState<HeatmapDayDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // W-7：回放详情归属打开时的课程——切项目后旧课程的回放不得继续渲染在新
+  // 回放详情归属打开时的课程——切项目后旧课程的回放不得继续渲染在新
   // 课程下（新 heatmap 到达时旧 detail 会重新挂载出现）。
   useEffect(() => {
     setDetail(null);

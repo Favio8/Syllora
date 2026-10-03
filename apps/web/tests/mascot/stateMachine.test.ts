@@ -49,7 +49,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("deriveMascotState 优先级仲裁（§4.2 + §7.2 P1 扩展）", () => {
+describe("deriveMascotState 优先级仲裁（§4.2 + §7.2 扩展）", () => {
   it("全空输入 → idle", () => {
     expect(deriveMascotState(base, T0)).toBe("idle");
   });
@@ -135,7 +135,7 @@ describe("deriveMascotState 优先级仲裁（§4.2 + §7.2 P1 扩展）", () =>
 });
 
 describe("六态 pose 关键数值锁定（tables.ts，评审数值）", () => {
-  it("celebrate 举爪 -14（PR-2 微调：原型 -26 盖嘴线，评审 P2 修复）", () => {
+  it("celebrate 举爪 -14（微调：原型 -26 盖嘴线，评审修复）", () => {
     const pose = poseTargets("celebrate", 10, 1);
     expect(pose.pawL).toBe(-14);
     expect(pose.pawR).toBe(-14);

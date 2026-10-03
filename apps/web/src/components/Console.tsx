@@ -56,7 +56,7 @@ export default function Console() {
   const setRightPanelCollapsed = useAppStore((s) => s.setRightPanelCollapsed);
   const effectiveDetailsWidth = rightPanelCollapsed ? 0 : detailsWidth;
   const [dragging, setDragging] = useState<null | "sidebar" | "details">(null);
-  // FL-22：宿主心跳。旧版 api.workspaces() 失败被静默吞掉且"左栏错误横幅"
+  // 宿主心跳。旧版 api.workspaces 失败被静默吞掉且"左栏错误横幅"
   // 根本不存在——用户只起了 next dev 忘了起 syllora serve 时，三栏空壳、
   // 零报错零引导，30 秒内判定"这软件是坏的"。null = 探测中。
   const [hostUp, setHostUp] = useState<boolean | null>(null);
@@ -122,8 +122,8 @@ export default function Console() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMode]);
 
-  // 项目指针就绪/切换后重拉课程（M1 起课程列表按项目读取，存在异步竞态：
-  // loadCourses 在 workspaces() 返回前执行会拿不到 path 而空跑）。
+  // 项目指针就绪/切换后重拉课程（起课程列表按项目读取，存在异步竞态：
+  // loadCourses 在 workspaces 返回前执行会拿不到 path 而空跑）。
   const workspacePath = useAppStore((s) => s.workspacePath);
   useEffect(() => {
     if (!workspacePath) return;
@@ -135,9 +135,9 @@ export default function Console() {
       }
       // 骨架自愈（DSH：工作区随时可开聊）：课程记录缺失（如清场后）时补空
       // 骨架——不触发 LLM——然后重拉列表，恢复「新对话」可用。
-      // FL-23：工作区路径是 `realpath` 的规范路径（paths.ts:19-21 只做 realpath，
+      // 工作区路径是 `realpath` 的规范路径（paths.ts:19-21 只做 realpath，
       // 不做分隔符转换）——Windows 上是 `D:\a\b`，POSIX 上是 `/a/b`。旧实现只按 `/`
-      // 切分，在 Windows 上 `pop()` 会拿到整条路径而非末段，随后被 courseDirOf 的
+      // 切分，在 Windows 上 `pop` 会拿到整条路径而非末段，随后被 courseDirOf 的
       // basename 校验拒绝（course.ts:64-65）并被下面的 catch 静默吞掉，导致"新对话"
       // 永远不可用。两种分隔符都要切。
       const courseId = workspacePath.split(/[\\/]/).pop() ?? "";
@@ -245,7 +245,7 @@ export default function Console() {
         </button>
       ) : null}
 
-      {/* FL-22：后端未启动横幅（8s 心跳持续探测，恢复后自动消失） */}
+      {/* 后端未启动横幅（8s 心跳持续探测，恢复后自动消失） */}
       {hostUp === false ? (
         <div
           role="alert"

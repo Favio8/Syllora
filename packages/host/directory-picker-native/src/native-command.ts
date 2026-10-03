@@ -1,5 +1,5 @@
 /**
- * No-shell `execFile` runner for host-native OS integrations (FL-45：与 dsh
+ * No-shell `execFile` runner for host-native OS integrations (：与 dsh
  * `packages/util/native-command` 同语义的本地实现)——utf8 stdio capture,
  * abort propagation, Windows console hide. Native pickers never invoke a
  * shell (no injection surface).

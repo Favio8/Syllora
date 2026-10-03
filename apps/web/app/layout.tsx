@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * FL-30：开发模式的 token 引导。生产路径由 `syllora serve` 在托管 index.html
+ * 开发模式的 token 引导。生产路径由 `syllora serve` 在托管 index.html
  * 时通过 tap 注入（static-host.ts）；`next dev` 下浏览器与宿主跨端口，无法
  * 自行读取 host.json——这里在服务端渲染时读一次注入给客户端。仅在 dev 生效：
  * 静态导出（build）时 NODE_ENV=production，不会把任何 token 烧进产物。
@@ -52,7 +52,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="h-full overflow-hidden">
         {children}
-        {/* P1-③：动态 favicon（状态角标；客户端组件，SSR 输出为 null 不影响水合） */}
+        {/* -③：动态 favicon（状态角标；客户端组件，SSR 输出为 null 不影响水合） */}
       </body>
     </html>
   );

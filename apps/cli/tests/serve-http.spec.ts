@@ -12,10 +12,10 @@
  *   7. C-1 回归：优雅关停（SIGINT）后 host.json 与 host.lock 真正删除；
  *   8. 实例锁自愈：同一 home 下强杀残留 lock 后重启可抢回。
  *
- * 平台注意（POSIX）：tsx CLI 与它拉起的 bin.ts 是两个进程，`child.kill()`
+ * 平台注意（POSIX）：tsx CLI 与它拉起的 bin.ts 是两个进程，`child.kill`
  * 只打到 wrapper 上。因此 POSIX 下 spawn 用 `detached` 让 serve 自成进程组，
  * 信号按组发（`process.kill(-pid, sig)`），保证真正跑 serve 的进程收到；
- * Windows 无进程组语义，`child.kill()` 即强杀且实测会带走监听（无孤儿）。
+ * Windows 无进程组语义，`child.kill` 即强杀且实测会带走监听（无孤儿）。
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -362,9 +362,9 @@ describe("serve HTTP 边界（集成）", () => {
 
   it("编码穿越不泄漏文件内容（403 或被归一化为 SPA 回落）", async () => {
     // 实测两种服务端形态都安全：
-    //  - `%2e%2e` 被 WHATWG URL 解析器在客户端归一化成 `/etc/passwd`，落 dist
-    //    根内无此文件 → SPA 回落 200（index.html，无穿越目标内容）；
-    //  - `..%2f` / `%2e%2e%2f` 保留编码到达服务端 → 显式 403。
+    // - `%2e%2e` 被 WHATWG URL 解析器在客户端归一化成 `/etc/passwd`，落 dist
+    // 根内无此文件 → SPA 回落 200（index.html，无穿越目标内容）；
+    // - `..%2f` / `%2e%2e%2f` 保留编码到达服务端 → 显式 403。
     for (const path of ["/%2e%2e/%2e%2e/%2e%2e/etc/passwd", "/..%2f..%2fetc/passwd", "/%2e%2e%2f%2e%2e%2fetc/passwd"]) {
       const res = await fetch(`${base()}${path}`, { signal: AbortSignal.timeout(8_000) });
       const body = await res.text();
@@ -378,7 +378,7 @@ describe("serve HTTP 边界（集成）", () => {
   it("编码穿越：裸 socket 直发未归一化路径也不泄漏文件内容", async () => {
     // 上一个用例里 `%2e%2e` 是被**客户端** URL 解析器归一化的，服务端那条路径
     // 压根没收到——证明不了服务端自己的行为。这里用裸 socket 把原始字节发给
-    // 服务端：当前由 bin.ts 的 `new URL()` 归一化 + static-host 的根包含校验两
+    // 服务端：当前由 bin.ts 的 `new URL` 归一化 + static-host 的根包含校验两
     // 道防线负责（任一道被移除都会在这里现形：归一化没了 → 解码成 `..` → 穿越）。
     for (const target of ["/%2e%2e/%2e%2e/%2e%2e/etc/passwd", "/%2e%2e%2f%2e%2e%2fetc/passwd", "/..%2f..%2fetc/passwd"]) {
       const { status, body } = await rawGet(target);

@@ -105,7 +105,7 @@ export function deadline(
   const id = setTimeout(() => { timer.abort(new TimeoutReason(code, timeoutMs)) }, timeoutMs)
   return {
     // AbortSignal.any adopts the reason of whichever source aborts FIRST, so a
-    // race resolves to a single cause: timeoutOf() reads TimeoutReason only
+    // race resolves to a single cause: timeoutOf reads TimeoutReason only
     // when the timeout won, and upstream-wins leaves an ordinary abort reason.
     signal: upstream !== undefined ? AbortSignal.any([upstream, timer.signal]) : timer.signal,
     [Symbol.dispose]() { clearTimeout(id) },

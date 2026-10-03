@@ -67,7 +67,7 @@ export interface SettingsDescriptor {
   // public API, provider contract, implementations, tests, and consumers.
   /** The registered namespace. */
   ns: SettingsNamespace
-  /** Serialized schemastery schema (`schema.toJSON()`). */
+  /** Serialized schemastery schema (`schema.toJSON`). */
   schema: unknown
   /** Current resolved value. */
   value: unknown
@@ -380,7 +380,7 @@ export abstract class SettingsProvider extends Service {
    * Load the provider's document once and publish it before the service
    * becomes injectable, and register the write-drain teardown. Providers with
    * their own init (watchers, connections) delegate here first via
-   * `yield* super[Service.init]()`; their disposers then run before the drain.
+   * `yield* super[Service.init]`; their disposers then run before the drain.
    */
   async* [Service.init](): AsyncGenerator<() => Promise<void> | void, void, void> {
     yield async () => {
@@ -627,7 +627,7 @@ export abstract class SettingsProvider extends Service {
       }
       // Every mode derives from the section as it stands NOW, at the front of
       // the queue — never from whatever the caller last saw.
-      // publish() 会同步整体替换 this.document，记下其身份供 persist 窗口做
+      // publish 会同步整体替换 this.document，记下其身份供 persist 窗口做
       // 外部变更检测。
       let docAtFront = this.document
       let before = this.section(ns) ?? {}
@@ -637,7 +637,7 @@ export abstract class SettingsProvider extends Service {
       if (expectedRevision !== undefined && expectedRevision !== registration.revision) {
         throw new SettingsConflictError(ns, expectedRevision, registration.revision)
       }
-      // publish-during-persist 竞态：publish()（外部文档变更入口，文件 watcher
+      // publish-during-persist 竞态：publish（外部文档变更入口，文件 watcher
       // 类提供者必然使用）不经过写队列。若外部 publish 落在 persist 窗口内，
       // 无条件 `this.document[ns] = section` 会把外部编辑在缓存与存储中静默
       // 抹掉。检测到 document 身份变化时，把本次增量重放到外部节上重新落盘，

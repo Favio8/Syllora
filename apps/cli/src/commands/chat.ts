@@ -3,7 +3,7 @@
  * hidden thinking (a single "[思考中…]" hint, no deltas), live token output,
  * tool-call summaries, ask-frame answers resumed through
  * `/api/agents/answer/stream`, sync hints, and done usage lines. Exits via
- * /exit | /quit | :quit, Ctrl-C or EOF, always ending with the auto-save
+ * /exit | /quit |:quit, Ctrl-C or EOF, always ending with the auto-save
  * notice. Session selection: --new | --session <id> | most-recent (auto).
  * @module @syllora/cli/commands/chat
  */

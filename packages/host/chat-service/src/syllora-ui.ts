@@ -15,7 +15,7 @@ export type MaterialReadingContext = z.infer<typeof materialReadingSchema>
 export type EbookReadingContext = z.infer<typeof ebookReadingSchema>
 
 /**
- * ��电子书正文切条（约 1000 字符一块，锚到最近章节标题），
+ * 电子书正文切条（约 1000 字符一块，锚到最近章节标题），
  * 用于 assist 的伪来源（范围=电子书+原始资料，复用 sources 机制）。
  * 注意：前端 `services.ts` 有同实现用于组装 matches，改动需两边同步。
  */
@@ -72,7 +72,7 @@ export function validateReading(course:Course,context:ReadingContext):Source[] {
   return selected as Source[]
 }
 
-/** ��多文件拟序草案契约（落盘 {courseRoot}/draft-order.json，AI 草案与人工确认共用同一形状）。 */
+/** 多文件拟序草案契约（落盘 {courseRoot}/draft-order.json，AI 草案与人工确认共用同一形状）。 */
 export const ebookOrderDraftSchema = z.object({
   version: z.literal(1),
   /** 参加拟序的电子书顺序（全课程级）。 */
@@ -87,7 +87,7 @@ export const ebookOrderDraftSchema = z.object({
 export type EbookOrderDraft = z.infer<typeof ebookOrderDraftSchema>
 export const emptyEbookOrderDraft = (): EbookOrderDraft => ({ version: 1, files: [], sections: [], confirmed: false, draftedBy: null, draftedAt: null })
 
-/** M8 agent 自动建谱产物（每本电子书 docmind/graph.json；D9 契约初版）。 */
+/** agent 自动建谱产物（每本电子书 docmind/graph.json； 契约初版）。 */
 export const bookGraphSchema = z.object({
   version: z.literal(1),
   builtAt: z.number().int(),

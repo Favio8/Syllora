@@ -8,10 +8,10 @@ const { storeState, wakeupMocks, getStateMock } = vi.hoisted(() => ({
   },
   wakeupMocks: {
     submitWakeupAnswer: vi.fn(),
-    // W-1：WakeupCard 卸载时中止在途评测流（组件新增的 cleanup 导入）。
+    // WakeupCard 卸载时中止在途评测流（组件新增的 cleanup 导入）。
     abortActiveWakeupEval: vi.fn(),
   },
-  // 爪爪结果脉冲（P1）：WakeupCard 评测后经 getState 写入。
+  // 爪爪结果脉冲：WakeupCard 评测后经 getState 写入。
   // 注意 afterEach 的 clearAllMocks 只清调用记录不清实现，但 mock 工厂
   // 返回对象上的普通函数属性会在 clear 后保留——这里用 vi.fn 独立持有，
   // 避免被模块级对象引用差异吞掉。

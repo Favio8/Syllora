@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 动态 favicon（P1-③，设计文档 §5.4）：
+ * 动态 favicon（-③，设计文档 §5.4）：
  *
  * 基础 icon 是 app/icon.svg 的静态剪影；本组件在客户端按派生状态用 canvas
  * 重绘 32×32 favicon 并覆盖 <link rel="icon">——alerting 红点、encourage 暗蓝、

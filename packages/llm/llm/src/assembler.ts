@@ -27,8 +27,8 @@ interface PartialBlock {
  * {@link ContentBlock}s and a final assistant {@link Message}.
  *
  * The agent loop feeds it while logging raw chunks for replay fidelity, then
- * reads `blocks()` / `message()` / `usage` / `finish` once the stream ends,
- * or `interruptedBlocks()` when cancellation cut the stream short.
+ * reads `blocks` / `message` / `usage` / `finish` once the stream ends,
+ * or `interruptedBlocks` when cancellation cut the stream short.
  *
  * Tolerant of delta-only protocols (no block-start/end); deltas arriving for
  * an index already closed by `block-end` are ignored (malformed stream) so a
@@ -199,7 +199,7 @@ export class BlockAssembler {
   /**
    * The assembled assistant message.
    * @param source - producer attribution for the assembled message.
-   * @returns a frozen assistant-role message over `blocks()` (same open-block assembly rules).
+   * @returns a frozen assistant-role message over `blocks` (same open-block assembly rules).
    */
   message(source: MessageSource = { kind: 'plugin', plugin: 'dsh-llm/assembler' }): Message {
     return createMessage({ role: 'assistant', content: this.blocks(), source })

@@ -1,7 +1,7 @@
 /**
- * P1-6 回归：withCourseLock 必须真正串行化同 key 的临界区，且单个临界区
+ *  回归：withCourseLock 必须真正串行化同 key 的临界区，且单个临界区
  * 抛错不能卡死后续等待者。
- * FL-36：锁现在含跨进程文件层（`<课程>/.syllora/course.lock`），key 必须
+ * 锁现在含跨进程文件层（`<课程>/.syllora/course.lock`），key 必须
  * 是真实目录——用 os.tmpdir 下的独立目录，避免污染仓库工作目录。
  */
 
@@ -81,7 +81,7 @@ describe('withCourseLock', () => {
     }
   })
 
-  it('FL-36 回归：持有者进程死亡后，陈旧锁文件被后来者自愈抢走', async () => {
+  it('回归：持有者进程死亡后，陈旧锁文件被后来者自愈抢走', async () => {
     const dir = await makeCourseDir()
     try {
       // 模拟一个崩溃进程留下的锁：pid 写成不可能存活的 2^22 以上的大数
@@ -98,7 +98,7 @@ describe('withCourseLock', () => {
     }
   })
 
-  it('NEW-001 回归：pid:nonce 格式的陈旧锁同样被自愈抢走且临界区后清理', async () => {
+  it('回归：pid:nonce 格式的陈旧锁同样被自愈抢走且临界区后清理', async () => {
     const dir = await makeCourseDir()
     try {
       const lockDir = join(dir, '.syllora')
@@ -112,7 +112,7 @@ describe('withCourseLock', () => {
     }
   })
 
-  it('NEW-001 回归：临界区期间锁文件持有本进程 pid:nonce 令牌', async () => {
+  it('回归：临界区期间锁文件持有本进程 pid:nonce 令牌', async () => {
     const dir = await makeCourseDir()
     try {
       let content = ''

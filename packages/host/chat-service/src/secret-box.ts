@@ -1,5 +1,5 @@
 /**
- * Workspace credential sealing (P0-2 / SEC-7).
+ * Workspace credential sealing （/ SEC-7).
  *
  * Threat model: the workspace folder itself gets zipped/shared — so the API
  * keys must not survive in plaintext inside `.syllora/credentials.json`.
@@ -17,7 +17,7 @@ import { migrateLegacyHome } from '@syllora/tools'
 const KEY_BYTES = 32
 
 export function masterKeyPath(): string {
-  // NEW-007 对齐：env 覆盖与 bin.ts 的 hostHome 同一取法（resolve 成绝对路径），
+  // 对齐：env 覆盖与 bin.ts 的 hostHome 同一取法（resolve 成绝对路径），
   // 否则相对路径下宿主侧与密钥侧各自锚定不同 cwd，master.key 与密文错位。
   return join(migrateLegacyHome(), 'master.key')
 }

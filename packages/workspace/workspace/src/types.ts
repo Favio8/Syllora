@@ -2,7 +2,7 @@
  * Public type vocabulary of the workspace registry: the `WorkspaceId` brand,
  * the `Workspace` consumer interface, and the business error types the RPC
  * layer maps to stable codes. Types and errors only — no other runtime code.
- * Ported from dsh-workspace `src/types.ts`; session accounting is out of M1
+ * Ported from dsh-workspace `src/types.ts`; session accounting is out of 
  * scope and therefore absent.
  * @module @syllora/workspace/src/types
  */

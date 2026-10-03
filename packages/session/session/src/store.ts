@@ -1,7 +1,7 @@
 /**
  * SessionStore: one append-only JSONL file per session
  * (`history/session_<YYYYMMDD-HHMMSS>.jsonl`, meta line first, mtime decides
- * recency). Ported from Python `session.py::SessionStore`.
+ * recency). Ported from Python `session.py：SessionStore`.
  * @module @syllora/session/src/store
  */
 
@@ -21,7 +21,7 @@ export class SessionError extends Error {
   }
 }
 
-/** In-process serialization for whole-file meta rewrites (P1-6). */
+/** In-process serialization for whole-file meta rewrites . */
 const metaRewriteLocks = new Map<string, Promise<void>>()
 
 async function withMetaRewriteLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -396,7 +396,7 @@ export class SessionStore {
   }
 
   /**
-   * P1-6：两处 meta 重写共用此路径——唯一随机 tmp 名 + rename 原子替换，
+   * 两处 meta 重写共用此路径——唯一随机 tmp 名 + rename 原子替换，
    * 并用进程内文件锁串行化，避免并发重写互相覆盖 / 固定 tmp 名互踩。
    */
   private async rewriteMetaLine(sessionId: string, metaLine: SessionMetaLine): Promise<void> {

@@ -15,7 +15,7 @@
  */
 export function assertNever(value: never, context?: string): never {
   // JSON.stringify returns undefined for undefined input, but THROWS on
-  // BigInt / circular structures / throwing toJSON — the String() fallback
+  // BigInt / circular structures / throwing toJSON — the String fallback
   // must cover both, or the promised `unreachable variant` diagnostic is
   // replaced by a raw TypeError.
   let rendered: string

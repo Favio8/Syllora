@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * W-10：aria-modal 弹层的焦点圈闭。
+ * aria-modal 弹层的焦点圈闭。
  *
  * 旧实现四个弹层均无 Tab 循环——焦点可逃逸到背景三栏（aria-modal 对屏幕阅读器
  * 声明了模态，键盘用户却能 Tab 出去）；MaterialsDialog/NewProjectWizard 打开时

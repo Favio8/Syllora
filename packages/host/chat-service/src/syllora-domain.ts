@@ -1,7 +1,7 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
 import { DEFAULT_REVIEW_HOURS, learningSettings, validReviewHours, type EvidenceRuleSnapshot, type LearningSettings } from './syllora-policy.js'
 import { currentSession, sessionMetrics, type LearningEvent, type LearningSession, type SessionJob, type SourceVersion } from './syllora-sessions.js'
-/** 阅读上下文：资料模式带 materialId/revision/sourceIds；电子书模式带 ebookId（��。 */
+/** 阅读上下文：资料模式带 materialId/revision/sourceIds；电子书模式带 ebookId（。 */
 export type ReadingContext =
   | { materialId: string; revision: string; selection: string; sourceIds: string[]; mode: 'explain' | 'search' }
   | { ebookId: string; selection: string; mode: 'explain' | 'search' }

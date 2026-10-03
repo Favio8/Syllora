@@ -36,7 +36,7 @@ export async function logicalRequest<T=unknown>(action:string,payload:Record<str
     throw error;
   }
 }
-/** ��电子书正文切条（与后端 syllora-ui.ts chunkEbookMarkdown 同实现，改动需两边同步；M7 自动判规也复用）。 */
+/** 电子书正文切条（与后端 syllora-ui.ts chunkEbookMarkdown 同实现，改动需两边同步； 自动判规也复用）。 */
 export function chunkEbookMarkdown(markdown: string): Array<{ id: string; section: string; text: string }> {
   const chunks: Array<{ id: string; section: string; text: string }> = [];
   let section = '前言';
@@ -96,7 +96,7 @@ export const readingService:ReadingService={
       }
     } finally {signal?.removeEventListener('abort',cancel);}
   },
-  /** ��电子书 AI解释/AI搜索 —— 范围=电子书本体，后端切条+选区定位（复用 sources 机制）。 */
+  /** 电子书 AI解释/AI搜索 —— 范围=电子书本体，后端切条+选区定位（复用 sources 机制）。 */
   async assistEbook(courseId: string, ebookId: string, markdown: string, selection: string, mode: 'explain' | 'search', signal?:AbortSignal): Promise<ReadingAssistance> {
     const result=await logicalRequest<{jobId:string}>('generate',{courseId,kind:'answer',reading:{ebookId,selection,mode}});
     const cancel=()=>{void workbenchRpc('cancel',{courseId,jobId:result.jobId}).catch(()=>undefined);};
@@ -123,7 +123,7 @@ export const readingService:ReadingService={
   },
 };
 
-/** 电子书对象（盖章决策⑤）：独立于资料库，读取 docmind 产物。 */
+/** 电子书对象：独立于资料库，读取 docmind 产物。 */
 export interface EbookSummary {
   ebookId: string;
   fileName: string;
@@ -141,7 +141,7 @@ export interface EbookOutlineNode {
   anchor: string;
   line: number;
 }
-/** M7 大纲学习状态：绿=已掌握、黄=学习中、红=薄弱（判规 D8 待确认，先手工标记）。 */
+/** 大纲学习状态：绿=已掌握、黄=学习中、红=薄弱（判规  待确认，先手工标记）。 */
 export type EbookNodeStatus = 'mastered' | 'learning' | 'weak';
 export interface EbookDocument {
   ebookId: string;
@@ -191,7 +191,7 @@ export const ebookService = {
   async document(courseId: string, ebookId: string) {
     return workbenchRpc<EbookDocument>('ebook/document', { courseId, ebookId });
   },
-  /** M7 大纲学习状态：手工标记 红/黄/绿（status=null 清除），返回最新 progress。 */
+  /** 大纲学习状态：手工标记 红/黄/绿（status=null 清除），返回最新 progress。 */
   async progressSet(courseId: string, ebookId: string, anchor: string, status: EbookNodeStatus | null) {
     return workbenchRpc<{ saved: boolean; progress: { nodes: Record<string, EbookNodeStatus> } }>(
       'ebook/progress-set',

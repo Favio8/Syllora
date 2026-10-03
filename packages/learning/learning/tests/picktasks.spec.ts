@@ -19,7 +19,7 @@ afterEach(async () => {
 })
 
 /**
- * 构造测试课程。FL-24 之后「是否已评测」的唯一事实源是 `progress.md`
+ * 构造测试课程。 之后「是否已评测」的唯一事实源是 `progress.md`
  * （`evalSubmit` 只写它，从不回写 task pool），所以要用进度板而不是
  * `task.history.attempts` 来表达"这个概念练过几次"。
  * @param cEvals - 概念 c_c 的评测次数（进度板口径）。
@@ -30,7 +30,7 @@ async function makeCourse(cEvals = 0): Promise<string> {
   const course = join(root, 'demo')
   await mkdir(join(course, '.syllora'), { recursive: true })
   // 进度板：c_a 已到期（昨日），c_b/c_c 为新播种概念（nextReviewAt=null）。
-  // P1-7：板与写入侧一致，存放在 <课程根>/.syllora/progress.md。
+  // 板与写入侧一致，存放在 <课程根>/.syllora/progress.md。
   let board = {
     overallMastery: 0,
     dueCount: 0,
@@ -99,7 +99,7 @@ describe('pickTasks', () => {
     expect(picked.map(task => task.task_id)).toEqual(['t_b01'])
   })
 
-  it('FL-24 回归：选题只认 progress.md，忽略恒为 0 的 task.history.attempts', async () => {
+  it('回归：选题只认 progress.md，忽略恒为 0 的 task.history.attempts', async () => {
     // c_c 在进度板里已评测 3 次，但 task 的 history 谎报 0 次（真实场景里
     // history 恒为生成时的 0，因为评测从不回写 task pool）。旧实现会把所有
     // 练过的卡都当新卡补进复习队列；新实现以进度板为准，c_c 不应被补位。
@@ -112,7 +112,7 @@ describe('pickTasks', () => {
     expect(picked.map(task => task.task_id)).toEqual(['t_b01'])
   })
 
-  it('FL-24 回归：到期卡按进度板的真实评测次数升序出卡', async () => {
+  it('回归：到期卡按进度板的真实评测次数升序出卡', async () => {
     const course = await makeCourse()
     // 让 c_c 也到期，且评测次数（5）多于 c_a（1）。
     const boardPath = join(course, '.syllora', 'progress.md')

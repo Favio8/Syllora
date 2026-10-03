@@ -58,7 +58,7 @@ export default function AgentChat({ folder, courseName, onOpenSettings, children
     setWorkspacePath(folder);
     setCourses([{ id: chatCourseId, title: courseName, overallMastery: 0, dueToday: 0, lastActiveAt: null }]);
     if (useAppStore.getState().activeCourseId !== chatCourseId) {
-      // chatStream.ts 的约定：对话切换前必须先 abortActiveChat()，保证同一时刻只有
+      // chatStream.ts 的约定：对话切换前必须先 abortActiveChat，保证同一时刻只有
       // 一条活跃流。缺少这一步时，切课后旧流的 meta/done 帧会按新的 activeCourseId
       // 落地，把上一门课的 sessionId 写进新课（服务端还会就地物化 session/create），
       // 同时 streaming 残留为 true，新课会一直显示「停止生成」。

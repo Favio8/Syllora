@@ -27,7 +27,7 @@ export type SpringName =
 
 /**
  * 弹簧参数表（key → [固有频率 f, 阻尼比 d]）。
- * 来源：原型 frame() 内逐条 stepSpring 调用的 [freq, damp] 实参。
+ * 来源：原型 frame 内逐条 stepSpring 调用的 [freq, damp] 实参。
  */
 export const SPRINGS: Record<SpringName, readonly [number, number]> = {
   bob: [4, 0.8],
@@ -208,7 +208,7 @@ export function poseTargets(state: MascotState, ph: number, dtS: number): PoseTa
         P.sqy = 1 - 0.04 * (dtS / 0.16);
       }
       P.lid = 1;
-      // 举爪 -26（原型值）会盖住嘴线并压到吻部下缘（评审 P2 项）；
+      // 举爪 -26（原型值）会盖住嘴线并压到吻部下缘（评审  项）；
       // 收到 -14：嘴部完整露出，爪尖贴在腮边，庆祝语义不变
       P.pawL = -14;
       P.pawR = -14;
@@ -225,7 +225,7 @@ export function poseTargets(state: MascotState, ph: number, dtS: number): PoseTa
       P.tail = 18;
       P.mouth = 1.5;
       break;
-    /* ── 以下 P1 八态为按既有姿态词汇的新设计（设计文档 §7.2），未经原型评审 ── */
+    /* ── 以下  八态为按既有姿态词汇的新设计（设计文档 §7.2），未经原型评审 ── */
     case "sleeping":
       // 闭眼横线、极缓呼吸（不眨眼由引擎保证）；6-10s 级慢周期
       P.lid = 0.06;

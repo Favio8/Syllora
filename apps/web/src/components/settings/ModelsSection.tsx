@@ -123,12 +123,12 @@ function ProviderEditorCard({
   creating: boolean;
   onSave: (profile: EditorProfile, apiKey: string) => Promise<void>;
   onCancel: () => void;
-  /** 添加卡草稿缓存：按目录条目 id 保存/恢复，切换条目不丢草稿（X4）。 */
+  /** 添加卡草稿缓存：按目录条目 id 保存/恢复，切换条目不丢草稿。 */
   draftCache?: Map<string, AddCardDraft> | null;
   occupiedIds?: string[];
 }) {
   const entryId = entry?.id ?? null;
-  // X4：挂载时从按条目缓存的草稿恢复（切换条目靠 key 重挂载触发），
+  // 挂载时从按条目缓存的草稿恢复（切换条目靠 key 重挂载触发），
   // 这样「切走再切回」同一目录时已填内容仍在。
   const draft = draftCache?.get(entryId ?? "") ?? null;
   let availableId = entry?.id ?? '';
@@ -141,7 +141,7 @@ function ProviderEditorCard({
   const [rows, setRows] = useState<ModelDraft[]>(() =>
     draft?.rows ?? draftsFrom(provider?.models ?? entry?.models ?? []),
   );
-  // 高级字段：编辑态从既有 provider 初始化真实值，创建态用默认（X2）。
+  // 高级字段：编辑态从既有 provider 初始化真实值，创建态用默认。
   const [temperature, setTemperature] = useState(draft?.temperature ?? provider?.temperature ?? 0.3);
   // 兜底必须与宿主默认值一致（config.ts / settings.ts 的 8）：这里是新建卡片的初值，
   // 保存时无条件发送，若用 4 会把运行时并发静默降回 4。
@@ -157,7 +157,7 @@ function ProviderEditorCard({
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ProviderModelPayload[] | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  // P2：API Key 明文切换——type=password 且无 eye 按钮，粘贴后无法核对。
+  // API Key 明文切换——type=password 且无 eye 按钮，粘贴后无法核对。
   const [keyVisible, setKeyVisible] = useState(false);
   // 「↺ 恢复内置列表」防误触：第一次点击只进入确认态， armed 期间再次点击才真正
   // 覆盖手改的模型行（旧实现一键丢弃，用户改半天的容量/ID 一次点飞）。
@@ -212,7 +212,7 @@ function ProviderEditorCard({
     (r) => r.context !== "invalid" && r.max !== "invalid",
   );
   // 写入即校验（DSH write-time refusal）：Base URL 是可用配置的硬前提。
-  // FL-47：默认模型允许留空保存——首次运行流是「贴 Key 即保存，之后再发现
+  // 默认模型允许留空保存——首次运行流是「贴 Key 即保存，之后再发现
   // 模型选默认」（测试契约 + 组件内既有警告文案都是这个语义）；空默认模型
   // 仅导致激活/构建不可用（后端 activate/构建侧已各自拒绝），不再阻止保存。
   const canSave =
@@ -228,7 +228,7 @@ function ProviderEditorCard({
     setError(null);
     try {
       // 编辑态 = 更新既有 id，必须显式 overwrite；创建态不带，撞 id 时由
-      // 上层弹 409 覆盖确认（X5）。高级字段编辑态保留真实值（X2）。
+      // 上层弹 409 覆盖确认。高级字段编辑态保留真实值。
       await onSave(
         {
           id,
@@ -287,7 +287,7 @@ function ProviderEditorCard({
 
   function adoptCandidates() {
     if (!candidates) return;
-    // P1-5：按模型 id 去重——候选默认过滤了已在列表中的模型，但用户可手动勾选
+    // 按模型 id 去重——候选默认过滤了已在列表中的模型，但用户可手动勾选
     // 重复项；旧实现直接 append，保存后 models 数组含重复 id（后端不校验唯一性），
     // 行卡片出现两行同一模型。
     const existing = new Set(rows.map((row) => row.id.trim()));
@@ -307,7 +307,7 @@ function ProviderEditorCard({
   }
 
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  // W-10：候选选择框的焦点圈闭（Escape 关闭，与遮罩点击同语义）。
+  // 候选选择框的焦点圈闭（Escape 关闭，与遮罩点击同语义）。
   const candidatesDialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap({ containerRef: candidatesDialogRef, onEscape: () => setCandidates(null) });
   // 浏览器和密码管理器可能忽略 autocomplete="off"，尤其是新建表单。
@@ -357,7 +357,7 @@ function ProviderEditorCard({
             name={`${uid}_secret_value`}
             {...autofillGuardProps}
           />
-          {/* P2：显示/隐藏明文切换。 */}
+          {/* 显示/隐藏明文切换。 */}
           <button
             type="button"
             aria-label={keyVisible ? "隐藏 API Key" : "显示 API Key"}
@@ -746,7 +746,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const [manageOpen, setManageOpen] = useState(false);
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(new Set());
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  // X5：创建时撞到已存在 id 的覆盖确认（409 provider-exists）。
+  // 创建时撞到已存在 id 的覆盖确认（409 provider-exists）。
   const [conflict, setConflict] = useState<{ profile: EditorProfile; apiKey: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -762,14 +762,14 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   const [docmindBusy, setDocmindBusy] = useState(false);
   const [docmindError, setDocmindError] = useState<string | null>(null);
   const [docmindSaved, setDocmindSaved] = useState(false);
-  // X4：添加卡按目录条目缓存整卡草稿（切换条目不丢输入）。
+  // 添加卡按目录条目缓存整卡草稿（切换条目不丢输入）。
   const addDraftsRef = useRef(new Map<string, AddCardDraft>());
   // 返航键要把设置弹窗右侧内容区滚回顶部；该容器是本组件的父节点。
   const sectionRef = useRef<HTMLElement | null>(null);
-  // P2：空目录的添加卡被用户手动收起后，不因 SettingsDialog 的 loaded 刷新
+  // 空目录的添加卡被用户手动收起后，不因 SettingsDialog 的 loaded 刷新
   // （如去通用页签保存）而反复重开。
   const [dismissedEmptyAdd, setDismissedEmptyAdd] = useState(false);
-  // W-10：删除/覆盖确认框的焦点圈闭（Escape 尊重 busy）。
+  // 删除/覆盖确认框的焦点圈闭（Escape 尊重 busy）。
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const conflictDialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap({ containerRef: deleteDialogRef, onEscape: () => { if (!busy) setDeleteId(null); } });
@@ -904,7 +904,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
       try {
         finalPayload = await api.setProviderCredential(profile.id, apiKey);
       } catch (cause) {
-        // P1-4：配置已落盘但 Key 保存失败——旧实现不刷新 payload（行不显示、
+        // 配置已落盘但 Key 保存失败——旧实现不刷新 payload（行不显示、
         // 状态不一致）且把异常抛回卡片，用户重试必撞 409 覆盖确认、文案还对不上。
         // 现在：payload 照刷新（行立即可见）、卡片正常收起、横幅指明补救路径
         // （编辑该行补填 Key，编辑态带 overwrite 不会再撞 409）。
@@ -926,7 +926,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
     );
   }
 
-  /** X5：保存时若目标 id 已存在且未带 overwrite，后端返回 409；弹确认框。 */
+  /** 保存时若目标 id 已存在且未带 overwrite，后端返回 409；弹确认框。 */
   async function handleSaveWithConflict(profile: EditorProfile, apiKey: string) {
     try {
       await handleSave(profile, apiKey);
@@ -940,8 +940,8 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
   }
 
   /** 用户在确认框点「覆盖」：带 overwrite 重发。
-   *  N-1：委托 handleSave（而非自链两步保存）——自链版本在 setProviderCredential
-   *  失败时不刷新 payload、错误闷在确认框里，正是 P1-4 的同类问题；委托后
+   * 委托 handleSave（而非自链两步保存）——自链版本在 setProviderCredential
+   *  失败时不刷新 payload、错误闷在确认框里，正是  的同类问题；委托后
    *  credential 失败走统一的「配置已保存 + 补救横幅」路径，确认框正常关闭。 */
   async function handleOverwrite() {
     if (!conflict) return;
@@ -1136,7 +1136,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
               onSave={handleSaveWithConflict}
               onCancel={() => {
                 setAdding(false);
-                // P2：空目录下手动收起添加卡后记住选择，不随 loaded 刷新重开。
+                // 空目录下手动收起添加卡后记住选择，不随 loaded 刷新重开。
                 if (providers.length === 0) setDismissedEmptyAdd(true);
               }}
               draftCache={addDraftsRef.current}
@@ -1153,7 +1153,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
             onClick={() => { setEditingId(null); setAdding(true); }}
             className="flex-1 rounded-xl border border-border-line px-3 py-2 text-sm text-text-muted hover:bg-bg-card disabled:opacity-40"
           >
-            {/* P2：目录加载期间说明按钮禁用原因（旧实现无提示地灰住）。 */}
+            {/* 目录加载期间说明按钮禁用原因（旧实现无提示地灰住）。 */}
             {catalog === null ? "加载目录中…" : "＋ 添加供应商"}
           </button>
           <button
@@ -1176,6 +1176,7 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
           <span className="rounded border border-border-line px-1.5 py-0.5 text-[11px] text-text-muted">{docmind?.configured ? "已配置" : "未配置"}</span>
           <div className="ml-auto">
             <button
+              aria-label="保存 DocMind 设置"
               type="button"
               disabled={docmindBusy}
               onClick={() => void handleDocMindSave()}

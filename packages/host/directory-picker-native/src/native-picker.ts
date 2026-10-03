@@ -1,6 +1,6 @@
 /**
  * Syllora native directory picker — cross-platform tiered subset of the dsh
- * `directory-picker-native` backend (MIT). FL-45：不再只保留 Win32 一层——
+ * `directory-picker-native` backend (MIT).：不再只保留 Win32 一层——
  * macOS 走 `osascript choose folder`，Linux 走 `zenity`（缺则回落 `kdialog`），
  * Windows 保留 koffi 驱动的 `IFileOpenDialog` 子进程（前台激活语义见
  * win32-dialog.ts）。三层都不可用时抛"不可用"错误，由调用方回落 browse 后端。
@@ -49,7 +49,7 @@ function isMissingCommand(error: unknown): boolean {
 
 /** zenity/kdialog 的退出码 1 兼有「用户取消」与「对话框启动失败」两种语义：
  *  无图形会话/DISPLAY 时 GTK/Qt 也会以退出码 1 退出，一律返回 null 会违反
- *  FL-02 契约（null 仅表示用户取消）。stderr 命中启动失败特征时按不可用
+ *   契约（null 仅表示用户取消）。stderr 命中启动失败特征时按不可用
  *  处理——消息带「原生目录选择器」关键词，前端据此回落目录浏览。 */
 function throwIfDialogUnavailable(error: unknown): void {
   if (/(unable to init server|cannot open display|cannot connect to (?:x server|display)|could not connect to display|qt\.qpa|could not load the qt platform)/i.test(errorStderr(error))) {
@@ -67,7 +67,7 @@ function throwIfDialogUnavailable(error: unknown): void {
  * @returns the selected path, or null when the user cancels.
  * @throws when no native picker tier is available on the host platform
  *   (missing osascript/zenity/kdialog, or a non-desktop OS). The caller must
- *   distinguish "cancel" (null) from "unavailable" (throw) — FL-02：旧实现
+ *   distinguish "cancel" (null) from "unavailable" (throw) —：旧实现
  *   两者都返回 null，向导把"不可用"当"取消"直接关窗，首启死锁。
  */
 export async function pickNativeDirectory(
@@ -138,7 +138,7 @@ async function pickWithPlatform(
         return null
       }
       if (isMissingCommand(error)) {
-        // FL-45：三层皆不可用 → "不可用"错误（消息包含向导识别的
+        // 三层皆不可用 → "不可用"错误（消息包含向导识别的
         // 「原生目录选择器」关键词，前端自动回落目录浏览）。
         throw new Error('未找到可用的原生目录选择器（可安装 zenity 或 kdialog）：请改用目录浏览选择项目')
       }

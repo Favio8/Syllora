@@ -200,7 +200,7 @@ async function withCredentialLock<T>(workspaceRoot: string, fn: () => Promise<T>
   }
 }
 
-/** Workspace-wide read/modify/write serialization for config.yaml (��此前
+/** Workspace-wide read/modify/write serialization for config.yaml (此前
  * saveProvider/deleteProvider/activateProvider/updateSettings/setCredential
  * 全部无锁 RMW，并发保存会互相覆盖丢字段——例如 api_key_env 被覆盖后凭据
  * 变孤儿、界面显示「未配置」)。锁序固定为 config → credential，避免死锁。 */
@@ -458,7 +458,7 @@ export function validateModelBaseUrl(rawUrl: string): string {
   return trimmed.replace(/\/+$/, '')
 }
 
-/** ��模型目录探测缓存——sessionModels 每次打开选模目录会对全部已配 Key
+/** 模型目录探测缓存——sessionModels 每次打开选模目录会对全部已配 Key
  * 的 provider 并行打 `/models`（5s 超时），无缓存时离线/慢端点必卡选模 UI。
  * 键用 baseUrl + 密钥摘要（不落明文）；`refresh: true` 强制绕过（设置页
  * 「从端点获取」按钮永远实时）。 */
@@ -672,7 +672,7 @@ export async function activateProvider(workspaceRoot: string, providerId: string
 
 /** Store one provider's API key into `.syllora/credentials.json`. */
 export async function setCredential(workspaceRoot: string, providerId: string, apiKey: string): Promise<SettingsPayload> {
-  // ��config 段与凭据段同锁序（config → credential）串行，与并发保存的
+  // config 段与凭据段同锁序（config → credential）串行，与并发保存的
   // provider 编辑互不丢更新。
   return withConfigLock(workspaceRoot, async () => {
     const config = await readConfig(workspaceRoot)
@@ -763,7 +763,7 @@ export async function updateSettings(workspaceRoot: string, partial: {
       || JSON.stringify(nextAgent) !== JSON.stringify(config.agent ?? {}) || JSON.stringify(nextPermissions) !== JSON.stringify(config.permissions ?? {})
       || JSON.stringify(nextPlugins) !== JSON.stringify(config.plugins ?? {})
     if (!changed) {
-      // FL-16：无改动是正常操作（幂等保存），旧实现抛「没有需要更新的设置字段」
+      // 无改动是正常操作（幂等保存），旧实现抛「没有需要更新的设置字段」
       // 让前端把"什么都没改就点保存"报成红色失败弹窗。直接返回当前 payload。
       return settingsPayload(workspaceRoot)
     }

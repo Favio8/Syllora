@@ -30,6 +30,8 @@ const { flashStatusBanner, apiMocks, catalog, ApiError } = vi.hoisted(() => {
       activateProvider: vi.fn(),
       providerCatalog: vi.fn(),
       discoverModels: vi.fn(),
+      docmindSettings: vi.fn(async () => { throw new Error("docmind-unavailable"); }),
+      saveDocMind: vi.fn(),
     },
     catalog: [
       {
@@ -53,7 +55,7 @@ vi.mock("../src/store/useAppStore", () => ({
   useAppStore: Object.assign(
     (selector: (state: { flashStatusBanner: typeof flashStatusBanner }) => unknown) =>
       selector({ flashStatusBanner }),
-    // P1-5：adoptCandidates 的跳过提示走 getState().flashStatusBanner。
+    // adoptCandidates 的跳过提示走 getState.flashStatusBanner。
     { getState: () => ({ flashStatusBanner }) },
   ),
 }));
@@ -184,7 +186,7 @@ describe("ModelsSection 首次运行与目录添加", () => {
 
     const save = screen.getByRole("button", { name: "保存" });
     expect(save).toHaveProperty("disabled", true);
-    // FL-47：文案对齐组件现状（Base URL 必填提示）。
+    // 文案对齐组件现状（Base URL 必填提示）。
     expect(screen.getByText(/必填：模型端点的 OpenAI 兼容 Base URL/)).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText("acme-gateway"), { target: { value: "Bad_ID" } });
@@ -327,8 +329,8 @@ describe("ModelsSection 模型列表", () => {
   });
 });
 
-describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
-  it("X2 编辑既有 Provider：温度/并发从 provider 真实值初始化，不再硬编码重置", async () => {
+describe("ModelsSection ", () => {
+  it("编辑既有 Provider：温度/并发从 provider 真实值初始化，不再硬编码重置", async () => {
     const tuned = {
       ...configuredProvider,
       temperature: 0.7,
@@ -369,7 +371,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(apiMocks.saveProvider.mock.calls[0][0].maxConcurrency).toBe(8);
   });
 
-  it("X3 恢复内置列表需二次确认：第一次只武装、确认后才覆盖手改", async () => {
+  it("恢复内置列表需二次确认：第一次只武装、确认后才覆盖手改", async () => {
     render(<ModelsSection initial={makePayload([])} />);
     await screen.findByText("选择供应商");
     // 等目录到达、编辑器挂载（初始选中 deepseek，无预置模型）。
@@ -391,7 +393,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(screen.getByLabelText("模型 ID 1")).toHaveValue("sensenova-6.8-flash-lite");
   });
 
-  it("X3b 恢复确认超时后自动解除武装，不再一键覆盖", async () => {
+  it("恢复确认超时后自动解除武装，不再一键覆盖", async () => {
     // 用真实计时器等过武装窗口：假计时器会让同文件其余用例的 waitFor 全部挂死
     // （waitFor 依赖 setInterval 推进），因此这里不用 vi.useFakeTimers。
     render(<ModelsSection initial={makePayload([])} />);
@@ -411,7 +413,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(screen.getByLabelText("模型 ID 1")).toHaveValue("custom-x");
   });
 
-  it("X4 切换目录条目不丢已填草稿（切走再切回仍在）", async () => {
+  it("切换目录条目不丢已填草稿（切走再切回仍在）", async () => {
     render(<ModelsSection initial={makePayload([])} />);
     await screen.findByText("选择供应商");
     // 等目录到达、编辑器挂载。
@@ -433,7 +435,7 @@ describe("ModelsSection 批次1（X2/X3/X4/X5）", () => {
     expect(screen.getByLabelText("模型 ID 1")).toHaveValue("custom-1");
   });
 
-  it("X5 创建撞已存在 id：后端 409 弹确认框，点覆盖带 overwrite 重发", async () => {
+  it("创建撞已存在 id：后端 409 弹确认框，点覆盖带 overwrite 重发", async () => {
     apiMocks.saveProvider
       .mockRejectedValueOnce(new ApiError("provider-exists", "Provider acme 已存在（覆盖前请先确认）", 200))
       .mockResolvedValueOnce(makePayload([configuredProvider]));
@@ -472,7 +474,7 @@ describe("ModelsSection 防自动填充", () => {
   });
 });
 
-describe("ModelsSection Key 保存失败一致性（P1-4）", () => {
+describe("ModelsSection Key 保存失败一致性（）", () => {
   it("配置已保存但 Key 保存失败：行仍可见、横幅指明补救路径、绝不重试 saveProvider", async () => {
     apiMocks.saveProvider.mockResolvedValue(makePayload([configuredProvider]));
     apiMocks.setProviderCredential.mockRejectedValue(new ApiError("INTERNAL_ERROR", "磁盘写入失败", 500));
@@ -499,7 +501,7 @@ describe("ModelsSection Key 保存失败一致性（P1-4）", () => {
   });
 });
 
-describe("ModelsSection 模型候选去重（P1-5）", () => {
+describe("ModelsSection 模型候选去重（）", () => {
   it("采纳时跳过列表中已存在的模型并提示，行不重复", async () => {
     apiMocks.discoverModels.mockResolvedValue({
       models: [
@@ -530,7 +532,7 @@ describe("ModelsSection 模型候选去重（P1-5）", () => {
   });
 });
 
-describe("ModelsSection 覆盖路径的 Key 失败一致性（N-1）", () => {
+describe("ModelsSection 覆盖路径的 Key 失败一致性（）", () => {
   it("409 覆盖后存 Key 失败：配置已保存横幅 + 确认框关闭 + 无三次重试", async () => {
     apiMocks.saveProvider
       .mockRejectedValueOnce(new ApiError("provider-exists", "Provider acme 已存在", 200))

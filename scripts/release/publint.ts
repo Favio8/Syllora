@@ -1,5 +1,5 @@
 /**
- * FL-43：publint 门禁——对 artifacts/ 下最新的 @syllora/cli tgz 做包结构
+ * publint 门禁——对 artifacts/ 下最新的 @syllora/cli tgz 做包结构
  * 合法性校验（bin shebang、exports/files 一致性等）。tgz 直喂以规避
  * @publint/pack 的包管理器探测（stage 目录会被 packageManager 字段带到
  * 仓库根的 pnpm，而 shell PATH 上没有 pnpm）。

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
+ * Syllora CLI entry: `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
  * dispatches the RPC method table over `POST /api/<method>`.
  *
- * Dev mode runs this through tsx; the packaged npm bin (M5) runs the tsdown
+ * Dev mode runs this through tsx; the packaged npm bin  runs the tsdown
  * build of this same entry.
  */
 
@@ -72,12 +72,12 @@ import { syncCommand } from './commands/sync.ts'
 import { courseCommand } from './commands/course.ts'
 
 function hostHome(): string {
-  // NEW-007：env 覆盖先 resolve 成绝对路径（相对路径以进程 cwd 锚定），
+  // env 覆盖先 resolve 成绝对路径（相对路径以进程 cwd 锚定），
   // 避免宿主与 CLI/桌面端 cwd 不同时，配置与锁文件落到不可预期的位置。
   return migrateLegacyHome()
 }
 
-/** FL-03：设置读写以 lastOpenedPath 为根；未打开工作区时配置会写到宿主进程
+/** 设置读写以 lastOpenedPath 为根；未打开工作区时配置会写到宿主进程
  * cwd 的游离 `.syllora/`（假成功 + 重启失忆）。落盘前必须先有工作区。 */
 function requireWorkspaceRootForSettings(root: string, action: string): void {
   if (root === '') {
@@ -123,7 +123,7 @@ async function readHostDiagnostics(): Promise<{ files: Array<{ name: string; byt
   return { files }
 }
 
-/** FL-41：宿主单实例锁（`<hostHome>/host.lock` 记 pid + port）。持有者进程
+/** 宿主单实例锁（`<hostHome>/host.lock` 记 pid + port）。持有者进程
  * 存活 → 拒绝启动并给出可读提示；进程已死（崩溃残留）→ 自愈抢走。 */
 interface HostInstanceLock {
   release(): void
@@ -192,7 +192,7 @@ async function acquireHostInstanceLock(port: number): Promise<HostInstanceLock> 
   }
 }
 
-/** FL-30/35：宿主发现文件（`<hostHome>/host.json`）——记录实际端口与访问
+/** 宿主发现文件（`<hostHome>/host.json`）——记录实际端口与访问
  * token，桌面端/CLI 客户端据此握手。token 为 null 表示 `--insecure-no-token`。 */
 async function writeHostConfig(port: number, token: string | null): Promise<void> {
   const { writeFile } = await import('node:fs/promises')
@@ -268,7 +268,7 @@ const BROWSE_HIDDEN = new Set(['$RECYCLE.BIN', 'System Volume Information', 'Con
  * DSH browse-backend pattern: server-side directory listing, one fast RPC per
  * page. `null` lists the roots page.
  *
- * FL-02：首启（尚无工作区）时 browse 是唯一的项目选择途径——原生选择器仅
+ * 首启（尚无工作区）时 browse 是唯一的项目选择途径——原生选择器仅
  * Windows 可用，而旧实现 browse 又要求"已打开工作区"，非 Windows 首启无任何
  * 添加项目途径（整链断裂）。放开为：无工作区时全盘浏览（DSH
  * directory-picker-browse 语义，仍受 POST + loopback Origin 门禁保护）；
@@ -313,7 +313,7 @@ async function browseLocalDirectory(
   return { path: canonical, parent: dirname(canonical), entries }
 }
 
-/** FL-02：首启全盘浏览的根页——Windows 枚举盘符，POSIX 列根目录一级。 */
+/** 首启全盘浏览的根页——Windows 枚举盘符，POSIX 列根目录一级。 */
 async function listRootEntries(
   readdir: typeof import('node:fs/promises').readdir,
 ): Promise<DirectoryEntry[]> {
@@ -350,7 +350,7 @@ async function browseWorkspaceChildren(
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
 }
 
-/** 单文件/单次上传的体积与数量上限（P1-5：此前完全无上限，10MB body 直接吃进内存）。 */
+/** 单文件/单次上传的体积与数量上限（：此前完全无上限，10MB body 直接吃进内存）。 */
 const UPLOAD_FILE_LIMIT_BYTES = 25 * 1024 * 1024
 const UPLOAD_MAX_FILES = 10
 /** C-2：上传 handler 的 stall 兜底——busboy 的 'close' 在客户端 RST 时永不
@@ -387,7 +387,7 @@ async function uniqueDestinationPath(dir: string, filename: string): Promise<str
 /**
  * DSH-style startup hygiene:
  * 1. Drop a dangling or temp-hosted "current workspace" pointer (e2e harness
- *    workspaces living under os.tmpdir() are the common culprit) so a fresh
+ *    workspaces living under os.tmpdir are the common culprit) so a fresh
  *    run boots into the empty first-run state instead of a mock project.
  * 2. Import legacy `workspaces.json` records (Python-era registry) once, so
  *    previously opened projects keep appearing in the sidebar without
@@ -443,7 +443,7 @@ function usage(): void {
 }
 
 function hostUrl(): string {
-  // FL-35：显式 env 最高优先；否则随 client.ts 从 host.json 自动发现实际端口。
+  // 显式 env 最高优先；否则随 client.ts 从 host.json 自动发现实际端口。
   if (process.env.SYLLORA_HOST_URL !== undefined) return process.env.SYLLORA_HOST_URL.replace(/\/$/, '')
   return defaultClientDeps().baseUrl
 }
@@ -528,25 +528,25 @@ async function acpStdio(): Promise<void> {
 }
 
 export interface ServeOptions {
-  /** FL-30：跳过 token 校验（逃生口；host.json 的 token 记为 null）。 */
+  /** 跳过 token 校验（逃生口；host.json 的 token 记为 null）。 */
   insecureNoToken?: boolean
-  /** FL-21：listen 成功后自动打开系统浏览器。 */
+  /** listen 成功后自动打开系统浏览器。 */
   open?: boolean
 }
 
 async function serve(port: number, options: ServeOptions = {}): Promise<void> {
-  // FL-37：文件日志先于任何业务逻辑安装——启动期错误也要留痕。仅 serve 安装
+  // 文件日志先于任何业务逻辑安装——启动期错误也要留痕。仅 serve 安装
   //（acp/quiz 等前台命令的 stdout 是协议/交互通道，不能被日志污染）。
   const hostLogger = await installHostFileLogging(hostHome())
-  // FL-41：单实例守卫。桌面端/多开场景下两个宿主同时 serve 同一工作区会
+  // 单实例守卫。桌面端/多开场景下两个宿主同时 serve 同一工作区会
   // 交叉写 progress.md（进程内锁对跨进程无效），且用户双击两次图标会开出
   // 两个宿主。host.lock 记 pid + port，持有者存活则拒绝启动并给出可读提示。
   const instanceLock = await acquireHostInstanceLock(port)
-  // FL-30：启动即生成一次性访问 token；除 /api/health 外的每个端点都要求
+  // 启动即生成一次性访问 token；除 /api/health 外的每个端点都要求
   // Bearer 校验（同机进程不再可无凭据调用全部 RPC）。--insecure-no-token 为
   // 显式逃生口（host.json 的 token 记 null，便于排查）。
   const token = options.insecureNoToken === true ? null : randomBytes(24).toString('hex')
-  // FL-21：同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
+  // 同端口托管 Web UI（apps/web 的静态导出产物）。产物缺失时保持
   // 纯 API 行为。token 经 index tap 注入同源页面（window.__SYLLORA__）。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
@@ -622,7 +622,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       ingestUrl: async (courseId, url, title) => courseService.ingestUrl(await workspaceForCourse(courseId), courseId, url, title),
       createCards: async (courseId, payload) => courseService.createCards(await workspaceForCourse(courseId), courseId, payload as { content: string; title?: string | null; conceptId?: string | null; count?: number; sessionId?: string | null }),
       dynamicCards: async (courseId, payload) => courseService.dynamicCards(await workspaceForCourse(courseId), courseId, payload as { taskId: string; misconception: string; content?: string | null; targetId?: string | null; count?: number; sessionId?: string | null }),
-      // ��evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
+      // evalId 必须透传——箭头函数实现少于接口形参是 TS 允许的，此前
       // 在这里静默丢参导致磁盘幂等账本（.syllora/eval-ledger/）永不写入。
       // 接口要求同步返回 AsyncGenerator，所以不能先 await 再返回：这里用 async
       // 生成器委托，把课程根解析放进迭代体内（调用方拿到生成器即刻不阻塞）。
@@ -766,7 +766,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       get: async () => { requireWorkspaceRootForSettings(settingsRoot, '读取设置'); return settingsPayload(settingsRoot) as unknown as Record<string, unknown> },
       update: async partial => { requireWorkspaceRootForSettings(settingsRoot, '更新设置'); return updateSettings(settingsRoot, partial) as unknown as Record<string, unknown> },
       catalog: async () => providerCatalog() as unknown as Array<Record<string, unknown>>,
-      // ��设置页「从端点获取」永远实时探测；sessionModels 的自动发现才走缓存。
+      // 设置页「从端点获取」永远实时探测；sessionModels 的自动发现才走缓存。
       // 密钥解析优先级：表单新填 > 已加密存储的凭据（按 providerId 取，与 chat /
       // sessionModels 同一来源）> 环境变量。旧实现只认前两者中的第一项和
       // process.env——编辑既有 provider 时表单密钥按设计留空，于是「从端点获取」
@@ -968,7 +968,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       response.end()
       return
     }
-    // FL-30：token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
+    // token 门禁——/api/*（health 已放行）之外的一切 API 端点都要求
     // 持有宿主签发的 token；静态资源（UI 资产）不设 token，公开可读。
     if (url.pathname.startsWith('/api/') && token !== null && !tokenMatches(requestToken(request, url), token)) {
       response.writeHead(401)
@@ -976,7 +976,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       return
     }
     if (request.method === 'GET' || request.method === 'HEAD') {
-      // FL-21：非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
+      // 非 /api 的 GET/HEAD 交给静态托管（Web UI）；/api 的 GET 仍 405。
       if (!url.pathname.startsWith('/api/') && staticHost !== null) {
         void (async () => {
           const hit = await staticHost.respond(url.pathname)
@@ -1095,9 +1095,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
             : undefined,
           method === 'syllora/ebook/ingest' ? 120_000 : undefined,
         )
-        // FL-04：这里原本包了一层 `try { ... } catch (error) { }` 的空 catch，
+        // 这里原本包了一层 `try { ... } catch (error) { }` 的空 catch，
         // 把 `dispatch` 内部抛出的异常（而非返回的错误信封）整个吞掉：响应永不
-        // `end()`，请求挂死成 socket hang up——恰好是下方边界注释声称要防的场景。
+        // `end`，请求挂死成 socket hang up——恰好是下方边界注释声称要防的场景。
         // 去掉内层 try，让异常直接落到边界 catch，保证每个请求都有 JSON 信封。
         if (method === 'chat/stream') {
           await handleChatStream(request, response, body)
@@ -1252,9 +1252,9 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     const added: string[] = []
     const rejected: Array<{ file: string; reason: string }> = []
-    // NEW-003：每个文件直接流式落盘到临时文件（pause/drain 背压限流），不再把
+    // 每个文件直接流式落盘到临时文件（pause/drain 背压限流），不再把
     // 25MB×N 并发上传整体吃进内存；全部流结算后按到达顺序原子改名转正。
-    // NEW-009：busboy 中途出错会掐断在途写流并标记放弃，结算 Promise 不悬挂，
+    // busboy 中途出错会掐断在途写流并标记放弃，结算 Promise 不悬挂，
     // 临时文件就地清理。
     const pending: Array<{
       safe: string
@@ -1381,7 +1381,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       const config = await configFacts()
       if (config !== null && config.model !== '' && config.baseUrl !== '') {
         // 上传后直接同步构建（异步 job 路径由 sync 端点覆盖）
-        // FL-01：sync() 返回的 buildJobId 此前被丢弃——响应恒 buildJobId:null，
+        // sync 返回的 buildJobId 此前被丢弃——响应恒 buildJobId:null，
         // 前端 `if (buildJobId)` 轮询分支永不执行，上传后构建的进度与失败对
         // 用户完全不可见（假完成）。
         const syncResult = await services.courseService.sync(courseId)
@@ -1603,7 +1603,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', (error: NodeJS.ErrnoException) => {
-      // FL-41：端口被占时的默认 EADDRINUSE 栈对用户不可读——给出行动指引。
+      // 端口被占时的默认 EADDRINUSE 栈对用户不可读——给出行动指引。
       if (error.code === 'EADDRINUSE') {
         reject(new Error(`端口 ${port === 0 ? '(随机)' : port} 已被占用（可能是另一个 Syllora 实例或其他应用）。可用 --port <n> 换端口，或排查占用进程后重试。`))
         return
@@ -1611,7 +1611,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       reject(error)
     })
     server.listen(port, '127.0.0.1', () => {
-      // FL-35：`--port 0` → 由内核分配随机端口；实际端口以 listen 结果为准，
+      // `--port 0` → 由内核分配随机端口；实际端口以 listen 结果为准，
       // 连同 token 写入 host.json 供 CLI/桌面端握手发现。
       const address = server.address()
       const actualPort = typeof address === 'object' && address !== null ? address.port : port
@@ -1625,7 +1625,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   })
 
   const shutdown = async (): Promise<void> => {
-    // server.close() 只在全部连接结束后回调；SSE（chat/agents/acp 流）是
+    // server.close 只在全部连接结束后回调；SSE（chat/agents/acp 流）是
     // 长连接、没有空闲关闭语义，不主动断开存量连接会让 Ctrl-C 永久挂起。
     // 先停止接新连接，再强制断开存量连接，5s 兜底超时保证清理序列必达。
     const closed = new Promise<void>(resolve => server.close(() => resolve()))
@@ -1642,7 +1642,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   process.on('SIGTERM', () => void shutdown())
 }
 
-/** FL-21：`--open` 自动打开系统浏览器（不阻塞、失败静默）。 */
+/** `--open` 自动打开系统浏览器（不阻塞、失败静默）。 */
 async function openBrowser(url: string): Promise<void> {
   const { spawn } = await import('node:child_process')
   try {
@@ -1656,7 +1656,7 @@ async function openBrowser(url: string): Promise<void> {
   }
 }
 
-/** FL-21：Web UI 静态产物根目录。env 覆盖 > 仓库布局推断（对源码运行与
+/** Web UI 静态产物根目录。env 覆盖 > 仓库布局推断（对源码运行与
  * 打包产物同深度成立：apps/cli/src 与 apps/cli/lib 都距仓库根三级）。 */
 function webDistRoot(): string {
   if (process.env.SYLLORA_WEB_DIST !== undefined && process.env.SYLLORA_WEB_DIST !== '') {
@@ -1728,7 +1728,7 @@ async function main(): Promise<void> {
     if (!Number.isInteger(port) || port < 0 || port > 65535) {
       throw new Error(`无效端口: ${rawPort}（--port 需 0~65535 的整数，0 表示由内核分配随机端口）`)
     }
-    // FL-30/35/21：serve 旗标——token 逃生口、随机端口（--port 0）、自动开浏览器。
+    // serve 旗标——token 逃生口、随机端口（--port 0）、自动开浏览器。
     await serve(port, {
       insecureNoToken: args.includes('--insecure-no-token'),
       open: args.includes('--open'),
@@ -1748,7 +1748,7 @@ async function main(): Promise<void> {
   } else if (command === 'quiz') {
     await quizCommand(args.slice(1))
   } else if (command === 'sync') {
-    // FL-13/FL-14：CLI 此前没有任何可触发课程构建的命令，quiz 空池提示指向
+    // /：CLI 此前没有任何可触发课程构建的命令，quiz 空池提示指向
     // 不存在的 sync 命令（死链）。补注册 sync 分支，提示链真实可行。
     await syncCommand(args.slice(1))
   } else if (command === 'review') {

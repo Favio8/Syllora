@@ -163,7 +163,7 @@ function SyllabusLoader({ courseId }: { courseId: string }) {
 
   const focusConcept = useCallback(
     (conceptId: string, name: string) => {
-      // 不再强制切回列表：当前视图内完成高亮（P4），仅更新全局聚焦态。
+      // 不再强制切回列表：当前视图内完成高亮，仅更新全局聚焦态。
       setFocusConcept(conceptId);
       flashStatusBanner(`已聚焦：${name}`);
     },

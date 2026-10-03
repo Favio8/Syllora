@@ -1,6 +1,6 @@
 /**
  * 服务入口防护回归：readRequestBody 跨 TCP chunk 的多字节 UTF-8 完整性
- * （P0-1 乱码根因）、体积上限（P1-5）、读超时与提前断连保护（NEW-002），
+ * （乱码根因）、体积上限、读超时与提前断连保护，
  * loopback Origin 白名单（SEC-1），以及错误消息凭据净化（BUG-005）。
  */
 
@@ -54,7 +54,7 @@ describe('readRequestBody', () => {
     await expect(pending).rejects.toBeInstanceOf(PayloadTooLargeError)
   })
 
-  it('NEW-002：请求体迟迟不发完时超时拒绝（Slowloris 防护）', async () => {
+  it('请求体迟迟不发完时超时拒绝（Slowloris 防护）', async () => {
     const request = new FakeRequest()
     const pending = readRequestBody(request as unknown as IncomingMessage, 1024, 50)
     queueMicrotask(() => {
@@ -64,7 +64,7 @@ describe('readRequestBody', () => {
     await expect(pending).rejects.toBeInstanceOf(RequestBodyTimeoutError)
   })
 
-  it('NEW-002：连接在 body 完成前断开时立即拒绝而不是挂死', async () => {
+  it('连接在 body 完成前断开时立即拒绝而不是挂死', async () => {
     const request = new FakeRequest()
     const pending = readRequestBody(request as unknown as IncomingMessage, 1024)
     queueMicrotask(() => {
@@ -74,7 +74,7 @@ describe('readRequestBody', () => {
     await expect(pending).rejects.toThrow('closed before body completed')
   })
 
-  it('NEW-002：正常完成后 close 不影响结果（settled 只结算一次）', async () => {
+  it('正常完成后 close 不影响结果（settled 只结算一次）', async () => {
     const request = new FakeRequest()
     const pending = readRequestBody(request as unknown as IncomingMessage, 1024)
     queueMicrotask(() => {

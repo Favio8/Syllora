@@ -30,7 +30,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   const feedVersion = useRef(0);
   const [feeding, setFeeding] = useState<{ requestId: string; jobId: string; message: string } | null>(null);
   const [feedNotice, setFeedNotice] = useState('');
-  // ��资料 ↔ 电子书 来源切换（盖章决策⑥）；电子书阅读 = 精炼 markdown +
+  // 资料 ↔ 电子书 来源切换；电子书阅读 = 精炼 markdown +
   // 目录骨架章节下拉 + 本地化图片渲染。
   const [mode, setMode] = useState<'material' | 'ebook'>('material');
   const [ebooks, setEbooks] = useState<EbookSummary[]>([]);
@@ -39,10 +39,9 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
   const [ebookChapterId, setEbookChapterId] = useState('');
   const [ebookLoading, setEbookLoading] = useState(false);
   const ebookVersion = useRef(0);
-  const headingSeen = useRef(new Map<string, number>());
-  // M7 大纲面板：红/黄/绿学习状态（手工标记，progress.json 持久化）。
+  // 大纲面板：红/黄/绿学习状态（手工标记，progress.json 持久化）。
   const [showOutline, setShowOutline] = useState(false);
-  // M9 复习：考前速记面板 + 考试 UI 外壳（对接待同学 skill 确认，D12）。
+  // 复习：考前速记面板 + 考试 UI 外壳（对接待同学 skill 确认，）。
   const [showReview, setShowReview] = useState(false);
   const [examOpen, setExamOpen] = useState(false);
   const [examDone, setExamDone] = useState(false);
@@ -79,7 +78,6 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     if (mode !== 'ebook' || !ebookSelectedId) return;
     let alive = true;
     const version = ++ebookVersion.current;
-    headingSeen.current.clear();
     setEbookDoc(null); setEbookChapterId(''); setError(''); setEbookLoading(true);
     void ebookService.document(course.id, ebookSelectedId).then(
       doc => { if (alive && version === ebookVersion.current) { setEbookDoc(doc); setEbookLoading(false); } },
@@ -125,7 +123,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     if(match.materialId&&match.materialId!==material?.id)setSelectedId(match.materialId);
     else {articleRef.current?.querySelector<HTMLElement>(`[data-source-id="${CSS.escape(match.sourceId)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});setHighlight(match.sourceId);jumpTarget.current=null;}
   }
-  /** ��电子书模式的来源跳转 —— 按章节标题定位大纲锚点（无匹配则回全书）。 */
+  /** 电子书模式的来源跳转 —— 按章节标题定位大纲锚点（无匹配则回全书）。 */
   function jumpEbookSource(title: string) {
     const node = ebookDoc?.outline.nodes.find(n => n.title === title);
     setEbookChapterId(node ? node.anchor : '');
@@ -180,7 +178,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
       if (version !== feedVersion.current) return;
       setFeedNotice(done.message);
       setTimeout(() => { if (version === feedVersion.current) setFeedNotice(''); }, 10_000);
-      // ��投喂完成自动切到电子书模式并刷新列表、选中刚投的书（不必等用户手动切换）。
+      // 投喂完成自动切到电子书模式并刷新列表、选中刚投的书（不必等用户手动切换）。
       setMode('ebook');
       void ebookService.list(course.id).then(fresh => {
         if (version !== feedVersion.current || !fresh.length) return;
@@ -195,7 +193,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     }
   }
 
-  /** 与后端 syllora-outline.ts::slugify 逐字对齐（M3a 生成的锚点必须可命中）。 */
+  /** 与后端 syllora-outline.ts：slugify 逐字对齐（生成的锚点必须可命中）。 */
   function ebookSlug(title: string): string {
     return title.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'section';
   }
@@ -209,12 +207,15 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     walk(children);
     return acc;
   }
+  // 标题锚点必须与后端 outline 的 slug 稳定一致：计数表每次渲染重建，
+  // 不能挂在 ref 上跨渲染累计（否则第二次渲染起 id 漂移成 slug-1，跳章静默失效）。
+  const headingSeen = new Map<string, number>();
   function renderHeading(level: 1 | 2 | 3 | 4 | 5 | 6) {
     const Tag = `h${level}` as 'h1';
     return function Heading({ children }: { children?: React.ReactNode }) {
       const base = ebookSlug(headingText(children));
-      const seen = headingSeen.current.get(base) ?? 0;
-      headingSeen.current.set(base, seen + 1);
+      const seen = headingSeen.get(base) ?? 0;
+      headingSeen.set(base, seen + 1);
       const id = seen === 0 ? base : `${base}-${seen}`;
       return <Tag id={id}>{children}</Tag>;
     };
@@ -225,7 +226,10 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} src={typeof props.src === 'string' ? resolveEbookImg(props.src) : props.src} alt={props.alt ?? ''} />,
   };
 
-  /** M7 自动判规（D8 默认规则，待你批）：按 AI 答疑来源统计章节接触次数（chunk→章节），≥3 次→绿(已掌握)、1-2 次→黄(学习中)、0→红(薄弱)；手工标记优先于自动。 */
+  // 整本切条只算一次：轮询与输入都会触发重渲染，两处 memo 各自重算等于每次都切两遍全书。
+  const ebookChunks = useMemo(() => (ebookDoc ? chunkEbookMarkdown(ebookDoc.markdown) : []), [ebookDoc]);
+
+  /** 自动判规（默认规则，待你批）：按 AI 答疑来源统计章节接触次数（chunk→章节），≥3 次→绿(已掌握)、1-2 次→黄(学习中)、0→红(薄弱)；手工标记优先于自动。 */
   const autoProgress = useMemo(() => {
     const counts = new Map<string, number>();
     for (const message of course.messages ?? []) {
@@ -233,7 +237,7 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
       for (const sid of message.sourceIds ?? []) counts.set(sid, (counts.get(sid) ?? 0) + 1);
     }
     const bySection = new Map<string, number>();
-    if (ebookDoc) for (const chunk of chunkEbookMarkdown(ebookDoc.markdown)) {
+    if (ebookDoc) for (const chunk of ebookChunks) {
       const n = counts.get(chunk.id) ?? 0;
       if (n > 0) bySection.set(chunk.section, (bySection.get(chunk.section) ?? 0) + n);
     }
@@ -244,21 +248,21 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
       else if (n >= 1) out[node.anchor] = 'learning';
     }
     return out;
-  }, [course.messages, ebookDoc, ebookSelectedId]);
+  }, [course.messages, ebookDoc, ebookSelectedId, ebookChunks]);
 
-  /** M9 考前速记：每章取首块正文摘要（浓缩版占位，AI 二度浓缩待模型接入后替换）。 */
+  /** 考前速记：每章取首块正文摘要（浓缩版占位，AI 二度浓缩待模型接入后替换）。 */
   const reviewSections = useMemo(() => {
     if (!ebookDoc) return [] as Array<{ anchor: string; title: string; excerpt: string }>;
     const firstBySection = new Map<string, string>();
-    for (const chunk of chunkEbookMarkdown(ebookDoc.markdown)) {
+    for (const chunk of ebookChunks) {
       if (!firstBySection.has(chunk.section)) {
         firstBySection.set(chunk.section, chunk.text.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim());
       }
     }
     return (ebookDoc.outline.nodes ?? []).map(node => ({ anchor: node.anchor, title: node.title, excerpt: (firstBySection.get(node.title) ?? '').slice(0, 90) }));
-  }, [ebookDoc]);
+  }, [ebookDoc, ebookChunks]);
 
-  /** ��章节学习状态循环 未标记→绿(已掌握)→黄(学习中)→红(薄弱)→未标记，乐观更新+后端落盘。 */
+  /** 章节学习状态循环 未标记→绿(已掌握)→黄(学习中)→红(薄弱)→未标记，乐观更新+后端落盘。 */
   const cycleChapterStatus = useCallback(async (anchor: string) => {
     if (!ebookDoc) return;
     const current = ebookDoc.progress?.nodes?.[anchor] ?? null;
@@ -285,6 +289,6 @@ export default function ReadingWorkspace({ course, onUpload, assistantOpen, onTo
     </div>{readingDoc?.content&&<footer className="reader-bottom-hint"><MousePointer2 size={13} />选中文字，即可使用 AI解释、AI搜索</footer>}</section>
     {assistantOpen ? <aside className={`reader-assistant is-open ${pending || result ? 'has-answer' : ''}`} aria-label="阅读助手"><header><span><Sparkles size={16} />阅读助手</span><button className="icon-button" aria-label="收起阅读助手" title="收起阅读助手" onClick={onToggleAssistant}><X size={17} /></button></header><div className="reading-assistant-content">{!result && !pending ? <div className="reading-assistant-empty"><span><MousePointer2 size={25} /></span><h3>从一个疑问开始</h3><p>在正文中选中一个概念或一段话，选择你需要的帮助。</p><div><Sparkles size={16} /><span><strong>AI解释</strong><small>换一种方式理解选中的内容</small></span></div><div><Search size={16} /><span><strong>AI搜索</strong><small>找到资料中相关的段落</small></span></div></div> : <><span className="reading-result-label">{(pending?.mode ?? result?.mode) === 'explain' ? 'AI解释' : 'AI搜索'}<small>课程资料</small></span><blockquote className="reading-quote"><Quote size={15} /><p>{pending?.text ?? result?.selection}</p></blockquote>{pending ? <div className="reading-pending" role="status"><LoaderCircle size={16} className="spin" />{pending.mode === 'explain' ? '正在准备解释…' : '正在查找相关段落…'}<button className="text-button" onClick={()=>controller.current?.abort()}>取消阅读任务</button></div> : result?.mode === 'explain' ? <div className="reading-explanation"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{result.explanation}</ReactMarkdown>{result.matches.map(match=><button className="text-button" key={match.sourceId} onClick={()=>goSource(match)}>来源：{match.title}</button>)}</div> : <div className="reading-search-results"><ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={{img:()=>null}}>{result?.explanation??''}</ReactMarkdown><p>在课程资料中找到 {result?.matches.length ?? 0} 个相关段落</p>{result?.matches.map((match, i) => <article key={i} id={match.sourceId}><button className="text-button" onClick={()=>goSource(match)}>查看资料来源</button><button className="text-button" onClick={()=>{if(mode==='ebook')goSource(match);else locate(match);}}>定位段落</button><h3>{match.title}<ArrowUpRight size={13} /></h3><p>{match.excerpt}</p></article>)}</div>}</> }</div><footer>回答基于当前课程资料；点击来源可核对原文。</footer></aside> : <aside className="panel-rail reader-rail" aria-label="阅读助手已收起"><button className="icon-button" aria-label="展开阅读助手" onClick={onToggleAssistant}><PanelRightOpen size={18} /></button></aside>}
     {toolbar && createPortal(<div ref={toolsRef} className="selection-tools" role="toolbar" aria-label="选中文字操作" style={{ left: toolbar.x, top: toolbar.y }} onPointerDown={e => e.preventDefault()}><button onClick={() => void assist('explain')}><Sparkles size={15} />AI解释</button><span /><button onClick={() => void assist('search')}><Search size={15} />AI搜索</button></div>, document.body)}
-    {examOpen && <div className="exam-modal" role="dialog" aria-label="章节自测"><div className="exam-modal-card"><header><span><GraduationCap size={17} />章节自测<small>UI 外壳 · 考试接入契约待同学 skill 确认（D12）</small></span><button className="icon-button" aria-label="关闭" onClick={() => setExamOpen(false)}><X size={16} /></button></header><div className="exam-modal-body">{examDone ? <div className="exam-done"><h3>已交卷</h3><p>判题与评分需要考试接入契约（D12）确认后启用；当前仅展示界面外壳。</p><button className="button primary" onClick={() => { setExamDone(false); setExamOpen(false); }}>完成</button></div> : <><p className="exam-note">从当前电子书章节出若干单选题（示例占位，来自大纲前 3 节）。</p>{(ebookDoc?.outline.nodes ?? []).slice(0, 3).map((node, index) => <div className="exam-question" key={node.anchor}><h4>第 {index + 1} 题 · 关于「{node.title}」<small>（示例题）</small></h4><label><input type="radio" name={`q${index}`} />选项 A 示例</label><label><input type="radio" name={`q${index}`} />选项 B 示例</label><label><input type="radio" name={`q${index}`} />选项 C 示例</label><label><input type="radio" name={`q${index}`} />选项 D 示例</label></div>)}<button className="button primary" onClick={() => setExamDone(true)}>交卷</button></>}</div></div></div>}
+    {examOpen && <div className="exam-modal" role="dialog" aria-label="章节自测"><div className="exam-modal-card"><header><span><GraduationCap size={17} />章节自测<small>UI 外壳 · 考试接入契约待同学 skill 确认（）</small></span><button className="icon-button" aria-label="关闭" onClick={() => setExamOpen(false)}><X size={16} /></button></header><div className="exam-modal-body">{examDone ? <div className="exam-done"><h3>已交卷</h3><p>判题与评分需要考试接入契约（）确认后启用；当前仅展示界面外壳。</p><button className="button primary" onClick={() => { setExamDone(false); setExamOpen(false); }}>完成</button></div> : <><p className="exam-note">从当前电子书章节出若干单选题（示例占位，来自大纲前 3 节）。</p>{(ebookDoc?.outline.nodes ?? []).slice(0, 3).map((node, index) => <div className="exam-question" key={node.anchor}><h4>第 {index + 1} 题 · 关于「{node.title}」<small>（示例题）</small></h4><label><input type="radio" name={`q${index}`} />选项 A 示例</label><label><input type="radio" name={`q${index}`} />选项 B 示例</label><label><input type="radio" name={`q${index}`} />选项 C 示例</label><label><input type="radio" name={`q${index}`} />选项 D 示例</label></div>)}<button className="button primary" onClick={() => setExamDone(true)}>交卷</button></>}</div></div></div>}
   </div>;
 }

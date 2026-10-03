@@ -52,11 +52,11 @@ describe('BlockAssembler', () => {
 
   it('reuses an existing partial when ensure() is called with a tracked index', () => {
     const assembler = new BlockAssembler()
-    // block-start creates the partial; block-end calls ensure() on the same index
+    // block-start creates the partial; block-end calls ensure on the same index
     assembler.push({ type: 'block-start', index: 0, blockType: 'text' })
     // push a delta first to guarantee the partial exists
     assembler.push({ type: 'text-delta', index: 0, text: 'hi' })
-    // block-end's ensure() must find the existing partial (the second branch path)
+    // block-end's ensure must find the existing partial (the second branch path)
     assembler.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'hi' } })
     expect(assembler.blocks()).toEqual([{ type: 'text', text: 'hi' }])
   })

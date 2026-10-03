@@ -110,7 +110,7 @@ export async function courseShowCommand(deps: CourseDeps, explicitId: string | n
   renderCourse(deps.terminal, course, true)
 }
 
-/** `syllora course <list|show> [<id>]` 的分发（bin.ts main() 接线）。 */
+/** `syllora course <list|show> [<id>]` 的分发（bin.ts main 接线）。 */
 export async function courseCommand(argv: string[]): Promise<void> {
   const sub = argv[0] ?? 'list'
   if (sub === 'list') await courseListCommand(makeCourseDeps())

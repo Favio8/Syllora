@@ -2,7 +2,7 @@
  * Workspace entity registry (`ctx.workspaceRegistry`): durable workspace
  * records, stable registry order, and rename-conflict enforcement over the
  * storage-domain data form. Ported from dsh-workspace `src/index.ts` without
- * the session-membership half (M2 reintroduces it with the session domain).
+ * the session-membership half （reintroduces it with the session domain).
  * @module @syllora/workspace
  */
 
@@ -81,7 +81,7 @@ export class WorkspaceRegistry extends Service {
     this.validateStoredState(this.state)
     if (!this.state.initialized) {
       // A valid empty registry: nothing to bootstrap from yet (dsh bootstraps
-      // workspace membership from session history here; sessions are M2).
+      // workspace membership from session history here; sessions are）.
       await this.setState({ ...this.state, initialized: true })
     }
     this.rebuildEntities()

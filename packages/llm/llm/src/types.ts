@@ -15,8 +15,8 @@ declare module '@deepseek-ai/cordis' {
      * The provider topology changed: an adapter registered or unregistered
      * routes, or the configurable-provider directory gained or lost entries.
      * This payload-free registry notification fires at each commit point
-     * (including registration disposal); consumers re-read `listProviders()`,
-     * `listModels()`, or `listConfigurableProviders()` for the new state.
+     * (including registration disposal); consumers re-read `listProviders`,
+     * `listModels`, or `listConfigurableProviders` for the new state.
      * Observer failures are contained and cannot veto the registry mutation.
      * @mode emit
      */
@@ -160,7 +160,7 @@ export type ModelModality = ModelModalityMap[keyof ModelModalityMap]
 /**
  * One provider route an adapter plugin can activate through configuration,
  * whether or not the route is currently registered. Configuration surfaces
- * merge this directory with `listProviders()` to offer every configurable
+ * merge this directory with `listProviders` to offer every configurable
  * provider alongside its live/dormant state.
  */
 export interface LlmConfigurableProvider {
@@ -306,7 +306,7 @@ export interface ReplayEnvelope {
  * Block indexes correlate interleaved deltas, and `block-end` carries the
  * assembled block. Adapters emit usage before the terminal finish and nothing
  * afterward; tool arguments remain raw JSON strings. An adapter implementation
- * may throw, but `LlmRuntime.stream()` normalizes that failure to a terminal
+ * may throw, but `LlmRuntime.stream` normalizes that failure to a terminal
  * `error` or `aborted` finish before exposing it to consumers.
  */
 export type StreamChunk =

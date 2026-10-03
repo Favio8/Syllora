@@ -11,9 +11,9 @@ import { SettingsProvider, type SettingsNamespace } from '../src/index.ts'
 export class MemorySettings extends SettingsProvider {
   /** Raw document the provider "storage" currently holds. */
   doc: Record<string, unknown>
-  /** Every persist() call observed, in order. */
+  /** Every persist call observed, in order. */
   persisted: Array<{ ns: SettingsNamespace; section: Record<string, unknown> }> = []
-  /** When false, update() must reject before reaching persist(). */
+  /** When false, update must reject before reaching persist. */
   writableFlag: boolean
 
   /** Artificial persist latency so tests can interleave concurrent updates. */

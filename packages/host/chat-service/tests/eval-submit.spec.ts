@@ -80,12 +80,12 @@ async function collect(gen: AsyncGenerator<{ event: string; data: unknown }>): P
 }
 
 describe('evalSubmit MCQ answer-key fast grading', () => {
-  it('选对：满分通过；FL-27 约定答案键路径不再伪造 rubric 帧', async () => {
+  it('选对：满分通过； 约定答案键路径不再伪造 rubric 帧', async () => {
     const { root, ws, service, courseId, cleanup } = await setup()
     const frames = await collect(service.evalSubmit(ws, courseId, 't_mcq_001', '连接模型与真实环境的控制系统', null))
     const result = frames.find(frame => frame.event === 'result')
     expect(result?.data).toMatchObject({ score: 1, passed: true })
-    // FL-27：答案键是"单一布尔"判分，把它伪装成逐采分点命中帧会让多采分点
+    // 答案键是"单一布尔"判分，把它伪装成逐采分点命中帧会让多采分点
     // 的诊断价值归零——MCQ 快判只发结论（result/sm2/done），不发 rubric 帧。
     const rubrics = frames.filter(frame => frame.event === 'rubric')
     expect(rubrics).toHaveLength(0)

@@ -6,7 +6,7 @@
  * 选中对话 = GET 恢复端点 → 历史消息整渲染（瞬时，不做流式回放）
  *  + 对话横幅（已恢复（上次 …））+ suggestedEntry；
  * 新建对话 = POST → 空消息中栏 + 新对话横幅；
- * 切换/新建前先 abortActiveChat() 中止旧流（跨 hook 单例，lib/chatStream）。
+ * 切换/新建前先 abortActiveChat 中止旧流（跨 hook 单例，lib/chatStream）。
  *
  * UI-9：selectSession 携带选择纪元——restore 返回时若期间发生了更新的
  * 选择（手动连点/自动选会话），晚到的响应直接放弃落地，杜绝"点了 B 却

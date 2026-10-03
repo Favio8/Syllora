@@ -1,5 +1,5 @@
 /**
- * W-1 回归：唤醒卡作答必须与 quizFlow 同口径——透传 sessionId / AbortSignal /
+ *  回归：唤醒卡作答必须与 quizFlow 同口径——透传 sessionId / AbortSignal /
  * evalId（内容指纹）。旧实现三参全不传：SSE 中断后重试被服务端当新匿名 eval
  * 再次 settle（SM-2/进度重复计分），且在途流不可中止。
  */
@@ -42,7 +42,7 @@ function settledStream(): AsyncGenerator<{ event: string; data: Record<string, u
   })();
 }
 
-describe("唤醒卡评测幂等与中止（W-1）", () => {
+describe("唤醒卡评测幂等与中止（）", () => {
   it("透传 sessionId / signal / evalId，并返回判定结果", async () => {
     apiMocks.evalSubmit.mockReturnValue(settledStream());
     const result = await submitWakeupAnswer("course-1", "task-1", "我的答案");

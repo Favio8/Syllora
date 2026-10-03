@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * 大纲「思维导图视图」（P1 迭代，B1 mind-elixir 5.15）：章节 = 一级分支、
+ * 大纲「思维导图视图」（迭代，B1 mind-elixir 5.15）：章节 = 一级分支、
  * 概念 = 叶子；掌握度状态色点 + 百分比 + 「N 依赖」角标（tooltip 列先修
  * 概念名）。只读展示（editable=false），保留折叠/展开。
  *
- * P1 关键改进（相对初版）：
- * - init 一次、后续数据变化走 `refresh()`（不再 destroy/reinit，折叠不丢）；
+ *  关键改进（相对初版）：
+ * - init 一次、后续数据变化走 `refresh`（不再 destroy/reinit，折叠不丢）；
  * - 容器尺寸为 0 时不初始化（右栏 Tab 常驻 hidden 修复）、ResizeObserver
  *   驱动「适配视图」自动缩放；
  * - 「适配视图 / 1:1」缩放模式切换 + 放大/缩小/展开全部/收起全部/导出 PNG；
@@ -248,7 +248,7 @@ export default function SyllabusMindmap({
     };
   }, [fitToCanvas, ready, selectAndScroll]);
 
-  // 数据变化 → refresh()（保留实例；折叠态由投影数据恢复，避免破坏级重建）。
+  // 数据变化 → refresh（保留实例；折叠态由投影数据恢复，避免破坏级重建）。
   useEffect(() => {
     const mind = mindRef.current;
     if (mind === null || !ready || data === appliedDataRef.current) return;

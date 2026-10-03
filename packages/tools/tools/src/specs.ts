@@ -1,6 +1,6 @@
 /**
  * Default tool specification set: the 13 tools from Python
- * `agent_tools.py::build_default_specs` plus five read-only Syllora
+ * `agent_tools.py：build_default_specs` plus five read-only Syllora
  * course-snapshot tools. Handlers are registered in `index.ts`; host-side
  * learning actions are supplied through ToolContext.
  * @module @syllora/tools/src/specs

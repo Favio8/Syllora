@@ -205,7 +205,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
       setWsCourses(coursesMap);
       setWsMissing(missingMap);
     } catch {
-      // P1-2：瞬时失败（宿主重启/请求超时）不清空列表——旧实现直接
+      // 瞬时失败（宿主重启/请求超时）不清空列表——旧实现直接
       // setWsItems([])，用户视角是「项目全丢了」。保留上次的列表 + 横幅，
       // effect 会在 workspacePath 变化时重试。
       flashStatusBanner("✗ 项目列表加载失败，显示的是上次的列表");
@@ -233,7 +233,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
     };
   }, [wsMenuOpen]);
 
-  // P2：对话操作菜单与 wsMenu 同款的外点/Escape 关闭——旧实现菜单会一直挂看，
+  // 对话操作菜单与 wsMenu 同款的外点/Escape 关闭——旧实现菜单会一直挂看，
   // 只能点其他菜单项才消失。
   useEffect(() => {
     if (sessionMenuId === null) return;
@@ -272,7 +272,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
   }
 
   const [confirmForget, setConfirmForget] = useState<WorkspaceItem | null>(null);
-  // W-10：确认框与重命名框的焦点圈闭（两个对话框各有折叠/展开两处渲染，
+  // 确认框与重命名框的焦点圈闭（两个对话框各有折叠/展开两处渲染，
   // 同一 ref 在任意分支挂载；Escape 收敛到 hook，删掉 div 上自有 onKeyDown）。
   const confirmForgetRef = useRef<HTMLDivElement>(null);
   const renameDialogRef = useRef<HTMLDivElement>(null);
@@ -291,7 +291,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
         delete next[item.path];
         return next;
       });
-      // P2：清掉被移除项目的会话缓存——courseSessions 按 courseId 缓存，
+      // 清掉被移除项目的会话缓存——courseSessions 按 courseId 缓存，
       // 不清则重新添加同一目录时旧会话列表短暂复现。
       for (const course of wsCourses[item.path] ?? []) {
         useAppStore.getState().setCourseSessions(course.id, []);
@@ -303,7 +303,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
         abortActiveChat();
         abortActiveEval();
         abortActiveWakeupEval();
-        // FL-10：移除当前项目 → 本地指针同步清空（后端已回落/清空
+        // 移除当前项目 → 本地指针同步清空（后端已回落/清空
         // lastOpenedPath），整个控制台回到空态，而不是悬空挂在已移除项目上。
         const store = useAppStore.getState();
         store.setStreaming(false);
@@ -314,7 +314,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
         flashStatusBanner(`已从列表移除当前项目（磁盘数据未删除）`);
       }
     } catch (cause) {
-      // FL-15：移除失败旧实现 catch {} 全静默，用户毫无感知。
+      // 移除失败旧实现 catch {} 全静默，用户毫无感知。
       flashStatusBanner(`✗ 移除失败：${cause instanceof Error ? cause.message : String(cause)}`);
     }
   }
@@ -335,7 +335,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
 
   async function commitRename(item: WorkspaceItem) {
     const title = renameDraft.trim();
-    // P2：冲突前置阻断——renameConflict 依赖 editingWsId 非空，必须在清空之前
+    // 冲突前置阻断——renameConflict 依赖 editingWsId 非空，必须在清空之前
     // 判断；旧实现明知重名仍发请求，靠后端报错兜底。
     if (renameConflict) {
       setEditingWsId(null);
@@ -379,7 +379,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
       const payload = await api.reorderWorkspace(sourceId, nextId);
       setWsItems(payload.items);
     } catch (cause) {
-      // FL-15：排序失败旧实现只静默回滚，用户不知道排序没有生效。
+      // 排序失败旧实现只静默回滚，用户不知道排序没有生效。
       flashStatusBanner(`✗ 排序失败：${cause instanceof Error ? cause.message : String(cause)}`);
       void refreshWorkspaces();
     }
@@ -589,7 +589,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
   }, [courses, orderBy]);
 
   async function openSearchResult(result: SessionSearchResult) {
-    // P1-1/N-2：整链路兜底——adoptWorkspace（项目打开失败）与 selectSession
+    // /：整链路兜底——adoptWorkspace（项目打开失败）与 selectSession
     // （会话已被删/归档）都可能 reject；旧实现两者都裸奔，留下 unhandled
     // rejection 且界面零反馈。任一失败都横幅提示并保持搜索打开。
     try {
@@ -772,12 +772,12 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
   }
 
 
-  /** P1-3：项目的全部课程（激活项目读 store，其余读并列树缓存）。 */
+  /** 项目的全部课程（激活项目读 store，其余读并列树缓存）。 */
   function coursesOfWorkspace(item: WorkspaceItem): CourseSummary[] {
     return item.path === workspacePath ? courses : (wsCourses[item.path] ?? []);
   }
 
-  /** P1-3：项目的「当前课程」——激活项目跟随 activeCourseId（多课程可在左栏
+  /** 项目的「当前课程」——激活项目跟随 activeCourseId（多课程可在左栏
    *  切换），非激活项目取第一个（仅作标题/徽标展示）。旧实现两处都写死
    *  `[0]`，多课程项目的其余课程在左栏完全不可达。 */
   function primaryCourseOf(item: WorkspaceItem): CourseSummary | null {
@@ -872,7 +872,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
               {course.dueToday > 0 ? (
                 <span className="rounded-full border border-border-line px-1 py-px text-accent-warn">到期 {course.dueToday}</span>
               ) : null}
-              {/* P1-3：多课程项目的可发现性——旧实现只渲染第一个课程，其余课程
+              {/* 多课程项目的可发现性——旧实现只渲染第一个课程，其余课程
                   在左栏无任何入口（只能 /switch-course 盲切）。 */}
               {projectCourses.length > 1 ? (
                 <span
@@ -942,7 +942,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
     const missing = wsMissing[item.path] ?? false;
     // 项目即课程：项目行即课程行，其下直接挂对话树（当前项目显示已加载对话；
     // 其他项目点击行即切换，切换后加载其对话）。
-    // P1-3：会话树跟随「当前课程」（激活项目 = activeCourseId），不再写死第一个。
+    // 会话树跟随「当前课程」（激活项目 = activeCourseId），不再写死第一个。
     const projectCourses = coursesOfWorkspace(item);
     const course = primaryCourseOf(item);
     const loaded = course !== null
@@ -964,7 +964,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
             ) : (
               <>
                 {renderSessions(course, searching ? sessionHits : loaded)}
-                {/* P1-3：多课程项目的其余课程切换行——点击即切换激活课程
+                {/* 多课程项目的其余课程切换行——点击即切换激活课程
                     （与 CommandPalette 的 switch-course 同语义）。 */}
                 {!searching && otherCourses.length > 0 ? (
                   <div className="mt-1 border-t border-border-faint pt-1">
@@ -1115,7 +1115,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
           title={workspacePath ? "设置" : "请先添加/打开一个项目，再打开设置"}
           className="mt-auto flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-card hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-focus"
           onClick={() => {
-            // FL-03：未打开工作区时设置会写到宿主进程 cwd 的游离 `.syllora/`
+            // 未打开工作区时设置会写到宿主进程 cwd 的游离 `.syllora/`
             //（UI 报"已保存"，重启即失忆）——入口直接拦截并引导先建项目。
             if (!workspacePath) {
               flashStatusBanner("⚠ 请先添加/打开一个项目，再打开设置（配置需要项目目录落盘）");
@@ -1242,7 +1242,7 @@ export default function LeftNav({ collapsed: railCollapsed = false, onExpand, on
             </div>
           ) : null}
         </div>
-        {/* P0-③：●/○ 状态符号替换为爪爪 icon（14px）：synced→idle，同步/构建→thinking */}
+        {/* -③：●/○ 状态符号替换为爪爪 icon（14px）：synced→idle，同步/构建→thinking */}
         <span
           className={`flex items-center gap-1 text-[12px] ${
             buildStatus === "running" || syncState === "syncing"

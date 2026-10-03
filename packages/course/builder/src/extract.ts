@@ -1,6 +1,6 @@
 /**
  * Source text extraction: PDF/DOCX/HTML convert to Markdown through direct
- * libraries (FL-39：pdf-parse / mammoth / turndown 直用，替代 markitdown-ts——
+ * libraries (：pdf-parse / mammoth / turndown 直用，替代 markitdown-ts——
  * 甩掉其传递闭包里的整个 Vercel AI SDK 与 jsdom，约 100MB+ 依赖面). With
  * Python-parity degraded semantics — extraction failure or empty result raises
  * `ExtractionError` so the builder records `degraded` without crashing.
@@ -14,7 +14,7 @@ import mammoth from 'mammoth'
 import { PDFParse } from 'pdf-parse'
 import TurndownService from 'turndown'
 import XLSX from 'xlsx'
-// FL-38：SheetJS 0.20.x 的 ESM 构建（xlsx.mjs）不再自动绑定 node:fs——
+// SheetJS 0.20.x 的 ESM 构建（xlsx.mjs）不再自动绑定 node:fs——
 // 必须用 `set_fs(fs 模块)` 显式注入（内部按 `_fs.readFileSync` 调用），
 // 否则 `XLSX.readFile` 抛 "Cannot access file"。
 XLSX.set_fs(nodeFs)
@@ -48,7 +48,7 @@ function turndownInstance(): TurndownService {
 }
 
 /**
- * XLSX：直读工作表（FL-38 的 0.20.x + set_fs），逐 sheet 生成
+ * XLSX：直读工作表（的 0.20.x + set_fs），逐 sheet 生成
  * `## sheet 名` + markdown 表格（首行为表头）。原 markitdown 路径是
  * sheet→HTML→turndown(gfm)，这里直接产表格——同一输出契约，少一层转换。
  */

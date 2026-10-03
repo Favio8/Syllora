@@ -2,7 +2,7 @@ import { stateDirOf as workspaceStateDirOf } from '@syllora/course-builder'
 /**
  * Rubric evaluator + quiz selection + dynamic cards + memory + gitops +
  * heatmap metrics. Ported from Python evaluator.py/quiz.py/cards.py/
- * memory.py/gitops.py/metrics.py (M4 scope).
+ * memory.py/gitops.py/metrics.py （scope).
  * @module @syllora/learning/src/index
  */
 
@@ -87,7 +87,7 @@ export interface EvaluatorOptions {
 }
 
 /**
- * FL-26：唯一的"通过"阈值。必须与 `scoreToQuality`（progress.ts:229-235）的
+ * 唯一的"通过"阈值。必须与 `scoreToQuality`（progress.ts:229-235）的
  * q≥3 分界（score ≥ 0.6）保持一致——SM-2 用 q 决定间隔/EF 走向，streak 与
  * mastery 用 `passed` 决定，两者若不一致就会出现"EF 说过了、streak 说重来"。
  */
@@ -142,7 +142,7 @@ export class RubricEvaluator {
     if (aligned < rubric.length) {
       console.warn(`[evaluator] LLM 判定与评分点仅对齐 ${aligned}/${rubric.length} 条；缺失项按未命中计`)
     }
-    // FL-26：旧实现 `passed` 是"全部采分点命中"（全有全无），而 SM-2 消费的是
+    // 旧实现 `passed` 是"全部采分点命中"（全有全无），而 SM-2 消费的是
     // 比例分 `score`（经 `scoreToQuality` 的 0.6 阈值转 q）。两套口径打架：
     // 命中 3/4 时 passed=false，但 q=3 走 SM-2 的通过分支——EF 按 q=3 微调，
     // streak 却被清零，两个字段互相矛盾（首次命中 75% 还会算出 mastery=0）。
@@ -188,7 +188,7 @@ export async function pickTasks(
   const board = await loadProgressBoard(await stateFilePath(courseDir, 'progress.md'))
   const due = new Set(dueRecords(board, today).map(record => record.conceptId))
 
-  // FL-24：学习进度的权威在 `progress.md`——`evalSubmit` 只写它，从不回写 task
+  // 学习进度的权威在 `progress.md`——`evalSubmit` 只写它，从不回写 task
   // pool（见 course.ts:505-532，`writeTaskPool` 的调用点全在构建/去重/动态卡）。
   // 因此 `task.history.attempts` 恒为生成时的 0（task-gen.ts:82），用它排序会让
   // "最短尝试先出"退化成按 id 排序，用它判"是否新卡"则把所有练过的卡都当新卡补位。
@@ -324,7 +324,7 @@ export async function generateDynamicCards(
   )
   const candidates = batch.tasks.slice(0, count).map((task, index) => ({
     ...task,
-    // T-19：`_dyn${Date.now()}${index}` 在同毫秒跨批会碰撞（mock/高速连续）
+    // T-19：`_dyn${Date.now}${index}` 在同毫秒跨批会碰撞（mock/高速连续）
     // → 池内 id 重复。加随机后缀；target_id 仍指向源题，不影响溯源。
     task_id: `${sourceTask.concept_id.replace(/^c_/, '')}_dyn${Date.now().toString(36)}${index}${Math.random().toString(36).slice(2, 6)}`,
     concept_id: sourceTask.concept_id,
@@ -352,7 +352,7 @@ export async function readGlobalMemory(workspaceRoot: string): Promise<string> {
 
 /** Read the course memory pool evidence (sync audit lines). */
 export async function readCourseMemoryPool(courseDir: string): Promise<string[]> {
-  // P1-7：与写入侧一致——历史目录在 <课程根>/.syllora/history。
+  // 与写入侧一致——历史目录在 <课程根>/.syllora/history。
   // T-16：旧布局（根目录 history/）回退。
   const historyDir = await historyDirOf(courseDir)
   const hints: string[] = []
@@ -457,7 +457,7 @@ export async function heatmap(workspaceRoot: string, weeks = 12): Promise<Heatma
     days.set(date, fresh)
     return fresh
   }
-  // 项目即课程：会话历史位于项目根 .syllora/history（P1-7 双轨制修复）。
+  // 项目即课程：会话历史位于项目根 .syllora/history（双轨制修复）。
   // T-16：旧布局（根目录 history/）回退——硬编码让未迁移工作区热力图恒 0。
   const historyDir = await historyDirOf(workspaceRoot)
   const chatTurnsByDate = new Map<string, number>()
@@ -557,7 +557,7 @@ export interface HeatmapDayDetail {
 export async function heatmapDay(workspaceRoot: string, date: string): Promise<HeatmapDayDetail> {
   const changelog: string[] = []
   const events: HeatmapDayDetail['events'] = []
-  // 项目即课程：会话历史位于项目根 .syllora/history（P1-7 双轨制修复）。
+  // 项目即课程：会话历史位于项目根 .syllora/history（双轨制修复）。
   // T-16：旧布局（根目录 history/）回退。
   const historyDir = await historyDirOf(workspaceRoot)
   if ((await (await import('node:fs/promises')).stat(historyDir).catch(() => null))?.isDirectory()) {

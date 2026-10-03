@@ -130,7 +130,7 @@ describe('SM-2 调度（F-12）', () => {
     expect(intervalDays(400, 2.9)).toBe(365)
   })
 
-  it('FL-29 回归：间隔序列对齐经典 SM-2（I(1)=1、I(2)=6、I(3)≈15）', () => {
+  it('回归：间隔序列对齐经典 SM-2（I(1)=1、I(2)=6、I(3)≈15）', () => {
     expect(intervalDays(1, 2.5)).toBe(1)
     expect(intervalDays(2, 2.5)).toBe(6)
     // I(3) = round(6 * 2.5) = 15（经典 SM-2 序列 1/6/15）。

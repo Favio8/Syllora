@@ -58,7 +58,7 @@ function syncJsonText(text: string, start: number): string | null {
   const open = text.indexOf('{', start)
   if (open < 0) return null
   // 括号配平必须跳过 JSON 字符串字面量：changelog/concept 值里出现 `{`/`}`
-  // （如代码片段 "fix foo() { bar }"）会让深度提前归零或越界，payload 被
+  // （如代码片段 "fix foo { bar }"）会让深度提前归零或越界，payload 被
   // 静默丢弃（progress.md 不更新且无报错）。畸形输入本就落在 JSON.parse
   // 的 catch 里，扫描器只需对合法 JSON 正确即可。
   let depth = 0

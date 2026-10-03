@@ -1,5 +1,5 @@
 /**
- * FL-21/30/35 宿主冒烟（打包形态）：起 serve（临时 SYLLORA_HOME），断言
+ *  宿主冒烟（打包形态）：起 serve（临时 SYLLORA_HOME），断言
  * ① /api/health 免 token 可达；② /api/* 无 token → 401；③ 带 host.json 的
  * token → 200；④ GET / 返回注入了 __SYLLORA__ 的 index.html；⑤ CLI 从
  * host.json 自动发现端口+token 后 `status` 可用。结束清理临时目录与进程。

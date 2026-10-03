@@ -48,7 +48,7 @@ export default function SettingsDialog() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
-  // W-10：焦点圈闭（打开聚焦首个控件、Tab 循环、Escape 尊重 busy、关闭还原）。
+  // 焦点圈闭（打开聚焦首个控件、Tab 循环、Escape 尊重 busy、关闭还原）。
   useFocusTrap({
     containerRef: dialogRef,
     onEscape: () => { if (!busy) setOpen(false); },

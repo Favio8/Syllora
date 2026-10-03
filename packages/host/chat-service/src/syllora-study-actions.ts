@@ -1,8 +1,8 @@
 /**
  * Read-only study actions for the learning agent: project the per-course
  * Syllora snapshot (`.syllora/course.json`) into compact tool payloads.
- * Kept in the host so the agent never re-implements `evidence()` /
- * `publicCourse()`; a course folder without a snapshot returns a plain
+ * Kept in the host so the agent never re-implements `evidence` /
+ * `publicCourse`; a course folder without a snapshot returns a plain
  * "not available yet" message instead of an error.
  * @module @syllora/chat-service/src/syllora-study-actions
  */

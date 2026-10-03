@@ -1,5 +1,5 @@
 /**
- * Syllora RPC contract (M1 minimal method set): unary dispatch over
+ * Syllora RPC contract （minimal method set): unary dispatch over
  * `POST /api/<method>` with a typed payload/result envelope, zod payload
  * validation at the boundary, business-error mapping from registry
  * exceptions to stable codes, and the wire views the web sidebar renders.
@@ -35,7 +35,7 @@ export interface WorkspacesListResult {
 export interface OpenWorkspaceResult {
   readonly workspace: WorkspaceView
   readonly created: boolean
-  /** FL-18：自动建课骨架失败的原因（null = 无警告）。旧实现被静默吞掉。 */
+  /** 自动建课骨架失败的原因（null = 无警告）。旧实现被静默吞掉。 */
   readonly courseWarning?: string | null
 }
 
@@ -100,7 +100,7 @@ export interface HostServices {
   }
   readonly courseSummary: (root: string) => Promise<{ courses: CourseSummary[]; missing: boolean }>
   /** Native directory chooser; resolves `null` on user cancel, throws when the
-   * platform has no native picker (FL-02: unavailable ≠ cancel). */
+   * platform has no native picker (: unavailable ≠ cancel). */
   readonly pickDirectory: () => Promise<string | null>
   /**
    * Server-side directory browse (DSH browse-backend pattern): one fast RPC
@@ -239,7 +239,7 @@ const handlers = {
       // 项目即课程：打开即初始化——尚未生成 syllabus 的项目就地构建骨架
       // （空生成器，无需 LLM；有资料则同时产出大纲）。
       const { courses, missing } = await services.courseSummary(workspace.path).catch(() => ({ courses: [], missing: true }))
-      // FL-18：自动建课失败此前被 `.catch(() => null)` 整个吞掉——用户拿到一
+      // 自动建课失败此前被 `.catch（=> null)` 整个吞掉——用户拿到一
       // 个没有任何提示的空项目。降级为 warning 字段透传，由前端展示。
       let courseWarning: string | null = null
       if (!missing && courses.length === 0) {
@@ -288,7 +288,7 @@ const handlers = {
       services: HostServices,
     ): Promise<RpcResponse<{ items: WorkspaceView[] }>> {
       const id = payload.id as WorkspaceId
-      // FL-10：移除"当前项目"时旧实现不清 lastOpenedPath——指针悬空指向已
+      // 移除"当前项目"时旧实现不清 lastOpenedPath——指针悬空指向已
       // 移除项，重启宿主还会把它恢复为"当前"。回落到列表首位，列表空则清空。
       const removed = services.registry.get(id)
       await services.registry.delete(id)
@@ -544,7 +544,7 @@ const handlers = {
       model: z.string().optional(),
       apiKeyEnv: z.string().optional(),
       apiBase: z.string().nullish(),
-      // 加固1：数值范围——z.number() 原样放行 -5/999/1e308（NaN/Infinity 已被
+      // 加固1：数值范围——z.number 原样放行 -5/999/1e308（NaN/Infinity 已被
       // zod v4 拒绝），temperature 直送 LLM API、maxConcurrency 仅消费端 clamp。
       temperature: z.number().min(0).max(2).optional(),
       maxConcurrency: z.number().int().min(1).max(32).optional(),

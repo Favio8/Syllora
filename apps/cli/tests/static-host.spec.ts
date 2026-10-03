@@ -1,5 +1,5 @@
 /**
- * FL-21：静态托管语义——文件命中、SPA 回落 index.html、目录穿越 403、
+ * 静态托管语义——文件命中、SPA 回落 index.html、目录穿越 403、
  * 坏路径 400、tap 注入 bootstrap（token）。
  */
 
@@ -65,7 +65,7 @@ describe('createStaticHost', () => {
     }
   })
 
-  it('FL-30：index.html 注入 bootstrap tap（token）', async () => {
+  it('index.html 注入 bootstrap tap（token）', async () => {
     const root = await makeDist({ 'index.html': '<html><head><meta charset="utf-8"></head><body></body></html>' })
     const host = (await createStaticHost({ root, bootstrap: { token: 'tk-123' } }))!
     const hit = await host.respond('/')

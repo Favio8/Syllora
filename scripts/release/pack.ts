@@ -1,5 +1,5 @@
 /**
- * FL-43：发布打包（dsh `scripts/release/pack.ts` 同职）。
+ * 发布打包（dsh `scripts/release/pack.ts` 同职）。
  *
  * 1. 构建 CLI 自包含 bundle（tsc -b + tsdown → apps/cli/lib/bin.js）与
  *    Web 静态导出（next build → apps/web/out，由 serve 托管）；
@@ -72,7 +72,7 @@ for (const name of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) {
 mkdirSync(join(stageDir, 'docs'), { recursive: true })
 cpSync(join(repoRoot, 'docs', 'RUNTIME_MIGRATION.md'), join(stageDir, 'docs', 'RUNTIME_MIGRATION.md'))
 
-/** FL-20：发布清单只保留 npm 可解析的外部依赖；workspace 闭包已全部入包。 */
+/** 发布清单只保留 npm 可解析的外部依赖；workspace 闭包已全部入包。 */
 const publishManifest = {
   name: manifest.name,
   version: manifest.version,

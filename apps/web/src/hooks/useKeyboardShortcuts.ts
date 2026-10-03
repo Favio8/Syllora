@@ -62,7 +62,7 @@ export function useKeyboardShortcuts() {
       if (mod && !alt && !event.shiftKey) {
         const key = event.key.toLowerCase();
         if (key === "k") {
-          // Command Palette。W-10：任意弹层打开（modal 栈非空——设置/材料/
+          // Command Palette。：任意弹层打开（modal 栈非空——设置/材料/
           // 向导/各类确认框，含非 store 的本地弹层）时不叠开 Palette，避免
           // 半叠加态；旧实现只查三个 store 旗标，MaterialsDialog 打开时
           // Ctrl+K 仍会叠开。
@@ -138,7 +138,7 @@ export function useKeyboardShortcuts() {
       if (event.key === "Tab") {
         // UI-12：设置弹层同为模态——Tab 必须在弹层内部导航，不能被三区
         // 焦点循环劫持（此前焦点会逃逸到背景三区）。
-        // W-10：判定改查 modal 栈（isModalOpen）——覆盖材料/向导/确认框等
+        // 判定改查 modal 栈（isModalOpen）——覆盖材料/向导/确认框等
         // 非 store 本地弹层；弹层内的循环由 useFocusTrap 的 capture 处理器
         // 负责（边界 preventDefault），中段交由浏览器原生 Tab。
         if (state.paletteOpen || isModalOpen()) return; // 弹层让位原生 Tab

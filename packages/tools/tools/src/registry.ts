@@ -2,7 +2,7 @@
  * ToolRegistry: registration, OpenAI function-calling schema projection,
  * mode-based policy filtering (M-C), lightweight JSON-Schema argument
  * validation, and three-state execution with timeout. Ported from Python
- * `agent_tools.py::ToolRegistry`.
+ * `agent_tools.py：ToolRegistry`.
  * @module @syllora/tools/src/registry
  */
 
@@ -233,7 +233,7 @@ export class ToolRegistry {
     }
     if (requiresApproval && ctx.approval !== undefined) {
       // T-14：审批期 abort/异常必须转成结构化 ToolResult——raceWithAbort 抛的
-      // 裸 Error 会穿出 execute()，而 executeWithRetry 只按 status 重试不
+      // 裸 Error 会穿出 execute，而 executeWithRetry 只按 status 重试不
       // catch，到达 Agent 循环的是非契约异常（executeBatch/ToolRuntime 才有
       // 结构化兜底，直接调用方没有）。
       let decision: 'allow' | 'deny'
@@ -537,7 +537,7 @@ async function withTimeout<T>(
   } finally {
     if (timer !== undefined) clearTimeout(timer)
     parentSignal?.removeEventListener('abort', onParentAbort)
-    // ��超时/取消胜出后，不响应 AbortSignal 的 handler 迟到 reject 不能成为
+    // 超时/取消胜出后，不响应 AbortSignal 的 handler 迟到 reject 不能成为
     // unhandledRejection（Node 默认会打崩宿主进程）。已结算时此 catch 是 no-op。
     promise.catch(() => undefined)
   }

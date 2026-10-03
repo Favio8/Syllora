@@ -2,7 +2,7 @@
  * The workspace domain declaration: record schema and the `defineDomain` spec
  * the registry opens. The zod schema is the durable-boundary validator today
  * and the direct source of the RPC wire projection. Ported from dsh-workspace
- * `src/spec.ts` without the session-account fields (M2 adds them back).
+ * `src/spec.ts` without the session-account fields （adds them back).
  * @module @syllora/workspace/src/spec
  */
 

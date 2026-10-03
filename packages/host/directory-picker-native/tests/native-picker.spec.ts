@@ -2,7 +2,7 @@
  * Native picker tier selection (Windows-only subset). The Win32 dialog is the
  * single tier: success maps to the path, cancellation to null, and any
  * failure surfaces as-is with no fallback. Non-Windows hosts THROW
- * "unavailable" (FL-02: null would be indistinguishable from a user cancel
+ * "unavailable" (: null would be indistinguishable from a user cancel
  * and stranded first-run on macOS/Linux; the browse backend is the
  * composition-level fallback). When the caller supplies no signal, an
  * internal 240 s timeout-bound lifetime stands in so a forgotten dialog
@@ -46,7 +46,7 @@ describe('pickNativeDirectory', () => {
     await expect(pickNativeDirectory(abort.signal, { platform: 'win32', pickWin32Dialog })).rejects.toThrow('dialog unavailable')
   })
 
-  it('FL-45：darwin 走 osascript——成功回路径（POSIX path 带尾斜杠），用户取消回 null', async () => {
+  it('darwin 走 osascript——成功回路径（POSIX path 带尾斜杠），用户取消回 null', async () => {
     const run = vi.fn(async (_c: string, _a: readonly string[], _s: AbortSignal) => ({ stdout: '/Users/m/work/\n', stderr: '' }))
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).resolves.toBe('/Users/m/work/')
     const cancelRun = vi.fn(async () => {
@@ -56,7 +56,7 @@ describe('pickNativeDirectory', () => {
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run: cancelRun })).resolves.toBeNull()
   })
 
-  it('FL-45：linux zenity 缺失时回落 kdialog，两者皆缺抛"不可用"', async () => {
+  it('linux zenity 缺失时回落 kdialog，两者皆缺抛"不可用"', async () => {
     // 第一层 zenity ENOENT → 第二层 kdialog 成功。
     const run: NativeCommandRunner = (command, _args, _signal) => {
       if (command === 'zenity') {
@@ -74,7 +74,7 @@ describe('pickNativeDirectory', () => {
     await expect(pickNativeDirectory(signal(), { platform: 'linux', run: none })).rejects.toThrow('原生目录选择器')
   })
 
-  it('unsupported 平台仍抛"不可用"（FL-02 语义：不可用 ≠ 取消）', async () => {
+  it('unsupported 平台仍抛"不可用"（ 语义：不可用 ≠ 取消）', async () => {
     await expect(pickNativeDirectory(signal(), { platform: 'aix' })).rejects.toThrow('原生目录选择器')
   })
 

@@ -1,12 +1,12 @@
 /**
- * 电子书管线 · 投喂入口（��。
+ * 电子书管线 · 投喂入口（。
  *
  * 上传原件落盘到 `{courseRoot}/ebook/{ebookId}/`，DocMind 整本解析后把
  * markdown / layouts / status 三件套存到 `.../docmind/`。后续里程碑
  * （章节切分 → 精炼 → 拟序）都在这三件套的基础上做，本模块不碰模型。
  *
  * 注意：与「资料库 20MiB/100 页」闸口完全分离——电子书是独立对象
- * （盖章决策⑤），大小/页数上限由调用方（syllora.ts 的 ebookIngest）把关。
+ * ，大小/页数上限由调用方（syllora.ts 的 ebookIngest）把关。
  */
 import { createHash } from 'node:crypto'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
@@ -44,13 +44,13 @@ export interface EbookIngestResult {
   images: number | null
   tokens: number | null
   markdownChars: number
-  /** 本地化图片（D2）：成功 / 失败 张数。 */
+  /** 本地化图片：成功 / 失败 张数。 */
   imagesDownloaded: number
   imagesFailed: number
-  /** M2 精炼：规则清洗修正项（refined.md 内容字符数）。 */
+  /** 精炼：规则清洗修正项（refined.md 内容字符数）。 */
   refineFixes: EbookRefineFix[]
   refinedChars: number
-  /** M3a 目录骨架：从文档自带标题层级离线提取的节点数。 */
+  /** 目录骨架：从文档自带标题层级离线提取的节点数。 */
   outlineCount: number
   outputDir: string
 }
@@ -67,7 +67,7 @@ export function ebookExtension(fileName: string): string {
 const DOCMIND_IMAGE_HOST = 'docmind-api-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com'
 
 /**
- * 图片本地化（D2）：DocMind 的 markdown 内插图是 OSS 预签名 URL（24h 过期），
+ * 图片本地化：DocMind 的 markdown 内插图是 OSS 预签名 URL（24h 过期），
  * 解析后必须尽快下载到 `images/` 并把引用改写为相对路径，否则电子书会碎图。
  * 返回改写后的 markdown 与下载统计；失败的图引用保留 URL 原样（可重试）。
  */
@@ -141,7 +141,7 @@ export async function ingestEbook(input: EbookIngestInput): Promise<EbookIngestR
   if (ext === '' || !EBOOK_ALLOWED_EXT.has(ext)) {
     throw new DocMindError(`暂不支持该文件类型（支持：${[...EBOOK_ALLOWED_EXT].join(', ')}）`, 'config')
   }
-  // P1 修复：先写 `{ebookId}.pending/`，全流程成功后 rename 为正式目录——
+  // 修复：先写 `{ebookId}.pending/`，全流程成功后 rename 为正式目录——
   // DocMind 提交/解析失败不再残留半成品目录（上层 catch 会清理 pending）。
   const pendingDir = join(input.courseRoot, 'ebook', `${input.ebookId}.pending`)
   const dir = join(input.courseRoot, 'ebook', input.ebookId)
@@ -162,11 +162,11 @@ export async function ingestEbook(input: EbookIngestInput): Promise<EbookIngestR
   )
   await input.onPhase?.('解析完成，正在本地化图片（签名 URL 24h 过期）…')
   const localized = await localizeEbookImages(result.markdown, pendingDir, input.signal)
-  // M2 精炼：免费规则清洗（决策 D3 默认不启用公式/模型增强规则）。
+  // 精炼：免费规则清洗（决策  默认不启用公式/模型增强规则）。
   const refined = refineMarkdown(localized.markdown)
-  // M3a 目录骨架：文档自带标题层级（决策 D4），AI 校验/纠序在后续阶段。
+  // 目录骨架：文档自带标题层级（决策），AI 校验/纠序在后续阶段。
   const outline = extractOutline(refined.markdown)
-  // P1 修复：持久化原始文件名等元信息，`ebook/list` 不再显示「电子书.pdf」占位。
+  // 修复：持久化原始文件名等元信息，`ebook/list` 不再显示「电子书.pdf」占位。
   const meta = {
     fileName: input.fileName,
     ext,

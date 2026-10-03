@@ -1,5 +1,5 @@
 /**
- * W-5 回归：SSE 帧解析对齐规范——
+ *  回归：SSE 帧解析对齐规范——
  * ① 多 data 行按规范用 \n 连接（旧实现 join("") 粘成坏帧）；
  * ② 单个坏 JSON 帧被跳过而非炸整条流（旧实现抛错并白耗 3 次网络重试）；
  * ③ 孤立 \r 作为行终止符（旧实现只处理 \r\n）；
@@ -32,7 +32,7 @@ async function collect(): Promise<Array<{ event: string; data: Record<string, un
   return out;
 }
 
-describe("streamSse 规范对齐（W-5）", () => {
+describe("streamSse 规范对齐（）", () => {
   it("多 data 行按 \\n 连接后正确解析", async () => {
     mockFetch(['event: token\ndata: {"a":\ndata: 1}\n\n']);
     const frames = await collect();

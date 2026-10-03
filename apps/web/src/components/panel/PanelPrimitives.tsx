@@ -112,7 +112,7 @@ export function PanelEmptyState({
   icon: LucideIcon;
   title: string;
   description: string;
-  /** 空态陪伴爪爪（P1）：默认开启，替换 lucide 图标位；测试/紧凑场景可关 */
+  /** 空态陪伴爪爪：默认开启，替换 lucide 图标位；测试/紧凑场景可关 */
   mascot?: boolean;
 }) {
   return (

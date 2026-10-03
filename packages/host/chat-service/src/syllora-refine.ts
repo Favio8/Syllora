@@ -1,6 +1,6 @@
 /**
- * 电子书精炼（��盖章③档2+3；决策 D3：默认只跑免费规则清洗，
- * 公式修复为模型增强/开关默认关，章节精修留到拟序(M3)链路）。
+ * 电子书精炼（+3；决策：默认只跑免费规则清洗，
+ * 公式修复为模型增强/开关默认关，章节精修留到拟序链路）。
  *
  * 输入：DocMind 本地化后的 markdown（含 images/ 相对引用）。
  * 输出：规则清洗后的 markdown + 各项修正计数（写 refined.md + refined-fixes.json）。
@@ -62,8 +62,8 @@ export function refineMarkdown(
   if (quote.hits > 0) fixes.push({ rule: 'blockquote-space', count: quote.hits })
 
   // 4) 列表符号后补空格：`-项`/`*项`/`1.项`（DocMind 偶发，只改无空格粘连）。
-  //    保守策略：星号行内另有 `*`（强调/粗体/分隔线）时不当作列表符；
-  //    数字标号后直接跟数字（如行首小数 `1.5倍`）时不补空格。
+  // 保守策略：星号行内另有 `*`（强调/粗体/分隔线）时不当作列表符；
+  // 数字标号后直接跟数字（如行首小数 `1.5倍`）时不补空格。
   const list = applyLineRule(text, line => {
     const matched = /^(\s*)([-*+]|\d{1,3}[.)])(?=\S)/.exec(line)
     if (matched === null) return null
@@ -77,7 +77,7 @@ export function refineMarkdown(
   if (list.hits > 0) fixes.push({ rule: 'list-marker-space', count: list.hits })
 
   // 5) DocMind 逐字斜杠乱码：标题被渲染成「高/等/学/校」——连续 ≥3 段的
-  //    「汉字/汉字」粘连是渲染乱码，合并回原文；单向「和/或」不受影响。
+  // 「汉字/汉字」粘连是渲染乱码，合并回原文；单向「和/或」不受影响。
   {
     const slashBefore = (text.match(/\p{Script=Han}(?:\/\p{Script=Han}){2,}/gu) ?? []).length
     if (slashBefore > 0) {
@@ -92,8 +92,8 @@ export function refineMarkdown(
     }
   }
 
-  // 6) 数学公式修复（决策 D3 默认关；开关打开时只做无损的空白/换行收敛，
-  //    不重排语义——重排属于模型增强阶段）。
+  // 6) 数学公式修复（决策  默认关；开关打开时只做无损的空白/换行收敛，
+  // 不重排语义——重排属于模型增强阶段）。
   if (options.formula === true) {
     const inlineBefore = (text.match(/\$\s+\$/g) ?? []).length
     if (inlineBefore > 0) {

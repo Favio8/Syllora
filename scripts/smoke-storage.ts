@@ -1,5 +1,5 @@
 /**
- * M0 冒烟：vendor/cordis + storage 四件套在源码直跑（tsx）模式下可用。
+ *  冒烟：vendor/cordis + storage 四件套在源码直跑（tsx）模式下可用。
  *
  * 组装配方与 dsh message-feedback 测试一致：Storage hub → JSON backend →
  * domain facility → storageDomain.open(spec)。验证：put/put 幂等重写、

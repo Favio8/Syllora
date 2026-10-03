@@ -666,7 +666,7 @@ describe('ToolRegistry', () => {
       },
     })
     controller.abort()
-    // 旧实现：raceWithAbort 的裸 Error 穿出 execute()，这里是 rejects.toThrow。
+    // 旧实现：raceWithAbort 的裸 Error 穿出 execute，这里是 rejects.toThrow。
     const result = await resultPromise
     expect(result.status).toBe('rejected')
     expect(result.error).toBe('TOOL_CANCELLED')

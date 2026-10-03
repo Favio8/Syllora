@@ -65,7 +65,7 @@ describe('BlockAssembler properties', () => {
         if ('index' in chunk) distinct.add(chunk.index)
       }
       const a = feed(chunks)
-      // blocks() length equals the number of distinct indices that became
+      // blocks length equals the number of distinct indices that became
       // partials (block-bearing chunks). It can never exceed distinct indices.
       expect(a.blocks().length).toBeLessThanOrEqual(distinct.size)
     }))
@@ -75,7 +75,7 @@ describe('BlockAssembler properties', () => {
     fc.assert(fc.property(streamArb, (chunks) => {
       const a = feed(chunks)
       expect(a.blocks()).toEqual(a.blocks())
-      // And message().content mirrors blocks().
+      // And message.content mirrors blocks.
       expect(a.message().content).toEqual(a.blocks())
     }))
   })

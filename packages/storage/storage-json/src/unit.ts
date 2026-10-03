@@ -84,9 +84,9 @@ export async function openJsonUnit(
 
 class JsonKvUnit implements KvUnit {
   private closed = false
-  /** In-flight publishes; close() drains them before releasing the unit. */
+  /** In-flight publishes; close drains them before releasing the unit. */
   private readonly inFlight = new Set<Promise<void>>()
-  /** Serialization chain for whole-file publishes (see publish()). */
+  /** Serialization chain for whole-file publishes (see publish). */
   private writeChain: Promise<void> = Promise.resolve()
 
   constructor(

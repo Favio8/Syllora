@@ -2,7 +2,7 @@
  * Markdown ingestor: two-level outline slicing (chapter + concept sections),
  * paragraph-boundary chunking with size caps, slug id generation (Chinese
  * falls back to md5 prefix), and concept typing. Ported from Python
- * `ingestor.py::MarkdownIngestor`.
+ * `ingestor.py：MarkdownIngestor`.
  * @module @syllora/course-builder/src/ingestor
  */
 
@@ -127,7 +127,7 @@ function isHeadingLine(lines: string[], lineno: number): boolean {
 /**
  * CJK Radical (Kangxi Radicals U+2F00–U+2FD5) → visually identical CJK
  * Unified Ideograph, written as the CANONICAL 214-radical sequence
- * (U+2F00 + N-1 = radical N). PDF font encodings frequently re-encode
+ * (U+2F00 +  = radical N). PDF font encodings frequently re-encode
  * ordinary characters to these radical code points (observed in real
  * lecture PDFs: 「行」 lands on U+2F8F), so an entry is chosen for every
  * radical whose glyph matches a modern (simplified-leaning) ideograph;

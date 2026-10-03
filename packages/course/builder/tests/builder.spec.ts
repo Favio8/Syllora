@@ -196,7 +196,7 @@ describe('CourseBuilder', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('��生成失败时旧卡保留、checksums 不落盘（先删后生成回归）', async () => {
+  it('生成失败时旧卡保留、checksums 不落盘（先删后生成回归）', async () => {
     const { root, courseDir, generator } = await setup()
     const builder = new CourseBuilder(courseDir, generator)
     await builder.build(1)

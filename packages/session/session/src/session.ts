@@ -2,7 +2,7 @@
  * TutorSession: one course's chat orchestrator — context assembly, tool
  * loop with mode-filtered schemas, streaming split (think/token/sync),
  * append-only persistence, and sync application. Ported from Python
- * `session.py::TutorSession`.
+ * `session.py：TutorSession`.
  * @module @syllora/session/src/session
  */
 
@@ -120,7 +120,7 @@ export function elideInteractiveBlocks(content: string): string {
 /**
  * One session's orchestration over its course. Instantiate with
  * `new: true` to create the session file, or with an existing `sessionId`
- * (or neither → latest is resumed, creating when absent). Call `init()`
+ * (or neither → latest is resumed, creating when absent). Call `init`
  * once before first use to resolve the real session id.
  */
 export class TutorSession {

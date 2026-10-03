@@ -386,12 +386,12 @@ describe("LeftNav 对话操作", () => {
   });
 });
 
-describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
+describe("LeftNav 专项修复回归", () => {
   // 以下用例各自在开头显式设定 store 字段（既有 harness 的 afterEach 只重置
   // 部分字段，跨用例污染会以空 courses/错 workspacePath 的形式咬人）。
   const singleCourse = [{ id: "course-1", title: "Kubernetes", overallMastery: 0, dueToday: 0, lastActiveAt: "2026-08-20T00:00:00Z" }];
 
-  it("P1-2：refresh 瞬时失败保留上次列表并横幅提示", async () => {
+  it("refresh 瞬时失败保留上次列表并横幅提示", async () => {
     mockWorkspaces();
     const { rerender } = render(<LeftNav />);
     expect(await screen.findByText("ws-alpha")).toBeInTheDocument();
@@ -409,7 +409,7 @@ describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
     expect(screen.queryByText("还没有导入项目")).not.toBeInTheDocument();
   });
 
-  it("P1-3：多课程项目渲染计数徽标与切换行，点击切换激活课程", async () => {
+  it("多课程项目渲染计数徽标与切换行，点击切换激活课程", async () => {
     mockWorkspaces();
     storeState.workspacePath = "D:/learn/ws-alpha";
     const multi = [
@@ -431,7 +431,7 @@ describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
     expect(storeState.setActiveCourse).toHaveBeenCalledWith("course-b");
   });
 
-  it("P1-1：搜索命中打开项目失败时横幅提示且搜索结果保持打开", async () => {
+  it("搜索命中打开项目失败时横幅提示且搜索结果保持打开", async () => {
     mockWorkspaces();
     storeState.workspacePath = "D:/learn/ws-alpha";
     storeState.courses = singleCourse;
@@ -468,7 +468,7 @@ describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
     expect(screen.getByText("命中对话")).toBeInTheDocument();
   });
 
-  it("P2：对话操作菜单外点关闭", async () => {
+  it("对话操作菜单外点关闭", async () => {
     mockWorkspaces();
     storeState.workspacePath = "D:/learn/ws-alpha";
     storeState.courses = singleCourse;
@@ -484,7 +484,7 @@ describe("LeftNav 专项修复回归（P1-1/P1-2/P1-3/P2）", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
-  it("P2：项目重命名撞名前置阻断，不发请求", async () => {
+  it("项目重命名撞名前置阻断，不发请求", async () => {
     mockWorkspaces();
     storeState.workspacePath = "D:/learn/ws-alpha";
     render(<LeftNav />);

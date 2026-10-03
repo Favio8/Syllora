@@ -29,7 +29,7 @@ declare module '@deepseek-ai/cordis' {
      * @param ns - the namespace whose resolved value changed.
      * @param next - the new resolved value.
      * @param prev - the previous resolved value.
-     * @param source - whether the change entered through `update()` or the provider.
+     * @param source - whether the change entered through `update` or the provider.
      * @mode emit
      */
     'settings/updated'(ns: SettingsNamespace, next: unknown, prev: unknown, source: SettingsUpdateSource): void

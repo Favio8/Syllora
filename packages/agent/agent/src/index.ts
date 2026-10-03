@@ -640,7 +640,7 @@ export class Agent {
       activity = this.activityDone
       if (this.active === null && this.maintenanceController === null && this.pending.length === 0 && this.nextStep.length === 0) return
       // PERF-9：activity 可能早已 settle（activityResolve 为 null），而
-      // pending>0 却因驱动侧阻塞（如 restore() 挂起的 ask）长期不变——
+      // pending>0 却因驱动侧阻塞（如 restore 挂起的 ask）长期不变——
       // 只 await 已完成 promise 是微任务热自旋，会饿死定时器/IO。加定时
       // 兜底强制回到宏任务队列。
       await Promise.race([

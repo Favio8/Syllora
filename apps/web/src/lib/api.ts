@@ -635,14 +635,14 @@ export const api = {
       sylloraRpc<{ name: string }>("notes/uploadImage", { courseId, ...payload }),
   },
 
-  /** ��课程知识图谱（资料+电子书图谱化：章节/知识点节点 + 顺序/父子/归属边；agent 概念抽取见 graphBuild）。 */
+  /** 课程知识图谱（资料+电子书图谱化：章节/知识点节点 + 顺序/父子/归属边；agent 概念抽取见 graphBuild）。 */
   graph: (courseId: string) =>
     sylloraRpc<{
       nodes: Array<{ id: string; label: string; kind: 'chapter' | 'point' | 'concept'; group?: string }>;
       edges: Array<{ source: string; target: string; kind: 'order' | 'parent' | 'belongs' | 'related' }>;
       books: Array<{ ebookId: string; fileName: string }>;
     }>("course/graph", { courseId }),
-  /** ��agent 自动建谱 —— 对课程内已结构化电子书调用模型抽取概念与关联，落 graph.json。 */
+  /** agent 自动建谱 —— 对课程内已结构化电子书调用模型抽取概念与关联，落 graph.json。 */
   graphBuild: (courseId: string) =>
     sylloraRpc<{ jobId: string }>("course/graph-build", { courseId }),
 };

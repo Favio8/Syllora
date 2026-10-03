@@ -228,7 +228,7 @@ async function resolveCredential(workspaceRoot: string, providerId: string, apiK
   if (credsRaw === null || credsRaw.trim() === '') return null
   let creds: Record<string, unknown>
   try {
-    // P0-2：凭据为 AES-GCM 密文；legacy 明文由 settings 层读取时自动迁移，
+    // 凭据为 AES-GCM 密文；legacy 明文由 settings 层读取时自动迁移，
     // 这里只需透明解密。解密失败按"未配置"降级而不是让所有 chat 崩溃，
     // 但必须留痕（L7）：master.key 与工作区错位时静默降级会让排障变成猜谜。
     const { unsealCredentials } = await import('./secret-box.ts')

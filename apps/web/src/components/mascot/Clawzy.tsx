@@ -200,7 +200,7 @@ function ClawzyAuto(props: Omit<ClawzyProps, "state">) {
 
 /**
  * <Clawzy size={20} tier="icon" state?={MascotState} />
- * state 缺省时走 useMascotState() 自动派生（受控与自动分体，hook 规则安全）。
+ * state 缺省时走 useMascotState 自动派生（受控与自动分体，hook 规则安全）。
  */
 export default function Clawzy(props: ClawzyProps) {
   const { state, ...rest } = props;

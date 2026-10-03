@@ -170,7 +170,7 @@ export default function NotesGraph({ courseId, refreshKey, overrideGraph, title 
     return () => { clearTimeout(t); cancelAnimationFrame(raf); };
   }, [selectedId, graphData]);
 
-  // 外部「选章聚焦」（需求 #4）：同步选中并放大到该节点（相对当前倍率放大，避免把已缩小的图又拉远）。
+  // 外部「选章聚焦」：同步选中并放大到该节点（相对当前倍率放大，避免把已缩小的图又拉远）。
   useEffect(() => {
     setSelectedId(focusNodeId ?? null);
   }, [focusNodeId]);
@@ -299,7 +299,13 @@ export default function NotesGraph({ courseId, refreshKey, overrideGraph, title 
     [],
   );
 
-  const selected = notes.find((n) => n.id === selectedId) ?? null;
+  // 课程图谱（overrideGraph）没有笔记元数据：详情回落到图节点，
+  // 否则点节点只更新选中态、详情卡永不渲染（表现为「点了没反应」）。
+  const selectedNote = notes.find((n) => n.id === selectedId) ?? null;
+  const selected = selectedNote ?? (() => {
+    const node = graph.nodes.find((n) => n.id === selectedId);
+    return node ? { id: node.id, title: node.title, wikilinks: [] as string[], updatedAt: null as string | null } : null;
+  })();
   const w = dims.w || (fullscreen ? 800 : 300);
   const h = dims.h || (fullscreen ? 600 : 360);
 
@@ -369,12 +375,12 @@ export default function NotesGraph({ courseId, refreshKey, overrideGraph, title 
       {!overrideGraph && loading && notes.length === 0 && <p className="sy-muted">正在读取笔记…</p>}
       {!overrideGraph && !loading && notes.length === 0 && <p className="sy-muted">暂无笔记。打开左栏「笔记」新建第一篇，正文里用 <code>[[笔记标题]]</code> 就会连出线。</p>}
       {(overrideGraph || notes.length > 0) && graphEl}
-      <p className="sy-graph-hint">{notes.length > 0 ? `${graph.nodes.length} 篇 · ${graph.edges.length} 条关联` : ""}</p>
+      <p className="sy-graph-hint">{(overrideGraph || notes.length > 0) ? `${graph.nodes.length} 篇 · ${graph.edges.length} 条关联` : ""}</p>
       {selected && (
         <div className="sy-graph-detail" data-testid="notes-graph-detail" key={selected.id}>
           <div><strong>{selected.title}</strong><button type="button" aria-label="关闭详情" onClick={() => setSelectedId(null)}>×</button></div>
           <p>{selected.wikilinks.length > 0 ? `关联：${selected.wikilinks.join("、")}` : "关联：无"}</p>
-          <small>{new Date(selected.updatedAt).toLocaleString("zh-CN", { hour12: false })} 更新</small>
+          <small>{selected.updatedAt ? `${new Date(selected.updatedAt).toLocaleString("zh-CN", { hour12: false })} 更新` : "课程图谱节点"}</small>
           <small className="sy-graph-follow">视角跟随中 · 点空白处取消</small>
         </div>
       )}

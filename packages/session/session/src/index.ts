@@ -1,8 +1,8 @@
 /**
  * Syllora session domain: JSONL session store, streaming splitters,
  * context assembly, and the tutor chat loop (ported from Python
- * `core/session.py`). M2 scope: four-mode chat with tool loop and sync
- * application; the task pool / evaluator backends land at M3/M4.
+ * `core/session.py`).  scope: four-mode chat with tool loop and sync
+ * application; the task pool / evaluator backends land at .
  * @module @syllora/session
  */
 

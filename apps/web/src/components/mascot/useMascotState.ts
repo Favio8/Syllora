@@ -9,7 +9,7 @@
  * - 会话错误取「最后一条 agent 消息」的 error（useChatStream 写入消息卡；
  *   用户重试/新消息会追加无 error 的新占位卡，alerting 自然回落）。
  * - celebrate 是覆盖式脉冲：quizFlow 在答对时写 { at }，本模块只按
- *   2400ms 时间窗判定，超时自动回落，答错路径不接（P1 encourage）。
+ *   2400ms 时间窗判定，超时自动回落，答错路径不接（encourage）。
  * - thinking↔writing 互切有 300ms 迟滞：流式帧交替时防仲裁抖动。
  */
 
@@ -56,7 +56,7 @@ function pulseActive(pulse: MascotStateInputs["pulse"], now: number): boolean {
 }
 
 /**
- * 纯仲裁函数（§4.2 优先级表 + §7.2 P1 扩展，单测全覆盖）。
+ * 纯仲裁函数（§4.2 优先级表 + §7.2  扩展，单测全覆盖）。
  * 高→低：alerting > celebrate > encourage > 判题 thinking > asking >
  * 流式 thinking > 工具 searching > 流式 writing > uploading > working >
  * progress(同步) > listening > idle。

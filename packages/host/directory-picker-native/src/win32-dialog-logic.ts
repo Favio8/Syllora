@@ -19,25 +19,25 @@ export const FOS_NOCHANGEDIR = 0x8
 /** One created folder dialog: the vtable calls the sequencing needs. */
 export interface Win32FolderDialog {
   /**
-   * `IFileDialog::SetOptions`.
+   * `IFileDialog：SetOptions`.
    * @param options - the `FOS_*` flag union to apply.
    * @returns the call's HRESULT.
    */
   setOptions(options: number): number
   /**
-   * `IFileDialog::SetTitle`.
+   * `IFileDialog：SetTitle`.
    * @param title - the dialog title text.
    * @returns the call's HRESULT.
    */
   setTitle(title: string): number
   /**
-   * `IModalWindow::Show` with no owner window; blocks the calling thread
+   * `IModalWindow：Show` with no owner window; blocks the calling thread
    * until the user selects or dismisses.
    * @returns the call's HRESULT (`HRESULT_CANCELLED` on dismissal).
    */
   show(): number
   /**
-   * `IFileDialog::GetResult` + `IShellItem::GetDisplayName(SIGDN_FILESYSPATH)`,
+   * `IFileDialog：GetResult` + `IShellItem：GetDisplayName(SIGDN_FILESYSPATH)`,
    * releasing the shell item and freeing the COM string.
    * @returns the call chain's HRESULT and, on success, the selected path.
    */

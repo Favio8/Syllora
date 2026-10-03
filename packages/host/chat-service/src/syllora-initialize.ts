@@ -150,11 +150,11 @@ export async function initializeFolder(options: {
       } catch(error) {
         if(attempt===0) { await new Promise(r=>setTimeout(r,300)); continue }
         const localValidation=['讲义引用了未提供的来源','讲义依据不是资料原文','本批资料没有完整关联到讲义，请重试']
-        // structuredCall 的失败原因形如「结构化输出尝试 N 次仍失败：<feedback>」，比兜底文案可诊断得多，
-        // 且只含 schema/解析反馈、不含上游响应原文；截断后展示，避免把整段响应带进界面。
+        // structuredCall 的反馈形如「结构化输出尝试 N 次仍失败：<feedback>」，其中 <feedback> 可能夹带上游响应原文，
+        // 所以只放行我们自己产生的固定文案；其余仍走 generationFailure 的安全映射（保留机器码、不落上游原文）。
         const raw=error instanceof Error?error.message:''
-        const structured=raw.startsWith('结构化输出尝试')?raw.slice(0,240):''
-        const reason=raw!==''&&localValidation.includes(raw)?raw:structured!==''?structured:generationFailure(error).message
+        const safeStructured=/^结构化输出尝试 \d+ 次仍失败：响应中未找到合法 JSON$/.test(raw)?raw:''
+        const reason=raw!==''&&localValidation.includes(raw)?raw:safeStructured!==''?safeStructured:generationFailure(error).message
         const message=`${item.group[0]!.section}（${item.group[0]!.anchor} 至 ${item.group.at(-1)!.anchor}）：${reason}`
         failures.push(message)
         // 进度里必须落下这次失败的范围，否则并发下先抛出的章节错误会丢失（调用方只看到 job.state=failed）。

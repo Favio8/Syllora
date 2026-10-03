@@ -20,7 +20,7 @@ const { storeState, apiMocks } = vi.hoisted(() => {
       setLastImport: vi.fn(),
       flashStatusBanner: vi.fn(),
       setCourses: vi.fn(),
-      // 爪爪 uploading 态输入源（P1）：测试内不关心调用
+      // 爪爪 uploading 态输入源：测试内不关心调用
       setUploading: vi.fn(),
     },
     apiMocks: {
@@ -108,7 +108,7 @@ describe("MaterialsDialog 上传补充", () => {
     });
   });
 
-  it("W-9：未配置模型（buildJobId=null）时明确告知未启动构建", async () => {
+  it("未配置模型（buildJobId=null）时明确告知未启动构建", async () => {
     apiMocks.uploadSources.mockResolvedValue({
       added: ["guide.md"],
       buildJobId: null,
@@ -230,7 +230,7 @@ describe("MaterialsDialog 勾选新建课程", () => {
   });
 });
 
-describe("MaterialsDialog 焦点管理（W-10）", () => {
+describe("MaterialsDialog 焦点管理（）", () => {
   it("打开后焦点落在弹层内（首个可聚焦控件），而非逃逸到背景", () => {
     render(<MaterialsDialog onClose={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "资料" });

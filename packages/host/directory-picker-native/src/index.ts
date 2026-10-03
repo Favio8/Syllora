@@ -4,7 +4,7 @@
  * in a spawned child process (a koffi-driven COM conversation on the child's
  * main thread) so the dialog is the process's first window and Windows
  * activates it without a manual foreground call; macOS uses `osascript choose
- * folder`; Linux uses `zenity` with a `kdialog` fallback (FL-45). Tiers that
+ * folder`; Linux uses `zenity` with a `kdialog` fallback . Tiers that
  * cannot run throw "unavailable" and the caller composes the browse backend.
  * @module @syllora/directory-picker-native
  */

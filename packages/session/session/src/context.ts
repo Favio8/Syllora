@@ -3,8 +3,8 @@ import { workspaceStateDirOf } from '@syllora/tools'
  * ContextAssembler: per-turn system/user prompt rendering from the bundled
  * tutor templates plus live material (Agent.md persona, Memory.md profile,
  * syllabus + progress board, concept chunks from sources/). Ported from
- * Python `session.py::ContextAssembler`; the M2 concept-chunk matcher is a
- * light heading-slug port of MarkdownIngestor (full builder lands at M3).
+ * Python `session.py：ContextAssembler`; the  concept-chunk matcher is a
+ * light heading-slug port of MarkdownIngestor (full builder lands at）.
  * @module @syllora/session/src/context
  */
 
@@ -59,7 +59,7 @@ export async function loadCourseState(courseDir: string): Promise<CourseState> {
   const concepts: CourseState['concepts'] = []
   const progressText = await readFile(await resolveStateFile(courseDir, 'progress.md'), 'utf8').catch(() => '')
   // 复用 tools 的表格解析器：手写解析曾同时踩三个坑——掌握度单元格带 emoji
-  // 前缀（`🟢 80%`）时 Number() 为 NaN → 全部概念按 0 报给模型；遇非表格行
+  // 前缀（`🟢 80%`）时 Number 为 NaN → 全部概念按 0 报给模型；遇非表格行
   // break 丢弃后续概念；passRate 硬编码 0。解析器已统一处理（F-11 家族）。
   for (const record of parseProgressTable(progressText)) {
     concepts.push({
@@ -150,7 +150,7 @@ export class ContextAssembler {
     ].join('\n')
   }
 
-  /** Best-effort concept chunks from sources/ (heading slug match; M3 replaces). */
+  /** Best-effort concept chunks from sources/ (heading slug match;  replaces). */
   private async conceptMaterial(conceptId: string | null): Promise<string> {
     if (conceptId === null) return '（未指定聚焦概念；请围绕学生问题与课程资料作答）'
     const sourcesDir = join(this.courseDir, 'sources')

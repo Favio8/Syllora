@@ -71,8 +71,8 @@ function isForbiddenIpv4(ip: string): boolean {
 function isForbiddenIpv6(ip: string): boolean {
   const lowered = ip.toLowerCase()
   if (lowered === '::' || lowered === '::1') return true
-  if (lowered.startsWith('fc') || lowered.startsWith('fd')) return true // ULA fd00::/8 起
-  if (/^fe[89ab]/.test(lowered)) return true // link-local fe80::/10
+  if (lowered.startsWith('fc') || lowered.startsWith('fd')) return true  // ULA fd00：/8 起
+  if (/^fe[89ab]/.test(lowered)) return true  // link-local fe80：/10
   if (lowered.startsWith('::ffff:')) return isForbiddenIpv4(lowered.slice(7)) // IPv4-mapped
   return false
 }
@@ -190,7 +190,7 @@ async function decompressBody(body: Buffer, encoding: string | undefined): Promi
 
 /**
  * node:http(s) 版 FetchLike（默认实现）：经 `lookup` 选项接入 pinnedLookup，
- * 并给响应体设 8MB 上限——旧默认 `fetch().text()` 会把任意大小的响应整体
+ * 并给响应体设 8MB 上限——旧默认 `fetch.text` 会把任意大小的响应整体
  * 缓冲进内存。未发送 Accept-Encoding 时多数服务器返回未压缩正文，这里仍
  * 兼容 gzip/deflate/br 以防强制压缩的服务器。
  */

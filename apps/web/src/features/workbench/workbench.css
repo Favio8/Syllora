@@ -65,7 +65,7 @@
 .reader-toolbar>div{display:flex;align-items:center;gap:10px;min-width:0;color:#8b9abc}
 .reader-toolbar select{border:0;background:white;font-size:12px;min-width:0;max-width:440px;color:#6c7f9e;text-overflow:ellipsis;cursor:pointer}
 .reader-toolbar .button{font-size:11px;padding:6px 10px;color:#7d90b5;flex-shrink:0}
-/* ��电子书大纲面板（章节树 + 红/黄/绿学习状态，手工标记落到 progress.json）*/
+/* 电子书大纲面板（章节树 + 红/黄/绿学习状态，手工标记落到 progress.json）*/
 .reader-outline-panel{display:flex;flex-direction:column;border-bottom:1px solid #e9edf5;background:#fbfcfe;max-height:40vh;overflow:auto;flex-shrink:0}
 .reader-outline-panel>header{display:flex;align-items:center;justify-content:space-between;padding:9px 22px;border-bottom:1px solid #eef1f7;font-size:11px;color:#7f93b4;letter-spacing:.3px;flex-shrink:0;position:sticky;top:0;background:#fbfcfe}
 .reader-outline-panel>header span{display:flex;align-items:center;gap:7px}
@@ -455,7 +455,7 @@ input:not([type]),input:is([type=text],[type=password],[type=url],[type=number],
 @media(max-width:850px){.reader-mobile-expand{display:inline-flex;width:32px;height:32px;flex-shrink:0;border:1px solid var(--line);color:#8a9fbe}}
 @media(max-width:560px){.study-panel.panel-open,.panel-backdrop{top:92px}.course-options-trigger{width:22px;flex-shrink:0}.breadcrumbs>span:not(.home-breadcrumb){max-width:calc(100vw - 138px)}.course-picker-list>button{padding:12px 10px}}
 
-/* ��考前速记面板（阅读模块，电子书模式） */
+/* 考前速记面板（阅读模块，电子书模式） */
 .reader-review-panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 14px;max-height:220px;overflow:auto}
 .reader-review-panel>header{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#5b6b85;font-size:11px;margin-bottom:8px}
 .reader-review-list{list-style:none;display:flex;flex-direction:column;gap:6px}
@@ -464,7 +464,7 @@ input:not([type]),input:is([type=text],[type=password],[type=url],[type=number],
 .reader-review-list>li>div{min-width:0}
 .reader-review-list h4{font-size:11px;color:#3c4b63;margin:0 0 2px}
 .reader-review-list p{font-size:10px;color:#8fa0ba;margin:0;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-/* ��考试 UI 外壳 */
+/* 考试 UI 外壳 */
 .exam-modal{position:fixed;inset:0;background:#00000044;z-index:90;display:flex;align-items:center;justify-content:center;padding:18px}
 .exam-modal-card{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:82dvh;display:flex;flex-direction:column;box-shadow:0 18px 60px #0002}
 .exam-modal-card>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line);color:#2e3c52;font-size:13px;font-weight:600}

@@ -17,7 +17,7 @@
  * 服务端命中已落盘轮次 → 重放正文（替换占位）；未落盘 → 重新生成完整流
  * （占位先清空）。用户消息不重复追加。
  *
- * 对话切换/新建由 useSessionActions 调 abortActiveChat() 中止旧流；
+ * 对话切换/新建由 useSessionActions 调 abortActiveChat 中止旧流；
  * isAbortError 不触发重试。
  *
  * UI-5：活跃流句柄与重试上下文全部提升为模块级单例——ChatArea 与
@@ -122,7 +122,7 @@ export function useChatStream() {
 
   /** FE-2 队列归属守卫：只有"发起排队时的会话"仍处于激活状态才允许发送下一条，
    * 否则丢弃并提示——修复 abort 走成功出口把旧会话文本发进新会话的串课。
-   *  W-3：同步 drain（旧实现 setTimeout 0）——setStreaming(false) 与 drain 之间
+   * 同步 drain（旧实现 setTimeout 0）——setStreaming(false) 与 drain 之间
    *  的 macrotask 边界是双流窗口：用户新消息绕过 streaming 守卫开第二条流，
    *  drain 到点又 registerActiveChat 抢占 abort 把新流冻成半截且无错误行，
    *  停止键也管不到即将 drain 的流。同步调用让 false→true 在同一 macrotask
@@ -151,7 +151,7 @@ export function useChatStream() {
     void sendRef.current(next.text, { queuedTurnId: next.turnId });
   }, [flashStatusBanner]);
 
-  /** W-8：abort 路径的陈旧队列清理——排队时的会话已切换且队列非空时静默清掉，
+  /** abort 路径的陈旧队列清理——排队时的会话已切换且队列非空时静默清掉，
    * 否则残留会在下次 drain 时弹"已切换会话，丢弃旧队列消息"的误导横幅。 */
   const clearStaleQueue = useCallback(() => {
     const state = useAppStore.getState();
@@ -161,7 +161,7 @@ export function useChatStream() {
     if (!sameOwner) useAppStore.setState({ queuedMessages: [] });
   }, []);
 
-  /** W-11：流式收尾提交必须带会话归属——abort/切课后旧流的尾部帧不得写进新
+  /** 流式收尾提交必须带会话归属——abort/切课后旧流的尾部帧不得写进新
    * 恢复会话的最后一条 agent 消息（updateLastAgent 按"当前最后一条 agent
    * 消息"定位，无归属校验；窗口=切课后的 abort 收尾帧）。 */
   const commitLastAgent = useCallback((patch: Parameters<typeof updateLastAgent>[0]) => {
@@ -372,7 +372,7 @@ export function useChatStream() {
           flashStatusBanner("队列已满，请等待当前回合完成");
           return;
         }
-        // W-4：命令（含未知命令）不进服务端 durable inbox——命令在 drain 时由
+        // 命令（含未知命令）不进服务端 durable inbox——命令在 drain 时由
         // 本函数的命令路径直接执行、不经过 streamChat，服务端回合永不消费：
         // QueueDock「队列中 N」永久卡住，且宿主自行消费 inbox 时命令文本又会
         // 作为普通 LLM 回合跑一遍。命令只进本地队列（无 turnId，刷新丢失可接受），
@@ -536,11 +536,11 @@ export function useChatStream() {
           if (abortedMidStream) {
             // 用户停止/切换对话：定格占位卡并退出；FE-2：不 drain 队列。
             cancelPendingFlush();
-            // W-8：abort 路径也要恢复 syncState（done/error 都恢复了，唯独漏
+            // abort 路径也要恢复 syncState（done/error 都恢复了，唯独漏
             // 这两条 → 切课/停止后左栏与爪爪永久卡"同步中"）。
             setSyncState("synced");
             clearStaleQueue();
-            // W-11：归属校验后的收尾提交。
+            // 归属校验后的收尾提交。
             commitLastAgent({ streaming: false });
             setStreamPhase(null);
             useAppStore.setState({ toolRunning: 0 }); // 爪爪 searching 计数归零 // 爪爪退出流式姿态
@@ -575,10 +575,10 @@ export function useChatStream() {
             // 用户停止/切换对话：定格占位卡（切换方随后可能清空消息）；
             // FE-2：不走 drain——旧会话的排队文本绝不能发进当前会话。
             cancelPendingFlush();
-            // W-8：同另一条 abort 路径——恢复 syncState、清陈旧队列。
+            // 同另一条 abort 路径——恢复 syncState、清陈旧队列。
             setSyncState("synced");
             clearStaleQueue();
-            // W-11：归属校验后的收尾提交。
+            // 归属校验后的收尾提交。
             commitLastAgent({ streaming: false });
             setStreamPhase(null);
             useAppStore.setState({ toolRunning: 0 }); // 爪爪 searching 计数归零 // 爪爪退出流式姿态
@@ -589,7 +589,7 @@ export function useChatStream() {
           }
           if (attempt < MAX_ATTEMPTS - 1) continue;
           cancelPendingFlush();
-          // W-11：归属校验后的收尾提交。
+          // 归属校验后的收尾提交。
           commitLastAgent({
             streaming: false,
             error: errorMessage(exc),

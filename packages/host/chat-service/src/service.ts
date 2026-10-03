@@ -86,10 +86,10 @@ export interface SessionEventView {
 
 const PROVIDER_OUTPUT_LIMIT = 1024 * 1024
 
-/** 边读边截断的受限抓取：`response.text()` 会把整个响应体读入内存后才开始
+/** 边读边截断的受限抓取：`response.text` 会把整个响应体读入内存后才开始
  * slice，输出上限形同虚设——大文件（agent 的 fetch 可指向任意 URL）会全量
  * 缓冲。按字节从 ReadableStream 读取，达到上限即取消连接。中止由传给
- * fetch 的 signal 负责（abort 会让 reader.read() 直接 reject）。 */
+ * fetch 的 signal 负责（abort 会让 reader.read 直接 reject）。 */
 async function readBodyCapped(response: Response, maxBytes: number): Promise<string> {
   const reader = response.body?.getReader()
   if (reader === undefined) return ''
@@ -296,7 +296,7 @@ function runtimeConfigOf(config: ResolvedChatConfig): AgentRuntimeConfig {
 const runtimeConfigLocks = new Map<string, Promise<AgentRuntimeConfig>>()
 
 /**
- * P1-8：AgentLoop 的请求级重试钩子此前从未被任何生产调用方传入——adapter
+ * AgentLoop 的请求级重试钩子此前从未被任何生产调用方传入——adapter
  * 声明的 retryPolicy（maxRetries:0）也只是元数据，真正执行的是这个钩子。
  * 仅对瞬时故障码重试，最多 3 次，配合 AgentLoop 内置的线性退避。
  */
@@ -735,7 +735,7 @@ export class LearningAgentService {
     } finally {
       this.queuedConsumers.delete(turnId)
       if (signal?.aborted) {
-        // P1-9：断连取消必须连同待审批一起清理（走服务级 cancel 内含
+        // 断连取消必须连同待审批一起清理（走服务级 cancel 内含
         // approvals.cancelForAgent），否则审批条目带定时器挂死会话的 waiting。
         void this.cancel(agentId, true).catch(() => undefined)
       }
@@ -1427,7 +1427,7 @@ export async function* chatStream(
     agent.cancel({ keepInbox: true, cause: 'system' })
   }
   if (input.signal?.aborted) {
-    // RV-22：入场即已中止（客户端在 setup 期间就已消失）——旧实现 abort() 后
+    // RV-22：入场即已中止（客户端在 setup 期间就已消失）——旧实现 abort 后
     // 仍走完 agent.send 与整个 turn：send 路径的消费循环没有 aborted 检查
     // （仅重放路径有），死连接上白跑完整 LLM 流（计费+落盘）。直接返回。
     abort()

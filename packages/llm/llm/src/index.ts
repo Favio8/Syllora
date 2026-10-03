@@ -51,7 +51,7 @@ declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
      * Waterfall around every streaming model call (retry, replay, routing).
-     * Bound to the {@link LlmRuntime}; call `next()` to reach the resolved
+     * Bound to the {@link LlmRuntime}; call `next` to reach the resolved
      * adapter's stream, or yield your own chunks to short-circuit.
      * @param options - the full request. A LOOP-built request carries the
      *   process-local {@link markAgentLoopRequest} identity and arrives deep-frozen
@@ -174,13 +174,13 @@ export interface PreparedLlmCall {
 /**
  * Provider-wire adapter for the harness message and stream vocabulary. Register implementations
  * with `ctx.llm.registerAdapter(providers, adapter)`. Every provider HTTP request must include
- * `attributionHeaders()`; prove the headers are added in the wire request or library header hook. The direct-fetch
+ * `attributionHeaders`; prove the headers are added in the wire request or library header hook. The direct-fetch
  * DeepSeek and library-backed pi-ai adapters meet this contract through different internals.
  */
 export abstract class LlmAdapter {
   /**
    * Describe one provider route owned by this adapter.
-   * @param provider - a route passed to `registerAdapter()` for this instance.
+   * @param provider - a route passed to `registerAdapter` for this instance.
    * @returns detached display metadata whose id must equal `provider`.
    */
   providerInfo(provider: string): LlmProviderInfo {
@@ -189,7 +189,7 @@ export abstract class LlmAdapter {
 
   /**
    * Return the provider-owned retry policy captured with this route.
-   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @param _provider - a route passed to `registerAdapter` for this instance.
    * @returns a resolved policy, or `undefined` to use the normal defaults.
    */
   providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined {

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { SessionEventStore } from '../src/events.ts'
 
 describe('SessionEventStore', () => {
-  it('一行坏数据不再锁死会话：load 容错，append 自愈并备份原件（P0-6）', async () => {
+  it('一行坏数据不再锁死会话：load 容错，append 自愈并备份原件（）', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-events-durability-'))
     const store = new SessionEventStore(root)
     await store.append('s',

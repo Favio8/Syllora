@@ -49,7 +49,7 @@ function mcqTask(): HarnessTask {
     answer_index: 1,
     answer_rationale: 'Harness 是连接模型与真实环境的控制系统。',
     evaluation_criteria: {
-      // rubric 遵循 FL-27 schema（min(2).max(4)）：少于 2 条会被加载校验丢弃。
+      // rubric 遵循  schema（min(2).max(4)）：少于 2 条会被加载校验丢弃。
       rubric: ['能指出 Harness 是连接模型与真实环境的控制系统', '能说明其把模型意图转化为可控操作'],
       keywords: ['控制系统'],
       misattribution_options: ['概念混淆', '推导漏洞', '边界遗漏', '无'],
@@ -130,7 +130,7 @@ describe('UI-7：evalSubmit evalId 幂等', () => {
     await cleanup()
   })
 
-  it('��跨 service 实例（宿主重启模拟）同 evalId 仍重放，不二次计分', async () => {
+  it('跨 service 实例（宿主重启模拟）同 evalId 仍重放，不二次计分', async () => {
     const { ws, service, courseId, cleanup } = await setup()
     const evalId = 'ev_restart_replay_001'
     const answer = '连接模型与真实环境的控制系统'

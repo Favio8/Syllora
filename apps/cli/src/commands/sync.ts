@@ -1,7 +1,7 @@
 /**
  * `syllora sync` — trigger an incremental course build (`courses.sync` →
  * async build job) and poll `jobs.get` until done/failed, printing N/M
- * progress. FL-13/FL-14：此前 CLI 没有任何可触发构建的命令，quiz 的空池提示
+ * progress. /：此前 CLI 没有任何可触发构建的命令，quiz 的空池提示
  * 「请先运行 syllora sync」指向一个不存在的命令（死链指引）——本命令补上
  * 该缺口，使提示链真实可行。
  * @module @syllora/cli/commands/sync

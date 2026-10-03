@@ -90,7 +90,7 @@ describe("AgentChat", () => {
     // 首次挂载只是接手课程，没有旧流可中止
     const initialAborts = abortActiveChatMock.mock.calls.length;
 
-    // chatStream.ts 的约定：对话切换前必须先 abortActiveChat()，否则旧流的 meta/done
+    // chatStream.ts 的约定：对话切换前必须先 abortActiveChat，否则旧流的 meta/done
     // 帧会按新的 activeCourseId 落地，把上一门课的 sessionId 写进新课。
     act(() => useAppStore.getState().setStreaming(true));
     rerender(<AgentChat folder={"D:\\courses\\线性代数"} courseName="线性代数" />);

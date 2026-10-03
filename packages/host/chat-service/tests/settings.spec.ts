@@ -139,7 +139,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('setCredential seals credentials.json and backfills api_key_env (P0-2)', async () => {
+  it('setCredential seals credentials.json and backfills api_key_env ()', async () => {
     const { root, ws } = await setup()
     await setCredential(ws, 'mock', PLACEHOLDER)
     const raw = await readFile(join(ws, '.syllora', 'credentials.json'), 'utf8')
@@ -156,7 +156,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('legacy 明文凭据在读取时自动迁移为密文（P0-2）', async () => {
+  it('legacy 明文凭据在读取时自动迁移为密文（）', async () => {
     const { root, ws } = await setup()
     await writeFile(join(ws, '.syllora', 'credentials.json'), JSON.stringify({ MOCK_KEY: PLACEHOLDER_LEGACY }), 'utf8')
     const payload = await settingsPayload(ws)
@@ -372,7 +372,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('��并发保存两个 provider 双双存活（config 写锁串行化 RMW）', async () => {
+  it('并发保存两个 provider 双双存活（config 写锁串行化 RMW）', async () => {
     const { root, ws } = await setup()
     await Promise.all([
       saveProvider(ws, { id: 'alpha', name: 'Alpha', model: 'model-a', baseUrl: 'https://a.example/v1' }),
@@ -388,7 +388,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('��并发「保存凭据」与「更新设置」互不丢字段', async () => {
+  it('并发「保存凭据」与「更新设置」互不丢字段', async () => {
     const { root, ws } = await setup()
     await Promise.all([
       setCredential(ws, 'mock', 'concurrent-secret'),
@@ -404,7 +404,7 @@ describe('settings domain', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('��discoverModels 命中缓存不发请求，refresh 强制实时', async () => {
+  it('discoverModels 命中缓存不发请求，refresh 强制实时', async () => {
     let hits = 0
     const server: Server = createServer((_req, res) => {
       hits += 1

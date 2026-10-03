@@ -41,7 +41,7 @@ const UPDATED_RE = /-\s*\*\*最后更新时间\*\*[:：]\s*([\d\- :]+)/
 
 /**
  * F-13：本地时区的 YYYY-MM-DD。到期/今日/热力图分桶统一用它——
- * `toISOString()` 是 UTC，UTC+8 的用户在 00:00–07:59 会整体错一天，
+ * `toISOString` 是 UTC，UTC+8 的用户在 00:00–07:59 会整体错一天，
  * 而早晨正是复习高发时段。
  */
 export function localDateKey(value: Date | string | number = new Date()): string {
@@ -264,7 +264,7 @@ export function updateEf(currentEf: number, quality: number): number {
 const MAX_INTERVAL_DAYS = 365
 
 export function intervalDays(repetitions: number, ef: number): number {
-  // FL-29：对齐经典 SM-2 间隔序列 I(1)=1、I(2)=6、I(n)=round(I(n-1)*EF)。
+  // 对齐经典 SM-2 间隔序列 I(1)=1、I(2)=6、I(n)=round(I(n-1)*EF)。
   // 旧实现 I(2)=3 的"半速复习"未在文档中声明，对外宣称"实现 SM-2"有口径风险。
   if (repetitions <= 1) return 1
   if (repetitions === 2) return 6

@@ -91,7 +91,7 @@ export class DomainFacility {
    * with the offending table and key); construct the domain.
    *
    * Lifecycle: the CALLER owns the returned handle and closes it via
-   * `Domain.close()` (typically as its own `ctx.effect` disposer) — the
+   * `Domain.close` (typically as its own `ctx.effect` disposer) — the
    * facility does not tie the domain to any consumer fiber. Domains still
    * open when the facility unmounts are closed by the plugin disposer.
    * @param spec - The domain declaration, typically from `defineDomain`.
@@ -185,7 +185,7 @@ export class DomainFacility {
 
   /**
    * Close every domain still open on this facility. The unmount path for
-   * consumers that never called `Domain.close()` themselves; closing is
+   * consumers that never called `Domain.close` themselves; closing is
    * idempotent, so double-closing an already-closed domain is harmless.
    * @returns resolution after every unit is released.
    */

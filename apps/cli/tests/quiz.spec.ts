@@ -156,7 +156,7 @@ describe('quiz', () => {
   it('非法 --mode / 非法题数：UsageError', async () => {
     await expect(quizCommand(['--mode', 'bad'])).rejects.toBeInstanceOf(UsageError)
     await expect(quizCommand(['0'])).rejects.toBeInstanceOf(UsageError)
-    // 确保 CLI 入口把 UsageError 记为 exit 2（由 bin.ts main().catch 处理）；此处仅断言类型。
+    // 确保 CLI 入口把 UsageError 记为 exit 2（由 bin.ts main.catch 处理）；此处仅断言类型。
     expect(new UsageError('x').message).toBe('x')
   })
 

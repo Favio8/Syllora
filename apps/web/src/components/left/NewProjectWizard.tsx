@@ -30,7 +30,7 @@ function errorMessage(error: unknown): string {
 type Phase = "picking" | "adopting" | "error";
 type Mode = "native" | "browse";
 
-/** W-10：向导各阶段共用的弹层外壳——焦点圈闭 + Escape 关闭 + 遮罩点击关闭。
+/** 向导各阶段共用的弹层外壳——焦点圈闭 + Escape 关闭 + 遮罩点击关闭。
  *  抽成组件而非在分支内直接加 hook：阶段切换会替换整个 section，分支内 hook
  *  的监听器会持有已卸载的旧容器。 */
 function WizardShell({
@@ -105,7 +105,7 @@ export default function NewProjectWizard() {
       if (!alive.current || !pickInFlight.current) return;
       pickInFlight.current = false;
       if (alive.current) {
-        // FL-02：非 Windows 宿主没有原生选择器——"不可用"要自动落到目录浏览
+        // 非 Windows 宿主没有原生选择器——"不可用"要自动落到目录浏览
         // 回退，而不是错误弹窗（更不能像用户取消那样直接关窗，否则首启死锁）。
         if (cause instanceof ApiError && cause.message.includes("原生目录选择器")) {
           setMode("browse");
@@ -221,7 +221,7 @@ function BrowsePicker({ onAdopt, onCancel, onPreferNative, busy }: {
 
   const current = page?.path ?? "";
 
-  // W-10：焦点圈闭（Escape = 取消，与遮罩点击/取消钮同语义）。
+  // 焦点圈闭（Escape = 取消，与遮罩点击/取消钮同语义）。
   const dialogRef = useRef<HTMLElement>(null);
   useFocusTrap({ containerRef: dialogRef, onEscape: onCancel });
 
@@ -255,7 +255,7 @@ function BrowsePicker({ onAdopt, onCancel, onPreferNative, busy }: {
 
         <div className="mt-1 min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="目录列表">
           {loading ? (
-            // P1 加载骨架：爪爪 searching 态 + 目录行占位（首屏目录枚举可到秒级）
+            // 加载骨架：爪爪 searching 态 + 目录行占位（首屏目录枚举可到秒级）
             <div className="flex flex-col items-center gap-3 px-2 py-8" aria-label="正在读取目录">
               <Clawzy size={48} state="searching" ariaLabel="爪爪正在读取目录" />
               <div className="w-full space-y-2 px-2">

@@ -522,7 +522,7 @@ export class SylloraService {
       if (!await this.consent(db)) fail('CONSENT_REQUIRED','请先确认允许向所选模型发送资料片段和问题')
       if (db.jobs.some(j => j.courseId === course.id && j.state === 'running')) fail('BUSY','本课程已有生成任务，请等待或取消')
       if (p.reading && 'ebookId' in p.reading) {
-        // ��电子书解释/搜索不依赖资料库来源（正文切条在 runGeneration 内完成）。
+        // 电子书解释/搜索不依赖资料库来源（正文切条在 runGeneration 内完成）。
       } else if (!learningSources(course).length) fail('NO_USABLE_SOURCE','请先导入资料并接受可用部分')
       if (p.taskId) {
         const task = course.plan?.tasks.find(task => task.id === p.taskId) ?? fail('NOT_FOUND','任务不存在或不属于当前课程')
@@ -562,7 +562,7 @@ export class SylloraService {
       }
       if(input.reading) {
         if('ebookId' in input.reading) {
-          // ��电子书来源 —— refined.md 切条成伪 Source（范围=电子书本体，复用 sources 机制）。
+          // 电子书来源 —— refined.md 切条成伪 Source（范围=电子书本体，复用 sources 机制）。
           sources=await this.ebookReadingSources(input.reading)
         } else {
           const reading = input.reading
@@ -646,7 +646,7 @@ export class SylloraService {
         const current = db.jobs.find(j=>j.id===job.id)
         if(!current || current.state!=='running' || controller.signal.aborted) return
         const course = this.course(db,job.courseId)
-        // ��电子书伪来源每次由同一 refined.md 切出（天然一致），跳过资料来源校验。
+        // 电子书伪来源每次由同一 refined.md 切出（天然一致），跳过资料来源校验。
         if(!input.reading||!('ebookId' in input.reading)) {
           const valid = new Set(usableSources(course).map(s=>s.id))
           if(selected.some(s=>!valid.has(s.id))) fail('NO_USABLE_SOURCE','生成期间来源已变化，请重新生成')
@@ -666,7 +666,7 @@ export class SylloraService {
     const dir = join(root, 'ebook')
     let names: string[] = []
     try {
-      // .pending = 投喂半成品（P1 修复后正常流程不留）；成功书籍必然有非空 refined.md。
+      // .pending = 投喂半成品（修复后正常流程不留）；成功书籍必然有非空 refined.md。
       names = (await readdir(dir, { withFileTypes: true }))
         .filter(entry => entry.isDirectory() && !entry.name.endsWith('.pending'))
         .map(entry => entry.name)
@@ -728,7 +728,7 @@ export class SylloraService {
     return { ebookId: p.ebookId, fileName, markdown, outline, progress }
   }
 
-  /** M7 大纲学习状态（手工标记红/黄/绿，D8 判规待确认；progress.json 落电子书目录）。 */
+  /** 大纲学习状态（手工标记红/黄/绿， 判规待确认；progress.json 落电子书目录）。 */
   private async ebookProgressSet(payload: unknown) {
     const p = z.object({
       courseId: key,
@@ -747,7 +747,7 @@ export class SylloraService {
     return { saved: true, progress }
   }
 
-  /** ��读取多文件拟序草案（draft-order.json；无草案返回空契约）。 */
+  /** 读取多文件拟序草案（draft-order.json；无草案返回空契约）。 */
   private async ebookOrderDraft(payload: unknown) {
     z.object({ courseId: key }).parse(payload)
     const root = this.options.courseRoot ?? fail('NOT_SUPPORTED', '请先打开课程文件夹')
@@ -761,7 +761,7 @@ export class SylloraService {
     }
   }
 
-  /** ��保存/确认多文件拟序草案（AI 草案或人工调整结果，契约见 syllora-ui.ts）。 */
+  /** 保存/确认多文件拟序草案（AI 草案或人工调整结果，契约见 syllora-ui.ts）。 */
   private async ebookOrderSave(payload: unknown) {
     const p = z.object({ courseId: key, draft: ebookOrderDraftSchema }).parse(payload)
     const root = this.options.courseRoot ?? fail('NOT_SUPPORTED', '请先打开课程文件夹')
@@ -771,7 +771,7 @@ export class SylloraService {
   }
 
   /**
-   * ��课程知识图谱（D9 契约初版，agent 自动抽点建链待接入）。
+   * 课程知识图谱（契约初版，agent 自动抽点建链待接入）。
    * 节点：电子书章节（docmind/outline.json）+ 课程知识点（plan points）；
    * 边：章节顺序/父子（大纲推导）+ 知识点→章节归属（title 匹配）。
    * 返回形状与前端 notesGraph.NotesGraph 兼容（from/to 转换由前端完成）。
@@ -842,7 +842,7 @@ export class SylloraService {
   }
 
   /**
-   * M8 agent 自动建谱：对课程内所有已结构化电子书逐一调用模型抽取概念节点 + 关系，
+   *  agent 自动建谱：对课程内所有已结构化电子书逐一调用模型抽取概念节点 + 关系，
    * 结果落 {ebook}/docmind/graph.json；单本失败不影响其他，汇总在任务消息。
    */
   private async graphBuild(payload: unknown) {
@@ -941,7 +941,7 @@ export class SylloraService {
   }
 
   /**
-   * ��电子书阅读来源 —— refined.md 切条成伪 Source（范围=电子书本体，
+   * 电子书阅读来源 —— refined.md 切条成伪 Source（范围=电子书本体，
    * 复用 sources 机制与 AI解释/AI搜索；选区定位参考 syllora-ui.ts chunkEbookMarkdown）。
    */
   private async ebookReadingSources(context: EbookReadingContext): Promise<Source[]> {
@@ -991,8 +991,8 @@ export class SylloraService {
   }
 
   // ---------------------------------------------------------------------------
-  // 电子书投喂（��— 上传原件 → DocMind 解析 → docmind/{markdown,layouts,status}。
-  // 电子书是独立对象（盖章决策⑤），不注册为 Material、不进资料库。
+  // 电子书投喂（— 上传原件 → DocMind 解析 → docmind/{markdown,layouts,status}。
+  // 电子书是独立对象，不注册为 Material、不进资料库。
   // ---------------------------------------------------------------------------
   private async handleEbook(sub: string, payload: unknown): Promise<unknown> {
     if (sub === 'ingest') return this.ebookIngest(payload)
@@ -1015,7 +1015,7 @@ export class SylloraService {
     const bytes = Buffer.from(p.base64, 'base64')
     if (bytes.length === 0) fail('INVALID_REQUEST', '上传内容为空')
     if (bytes.length > EBOOK_MAX_BYTES) fail('LIMIT_EXCEEDED', `电子书原文件超过 ${(EBOOK_MAX_BYTES / 1024 / 1024)} MiB 上限`)
-    // DocMind 解析不挂模型前置（盖章决策②）：只要求 DocMind 密钥已配置。
+    // DocMind 解析不挂模型前置：只要求 DocMind 密钥已配置。
     const docmind = await resolveDocMindCredential(root).catch(() => null)
     if (!docmind) fail('DOCMIND_NOT_CONFIGURED', '请先在「模型配置」中填写 DocMind 访问密钥（AccessKey ID / AccessKey Secret）')
     const created = await this.transaction(async db => {
@@ -1058,7 +1058,7 @@ export class SylloraService {
         },
       })
       await check()
-      // ��结构化完成即自动建谱（agent 抽取概念与关联，写 docmind/graph.json）。
+      // 结构化完成即自动建谱（agent 抽取概念与关联，写 docmind/graph.json）。
       // 不配置模型或调用失败都不阻塞投喂成功；结果并入任务消息。
       const graphInfo = await this.autoBuildGraph(job, root, input.ebookId, controller)
       await this.transaction(db => {
@@ -1070,7 +1070,7 @@ export class SylloraService {
         current.message = `已结构化电子书：${result.pages} 页 / ${result.blocks} 个版面块 / ${result.tables ?? 0} 表 / ${result.images ?? 0} 图 / ${(result.markdownChars / 1000).toFixed(1)}K 字符${fixCount > 0 ? `／规则精炼 ${fixCount} 处修正` : ''}${graphInfo}`
       })
     } catch (error) {
-      // P1 修复：任何失败都清掉 `.pending` 半成品目录（成功路径已 rename 正式目录）。
+      // 修复：任何失败都清掉 `.pending` 半成品目录（成功路径已 rename 正式目录）。
       await rm(join(root, 'ebook', `${input.ebookId}.pending`), { recursive: true, force: true }).catch(() => undefined)
       await this.transaction(db => {
         const current = db.jobs.find(j => j.id === job.id)
@@ -1087,7 +1087,7 @@ export class SylloraService {
   }
 
   /**
-   * M8 自动建谱：投喂结构化完成后随附调用（与电子书/大纲同一批产物）。
+   *  自动建谱：投喂结构化完成后随附调用（与电子书/大纲同一批产物）。
    * 无模型配置或调用失败都不阻塞投喂成功 —— 失败时返回提示语，可稍后用「重新生成图谱」补建。
    */
   private async autoBuildGraph(job: Job, root: string, ebookId: string, controller: AbortController): Promise<string> {

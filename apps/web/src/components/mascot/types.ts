@@ -9,7 +9,7 @@
  * - celebrate  quiz 答对庆祝（举爪 + 跳跃，2400ms 脉冲）
  * - alerting   会话出错（皱眉抖动，直到用户重试/新消息）
  *
- * P1 八态（设计文档 §7.2，姿态按既有词汇设计，未经原型评审）：
+ *  八态（设计文档 §7.2，姿态按既有词汇设计，未经原型评审）：
  * - sleeping   静置超 5 分钟（闭眼横线、极缓呼吸；引擎内部由 idle 计时驱动）
  * - waking     从睡眠被唤醒（惊醒→强制双眨→归位，约 1.8s 过渡）
  * - searching  流式期间工具执行中（眼左右扫、单爪前探）
@@ -45,7 +45,7 @@ export type MascotState =
 export type MascotTier = "icon" | "full";
 
 export interface ClawzyProps {
-  /** 受控状态；缺省走 useMascotState() 从全局 store 自动派生。 */
+  /** 受控状态；缺省走 useMascotState 从全局 store 自动派生。 */
   state?: MascotState;
   /** 渲染边长（px）。SVG viewBox 240 等比缩放，宽高恒等于 size，不产生布局位移。 */
   size: number;

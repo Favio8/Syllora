@@ -68,7 +68,7 @@ describe('progress board', () => {
     expect(updateEf(2.5, 5)).toBeCloseTo(2.6)
     const pass = reviewSchedule(2.5, 1, 0.9)
     expect(pass.repetitions).toBe(2)
-    // FL-29：对齐经典 SM-2 序列，I(2)=6（旧实现为 3）。
+    // 对齐经典 SM-2 序列，I(2)=6（旧实现为 3）。
     expect(pass.intervalDays).toBe(6)
     const fail = reviewSchedule(2.5, 5, 0.1)
     expect(fail.repetitions).toBe(0)
@@ -80,7 +80,7 @@ describe('heatmap metrics', () => {
   it('aggregates chat/eval/weak-cleared per day', async () => {
     const root = await mkdtemp(join(tmpdir(), 'syllora-metrics-'))
     const ws = join(root, 'ws')
-    // P1-7：历史目录与写入侧一致，位于 <工作区根>/.syllora/history。
+    // 历史目录与写入侧一致，位于 <工作区根>/.syllora/history。
     const historyDir = join(ws, '.syllora', 'history')
     await mkdir(historyDir, { recursive: true })
     // F-13：行内 ts 为 ISO（UTC），分桶按本地时区归日——夹具用正午 UTC

@@ -186,7 +186,7 @@ export default function ChatArea() {
             })()}
             {streaming ? (
               <div className="flex h-[26px] shrink-0 items-center gap-2 text-sm font-medium">
-                {/* P0-②：流式指示爪爪（icon 档），状态跟 streamPhase（thinking/writing） */}
+                {/* -②：流式指示爪爪（icon 档），状态跟 streamPhase（thinking/writing） */}
                 <Clawzy size={20} tier="icon" ariaLabel="爪爪正在工作" />
                 <span className="text-shimmer">深入研究中...</span>
               </div>
@@ -212,7 +212,7 @@ export default function ChatArea() {
                 className="pointer-events-none absolute -top-28 left-1/2 h-[130px] w-[72%] -translate-x-1/2 rounded-[50%] bg-[#6187D8]/[0.08] blur-[50px]"
               />
               <h1 className="relative mb-2 flex items-center justify-center gap-2.5 text-[26px] font-medium leading-8 text-text-primary">
-                {/* P0-①：🦞 替换为爪爪（72px 活体 idle，hero 恒静置态） */}
+                {/* -①：🦞 替换为爪爪（72px 活体 idle，hero 恒静置态） */}
                 <Clawzy size={72} ariaLabel="爪爪" />
                 今天学点什么？
               </h1>
