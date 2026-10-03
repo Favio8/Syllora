@@ -68,6 +68,12 @@ cloud:
 
 **缓存**：键为 `slides-v2:<模型>:<本批内容>`。资料未变的章节直接复用，不会重复上云计费。
 
+### 一个云端课堂里可能有非幻灯片页
+
+实测一次 8 页的课堂里，6 页是 `slide`（有 canvas），另 2 页分别是 `interactive`（交互模拟）
+与 `quiz`（测验）——它们没有 canvas，幻灯片渲染器无法呈现。归一化会丢弃这些页，
+但**把数量记进 `cloudSceneCount` / `skippedNonSlideCount`**，避免"生成少了页"的误解。
+
 ## 关于引用可追溯的变化
 
 云端**不返回** Syllora 的逐页来源 id，因此原先"每页引用可回溯到原文"无法维持。
@@ -87,15 +93,28 @@ cloud:
 
 ## 代填模型 Key
 
-用户在本地填写 Key，Syllora 写入云端：
+用户在本地填写 Key，Syllora 写入云端。**顺序是实测确定的**：
 
-1. `POST /api/verify-model` 校验 `{model, apiKey, baseUrl, providerType}`，不通过立即停止
-2. `PUT /api/model-config` 写入供应商（`kind: 'provider'`）
-3. `PUT /api/model-config` 赋值根槽位 `llm`（`kind: 'slots'`）
+1. `PUT /api/model-config` `{kind:'provider'}` 先保存供应商
+2. `POST /api/verify-model` `{ model: '<providerId>:<model>', apiKey }` 校验
+3. `PUT /api/model-config` `{kind:'slots'}` 赋值根槽位 `llm`
+
+**为什么必须先保存供应商**：`/api/verify-model` 的 `providerType` 字段是**协议类型**
+（`openai`、`anthropic` 等），不是预设名；传预设名会得到
+`Provider type mismatch for openai: expected openai, received deepseek`。
+而传 `<providerId>:<model>` 时服务端用**已保存的供应商**解析凭据与端点，故供应商必须先落地。
+
+**模型名以云端预设为准，不要照文档猜**：DeepSeek 预设提供的是
+`deepseek-v4-pro` / `deepseek-v4-flash`，并不是 `deepseek-chat`。可用模型从
+`GET /api/model-config` 的 `presets[].capabilities.chat.models` 读。
 
 槽位体系：根槽位是 `llm`，`course.outline` / `course.content` 等是它的子槽位，
 **未显式赋值时继承 `llm`**，因此只需写根槽位。写入带乐观并发（`revision`），
 冲突返回 409；被部署层 `openmaic.yml` 锁定的槽位返回 `SLOT_LOCKED`。
+
+**产物标识在 `result` 里**：任务成功后课堂 id 与场景数位于
+`result.classroomId` / `result.scenesCount`（见上游 `classroom-job-store` 的成功分支），
+**不在顶层**。顶层只有 `status` / `step` / `progress` / `scenesGenerated` / `error` / `done`。
 
 ### 为什么应由 Syllora 代填，而不是先在网页里配
 
@@ -130,10 +149,41 @@ PPTX 保真边界：
 ## 云端前置条件
 
 1. **云端必须配置模型**：否则生成任务会以
-   `No model is configured for course.outline...` 失败。用设置界面或本模块的代填功能配置。
-2. **资料限制**（取自 `/api/generate-classroom/capabilities`）：最多 5 份、总 150 MB、单文件 50 MB，
+   `No model is configured for course.outline...` 失败。用本模块的代填功能配置
+   （注意 owner 归属那一节：网页里配的对此不生效）。
+2. **模型能力要够**：实测 DeepSeek 预设下 `deepseek-v4-flash` **生成失败**，云端存储层拒绝了
+   模型产出的非法动作：
+
+   ```
+   @openmaic/storage: invalid scene scene_xxx: /actions/6/type:
+   unknown action type: "action_placeholder"
+   ```
+
+   同一份资料换 `deepseek-v4-pro` 则成功生成 8 页。也就是说**较弱模型可能通不过上游的
+   场景校验**，这是模型/提示词层面的问题，不是本集成的配置问题。选模型时建议先用一章试生成。
+3. **资料限制**（取自 `/api/generate-classroom/capabilities`）：最多 5 份、总 150 MB、单文件 50 MB，
    支持 `pdf` / `txt` / `markdown`。
-3. **访问口令**：云端未设 `ACCESS_CODE` 时门禁关闭，任何人都能访问——上公网前必须设置。
+4. **访问口令**：云端未设 `ACCESS_CODE` 时门禁关闭，任何人都能访问——上公网前必须设置。
+
+## 端到端验证怎么做
+
+单元测试用假服务器验证协议（快、离线）；但**假服务器会跟着实现走，掩盖真实契约的偏差**——
+`classroomId` 藏在 `result` 下这个偏差就是被单元测试漏掉、由真实调用发现的。
+
+因此另有一个默认跳过的真实云端测试：
+
+```bash
+SYLLORA_CLOUD_E2E=1 \
+SYLLORA_CLOUD_BASE_URL=https://<你的站点> \
+SYLLORA_CLOUD_ACCESS_CODE=<访问口令> \
+SYLLORA_CLOUD_API_KEY=<供应商 Key> \
+SYLLORA_CLOUD_PROVIDER=deepseek SYLLORA_CLOUD_PRESET=deepseek \
+SYLLORA_CLOUD_MODEL=deepseek-v4-pro \
+  vitest run --project node packages/host/chat-service/tests/syllora-cloud-live.spec.ts
+```
+
+它真的上传资料、生成一章、取回场景，并断言归一化后仍有可渲染内容。
+一次生成约 10–17 分钟。
 
 ## 同步与升级
 

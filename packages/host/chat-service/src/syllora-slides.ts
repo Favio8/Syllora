@@ -40,8 +40,17 @@ export interface SlideArtifact {
   classroomId: string
   /** 本次生成上传的 Syllora 来源 id（章节级溯源）。 */
   sourceIds: string[]
-  /** 归一化后的场景。 */
+  /** 归一化后的场景（只含可渲染的幻灯片页）。 */
   scenes: Array<SlideScene & { content: { type: string; canvas: unknown } }>
+  /**
+   * 云端课堂的场景总数，以及其中有多少不是幻灯片页。
+   *
+   * 实测：一次 8 页的课堂里有 2 页分别是 `interactive`（交互模拟）与 `quiz`（测验），
+   * 它们没有 canvas，幻灯片渲染器无法呈现。丢弃是正确行为，但**静默丢弃**会让人以为
+   * 生成漏了内容，因此把数量记下来，由界面如实说明。
+   */
+  cloudSceneCount?: number
+  skippedNonSlideCount?: number
 }
 
 /**
@@ -66,10 +75,17 @@ function readCanvas(content: unknown): unknown | null {
 
 /**
  * 把云端场景归一化成一节的场景。
+ *
  * 云端形态随版本演进，因此这里做保守映射：认不出画布的场景直接丢弃，
- * 而不是让一份畸形数据把整个渲染器打挂。
+ * 而不是让一份畸形数据把整个渲染器打挂。**丢弃的数量会被报出来**——
+ * 实测云端会把交互模拟与测验也放进同一个课堂，它们本来就无法用幻灯片呈现，
+ * 静默少页会让人误以为生成失败。
  */
-export function normalizeCloudScenes(scenes: CloudScene[]): SlideArtifact['scenes'] {
+export function normalizeCloudScenes(scenes: CloudScene[]): {
+  scenes: SlideArtifact['scenes']
+  cloudSceneCount: number
+  skippedNonSlideCount: number
+} {
   const out: SlideArtifact['scenes'] = []
   scenes.forEach((scene, index) => {
     const canvas = readCanvas(scene.content)
@@ -86,7 +102,8 @@ export function normalizeCloudScenes(scenes: CloudScene[]): SlideArtifact['scene
       content: { type: typeof scene.content?.type === 'string' ? scene.content.type : 'slide', canvas },
     })
   })
-  return out.sort((a, b) => a.order - b.order)
+  out.sort((a, b) => a.order - b.order)
+  return { scenes: out, cloudSceneCount: scenes.length, skippedNonSlideCount: scenes.length - out.length }
 }
 
 /**

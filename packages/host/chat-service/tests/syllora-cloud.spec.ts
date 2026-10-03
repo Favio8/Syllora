@@ -124,7 +124,11 @@ describe('OpenMaicCloud 生成与轮询', () => {
       if (req.url === '/api/generate-classroom/job1') {
         polls += 1
         if (polls < 2) { json(res, 200, { success: true, jobId: 'job1', status: 'running', step: 'scenes', progress: 40, done: false }); return }
-        json(res, 200, { success: true, jobId: 'job1', status: 'succeeded', step: 'completed', classroomId: 'cls_1', scenesGenerated: 4, done: true })
+        // 如实模拟云端：产物在 `result` 下，不在顶层
+        json(res, 200, {
+          success: true, jobId: 'job1', status: 'succeeded', step: 'completed', progress: 100, done: true,
+          result: { classroomId: 'cls_1', url: 'http://cloud/classroom/cls_1', scenesCount: 4 },
+        })
         return
       }
       json(res, 404, {})
@@ -137,7 +141,8 @@ describe('OpenMaicCloud 生成与轮询', () => {
     const status = await cloud.waitForJob(jobId, { intervalMs: 10, onProgress: current => { seen.push(current.progress ?? -1) } })
     expect(status.status).toBe('succeeded')
     expect(status.classroomId).toBe('cls_1')
-    expect(seen).toEqual([40, -1])
+    expect(status.scenesGenerated).toBe(4)
+    expect(seen).toEqual([40, 100])
 
     const start = requests.find(item => item.url === '/api/generate-classroom' && item.method === 'POST')!
     expect(JSON.parse(start.body.toString())).toEqual({ requirement: '生成第一章', materialIds: ['mat_abc'] })
@@ -211,11 +216,11 @@ describe('OpenMaicCloud 取回场景', () => {
 })
 
 describe('OpenMaicCloud 代填模型配置', () => {
-  it('先校验 Key，再按 revision 依次写供应商与根槽位 llm', async () => {
+  it('先写供应商，再按 <provider>:<model> 校验，最后写根槽位 llm', async () => {
     const puts: unknown[] = []
     const base = await startCloud((req, res) => {
       if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
-      if (req.url === '/api/verify-model') { json(res, 200, { success: true, valid: true }); return }
+      if (req.url === '/api/verify-model') { json(res, 200, { success: true, message: 'Connection successful' }); return }
       if (req.url === '/api/model-config' && req.method === 'GET') {
         json(res, 200, { revision: puts.length, slots: {} })
         return
@@ -228,25 +233,65 @@ describe('OpenMaicCloud 代填模型配置', () => {
       json(res, 404, {})
     })
     const cloud = new OpenMaicCloud(config(base))
-    await cloud.configureModel({ providerId: 'deepseek', preset: 'deepseek', model: 'deepseek-chat', apiKey: 'sk-test', baseUrl: 'https://api.deepseek.com' })
+    await cloud.configureModel({ providerId: 'deepseek', preset: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'sk-test', baseUrl: 'https://api.deepseek.com' })
 
+    // 供应商必须在校验之前写入：verify-model 用已保存的供应商解析凭据
     expect(puts).toHaveLength(2)
-    expect(puts[0]).toMatchObject({ revision: 0, change: { kind: 'provider', id: 'deepseek', apiKey: 'sk-test' } })
+    expect(puts[0]).toMatchObject({ revision: 0, change: { kind: 'provider', id: 'deepseek', preset: 'deepseek', apiKey: 'sk-test' } })
     // 槽位只需写根槽位 llm：course.outline / course.content 等子槽位未显式赋值时继承它
-    expect(puts[1]).toMatchObject({ revision: 1, change: { kind: 'slots', set: { llm: 'deepseek:deepseek-chat' } } })
+    expect(puts[1]).toMatchObject({ revision: 1, change: { kind: 'slots', set: { llm: 'deepseek:deepseek-v4-flash' } } })
+
+    // 校验用 <provider>:<model>，且不传 providerType——它是协议类型而不是预设名，
+    // 传预设名会被服务端拒绝（Provider type mismatch）
     const verify = requests.find(item => item.url === '/api/verify-model')!
-    expect(JSON.parse(verify.body.toString())).toMatchObject({ model: 'deepseek-chat', apiKey: 'sk-test' })
+    const body = JSON.parse(verify.body.toString())
+    expect(body).toMatchObject({ model: 'deepseek:deepseek-v4-flash', apiKey: 'sk-test' })
+    expect(body.providerType).toBeUndefined()
+    const putIndex = requests.findIndex(item => item.method === 'PUT')
+    const verifyIndex = requests.findIndex(item => item.url === '/api/verify-model')
+    expect(putIndex).toBeLessThan(verifyIndex)
   })
 
-  it('Key 校验不通过时立刻停止，不写入配置', async () => {
+  it('已保存的供应商引用不可解析时，回退到直传凭据的校验形式', async () => {
+    let verifyCalls = 0
     const base = await startCloud((req, res) => {
       if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
-      if (req.url === '/api/verify-model') { json(res, 400, { success: false, error: 'invalid api key' }); return }
-      json(res, 200, { revision: 0 })
+      if (req.url === '/api/verify-model') {
+        verifyCalls += 1
+        // 第一次（按引用）失败，第二次（直传凭据）成功
+        if (verifyCalls === 1) { json(res, 401, { success: false, error: 'unknown provider' }); return }
+        json(res, 200, { success: true })
+        return
+      }
+      if (req.url === '/api/model-config') {
+        if (req.method === 'PUT') { json(res, 200, { revision: 1 }); return }
+        json(res, 200, { revision: 0 })
+        return
+      }
+      json(res, 404, {})
+    })
+    const cloud = new OpenMaicCloud(config(base))
+    await cloud.configureModel({ providerId: 'deepseek', preset: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'sk-test', baseUrl: 'https://api.deepseek.com' })
+    expect(verifyCalls).toBe(2)
+    const second = requests.filter(item => item.url === '/api/verify-model')[1]!
+    expect(JSON.parse(second.body.toString())).toMatchObject({
+      model: 'deepseek-v4-flash',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.deepseek.com',
+    })
+  })
+
+  it('Key 校验不通过时抛出，且不写入槽位', async () => {
+    const base = await startCloud((req, res) => {
+      if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
+      if (req.url === '/api/verify-model') { json(res, 401, { success: false, error: 'invalid api key' }); return }
+      if (req.url === '/api/model-config') { json(res, 200, { revision: 0 }); return }
+      json(res, 404, {})
     })
     const cloud = new OpenMaicCloud(config(base))
     await expect(cloud.configureModel({ providerId: 'p', preset: 'p', model: 'm', apiKey: 'bad' }))
       .rejects.toBeInstanceOf(CloudError)
-    expect(requests.some(item => item.method === 'PUT')).toBe(false)
+    // 供应商已写入一次；校验失败后不得继续写槽位
+    expect(requests.filter(item => item.method === 'PUT')).toHaveLength(1)
   })
 })

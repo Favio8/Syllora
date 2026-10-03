@@ -788,12 +788,14 @@ export class SylloraService {
               throw new Error(status.error || `云端生成未成功（${status.status}）`)
             }
             const scenes = await cloud.scenes(status.classroomId)
-            const normalized = normalizeCloudScenes(scenes)
+            const { scenes: normalized, cloudSceneCount, skippedNonSlideCount } = normalizeCloudScenes(scenes)
             return {
               chapter,
               classroomId: status.classroomId,
               sourceIds: sources.map(source => source.id),
               scenes: normalized,
+              cloudSceneCount,
+              skippedNonSlideCount,
             }
           },
         } : {}),

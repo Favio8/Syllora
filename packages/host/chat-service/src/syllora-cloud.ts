@@ -40,7 +40,9 @@ export interface CloudJobStatus {
   step: string
   progress: number | undefined
   scenesGenerated: number | undefined
+  /** 成功时的产物标识。注意云端把它放在 `result` 里，不在顶层。 */
   classroomId: string | undefined
+  classroomUrl: string | undefined
   error: string | undefined
   done: boolean
 }
@@ -150,14 +152,20 @@ export class OpenMaicCloud {
     for (;;) {
       await options.check?.()
       const response = await this.fetchJson(`/api/generate-classroom/${encodeURIComponent(jobId)}`)
-      const raw = (response.json ?? {}) as Partial<CloudJobStatus> & { success?: boolean }
+      const raw = (response.json ?? {}) as Partial<CloudJobStatus> & {
+        success?: boolean
+        // 云端把产物放在 `result` 下（见上游 classroom-job-store 的成功分支）：
+        // result: { classroomId, url, scenesCount }
+        result?: { classroomId?: string; url?: string; scenesCount?: number }
+      }
       const status: CloudJobStatus = {
         jobId,
         status: (raw.status ?? 'running') as CloudJobStatus['status'],
         step: raw.step ?? '',
         progress: raw.progress,
-        scenesGenerated: raw.scenesGenerated,
-        classroomId: raw.classroomId,
+        scenesGenerated: raw.scenesGenerated ?? raw.result?.scenesCount,
+        classroomId: raw.result?.classroomId ?? raw.classroomId,
+        classroomUrl: raw.result?.url,
         error: raw.error,
         done: raw.done === true || raw.status === 'succeeded' || raw.status === 'failed',
       }
@@ -185,25 +193,18 @@ export class OpenMaicCloud {
   }
 
   /**
-   * 代填模型配置：先校验 Key，再写供应商，最后赋值给根槽位 `llm`。
+   * 代填模型配置：先写供应商，再按 `<provider>:<model>` 校验 Key，最后赋值给根槽位 `llm`。
+   *
+   * 顺序很重要，这一点是实测出来的：`/api/verify-model` 的 `providerType` 是**协议类型**
+   * （如 `openai`），不是预设名——传预设名会得到
+   * `Provider type mismatch for openai: expected openai, received deepseek`。
+   * 传 `<provider>:<model>` 时服务端用已保存的供应商解析凭据，因此必须先保存供应商再校验。
+   *
    * `course.outline` / `course.content` 等子槽位未显式赋值时继承 `llm`，因此不必逐个写。
-   * 写入带乐观并发（revision），冲突时抛 CONFLICT 由调用方重试。
+   * 写入带乐观并发（revision）。
    */
   async configureModel(input: { providerId: string; preset: string; model: string; apiKey: string; baseUrl?: string }): Promise<void> {
     await this.connect()
-    const verified = await this.fetchJson('/api/verify-model', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: input.model,
-        apiKey: input.apiKey,
-        baseUrl: input.baseUrl,
-        providerType: input.preset,
-      }),
-    })
-    if ((verified.json as { success?: boolean } | null)?.success === false) {
-      throw new CloudError('模型校验未通过，请检查 Key 与模型名', verified.status, 'VERIFY_FAILED')
-    }
     const current = await this.fetchJson('/api/model-config')
     const revision = (current.json as { revision?: number } | null)?.revision ?? null
     await this.fetchJson('/api/model-config', {
@@ -220,6 +221,29 @@ export class OpenMaicCloud {
         },
       }),
     })
+
+    // 先按已保存的供应商引用校验；若该部署未按此解析，再回退到直传凭据的形式。
+    const savedRef = `${input.providerId}:${input.model}`
+    const verified = await this.fetchJson('/api/verify-model', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: savedRef, apiKey: input.apiKey }),
+    }).catch(async (error: unknown) => {
+      if (!(error instanceof CloudError)) throw error
+      return this.fetchJson('/api/verify-model', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: input.model,
+          apiKey: input.apiKey,
+          ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+        }),
+      })
+    })
+    if ((verified.json as { success?: boolean } | null)?.success === false) {
+      throw new CloudError('模型校验未通过，请检查 Key 与模型名', verified.status, 'VERIFY_FAILED')
+    }
+
     const afterProvider = await this.fetchJson('/api/model-config')
     const nextRevision = (afterProvider.json as { revision?: number } | null)?.revision ?? null
     await this.fetchJson('/api/model-config', {
@@ -227,7 +251,7 @@ export class OpenMaicCloud {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         revision: nextRevision,
-        change: { kind: 'slots', set: { llm: `${input.providerId}:${input.model}` } },
+        change: { kind: 'slots', set: { llm: savedRef } },
       }),
     })
   }
