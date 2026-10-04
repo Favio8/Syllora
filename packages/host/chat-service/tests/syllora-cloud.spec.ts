@@ -218,6 +218,29 @@ describe('OpenMaicCloud 生成与轮询', () => {
 })
 
 describe('OpenMaicCloud 取回场景', () => {
+  it('manifest 返回的 scene 是对象时也能取出 id（真实形态：{id, order, rev}）', async () => {
+    // 实测云端 /manifest 返回 {"rev":9,"scenes":[{"id":"scene_x","order":1,"rev":1},...]}
+    let scenesQuery = ''
+    const base = await startCloud((req, res) => {
+      if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
+      if (req.url === '/api/stages/cls_obj/manifest') {
+        json(res, 200, { rev: 9, scenes: [{ id: 'scene_a', order: 1, rev: 1 }, { id: 'scene_b', order: 2, rev: 1 }] })
+        return
+      }
+      if (req.url?.startsWith('/api/stages/cls_obj/scenes')) {
+        scenesQuery = req.url
+        json(res, 200, { scenes: [{ id: 'scene_a', title: '甲', order: 1, content: { type: 'slide', canvas: { elements: [] } } }] })
+        return
+      }
+      json(res, 404, {})
+    })
+    const cloud = new OpenMaicCloud(config(base))
+    const scenes = await cloud.scenes('cls_obj')
+    expect(scenes).toHaveLength(1)
+    // 批量请求用逗号分隔、不编码成 %2C——逗号是合法的子分隔符，云端按字面量解析
+    expect(scenesQuery).toContain('ids=scene_a,scene_b')
+  })
+
   it('先读 manifest 再按 id 批量取场景，并兼容多种返回形态', async () => {
     const base = await startCloud((req, res) => {
       if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
@@ -258,7 +281,15 @@ describe('OpenMaicCloud 代填模型配置', () => {
       if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=t; Path=/' }); return }
       if (req.url === '/api/verify-model') { json(res, 200, { success: true, message: 'Connection successful' }); return }
       if (req.url === '/api/model-config' && req.method === 'GET') {
-        json(res, 200, { revision: puts.length, slots: {} })
+        // 如实模拟云端：`slots` 是**扁平数组**（每项含 slot/parent/assignment/effective），
+        // 不是嵌套对象。客户端不解析它，只读 revision，因此这里锁定"不解析也能工作"。
+        json(res, 200, {
+          revision: puts.length,
+          slots: [
+            { slot: 'llm', parent: null, capability: 'chat', locked: false, assignment: 'deepseek:deepseek-v4-flash' },
+            { slot: 'course.outline', parent: 'llm', capability: 'chat', locked: false, assignment: null },
+          ],
+        })
         return
       }
       if (req.url === '/api/model-config' && req.method === 'PUT') {

@@ -74,6 +74,18 @@ const TIMEOUT_MS = 120_000
 const POLL_INTERVAL_MS = 5_000
 
 /**
+ * 单章生成默认等待上限。
+ *
+ * 实测（同一份 775 字资料、10–11 页课堂）：
+ * - 慢配置（`pro` + 串行 + 开思维）：约 135 秒/页
+ * - 快配置（`flash` + 并发 + 关思维）：约 12 秒/页
+ *
+ * 差 11 倍，所以固定的 30 分钟会**先于云端完成而超时**：一本 40 页的课程在慢配置下要数小时。
+ * 默认放到 2 小时覆盖快配置下的整本书，慢配置则应由 `cloud.wait_timeout_minutes` 显式调大。
+ */
+const DEFAULT_WAIT_TIMEOUT_MS = 120 * 60_000
+
+/**
  * 一个云端会话：先换 cookie，之后所有请求带上它。
  *
  * cookie 保存在实例字段里而不写磁盘——Syllora 的课程目录是用户可见的普通文件夹，
@@ -154,7 +166,7 @@ export class OpenMaicCloud {
     intervalMs?: number
   } = {}): Promise<CloudJobStatus> {
     await this.connect()
-    const deadline = Date.now() + (options.timeoutMs ?? 30 * 60_000)
+    const deadline = Date.now() + (options.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS)
     const interval = options.intervalMs ?? POLL_INTERVAL_MS
     // 一次真实生成要 13–20 分钟，期间可能发生若干次瞬时网络故障（实测遇到过一次
     // `fetch failed`，直接把已经跑了 13 分钟的任务判死）。轮询对这类错误必须容忍：

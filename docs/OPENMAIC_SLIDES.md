@@ -40,15 +40,127 @@ cloud:
   base_url: https://studyandchat.top   # 云端 OpenMAIC 站点
   access_code: <站点访问口令>           # 对应云端 ACCESS_CODE
 
+  # 可选：单章生成的等待上限（分钟，1–1440）。默认 120。
+  # 慢配置（开思维、串行）下 40 页要数小时，需调大。
+  wait_timeout_minutes: 120
+
   # 可选：Syllora 代填云端模型配置（用户本地输入 Key，写入云端）
   provider: deepseek
   preset: deepseek
-  model: deepseek-chat
+  model: deepseek-v4-flash
   api_key: <你的 Key>
 ```
 
 `slides` 只在**开关打开且 `base_url`/`access_code` 都填好**时才生效——避免"开了但连不上"的模糊状态。
 关闭时（默认）不产生任何云端请求，也不写 `slides.json`，既有行为逐字保留。
+
+## 怎么把本地和云端连起来
+
+上面是字段清单，这一节是**从零到连通的操作顺序**。四步，跳过任何一步都会失败。
+
+### 第 1 步：拿到云端的地址与访问口令
+
+| 要填的值 | 从哪来 |
+|---|---|
+| `base_url` | 你部署 OpenMAIC 的站点地址，例如 `https://studyandchat.top`。**本机 Docker 部署则是 `http://127.0.0.1:3000`** |
+| `access_code` | 云端服务器的 `/opt/openmaic/.env.local` 里 `ACCESS_CODE=` 那一行的值 |
+
+在云端服务器上取访问口令：
+
+```bash
+grep '^ACCESS_CODE=' /opt/openmaic/.env.local | cut -d= -f2-
+```
+
+> 若云端 `.env.local` 没设 `ACCESS_CODE`，门禁是关闭的——任何人都能访问，
+> 当前 Syllora 要求非空访问口令；请先在云端设置 `ACCESS_CODE`，再填写本机连接配置。
+
+### 第 2 步：本地填 `config.yaml`
+
+```yaml
+# <课程>/.syllora/config.yaml
+ui:
+  slides: true
+
+cloud:
+  base_url: https://studyandchat.top
+  access_code: <第 1 步取到的值>
+```
+
+**注意作用范围**：也可通过设置页保存共享云端连接，虚拟课堂会在课程未配置时回落到共享设置。
+手写课程 `config.yaml` 时须核对实际生效配置；讲义初始化的配置选择还取决于课程是否配置了自己的模型。
+
+### 第 3 步：确认真的连上了
+
+这一步最容易被跳过，但连不上时的报错各不相同，先单独确认省时间。
+
+**先确认站点活着、门禁开着**（这个接口不需要口令）：
+
+```bash
+curl -s https://studyandchat.top/api/access-code/status
+# → {"success":true,"enabled":true,"authenticated":false}
+```
+
+`enabled: true` 说明站点设了口令。`authenticated: false` 是正常的——这个请求没带 cookie。
+
+**再确认口令正确**（能换到 cookie 就通了）：
+
+```bash
+curl -s -i -X POST https://studyandchat.top/api/access-code/verify \
+  -H 'content-type: application/json' \
+  -d '{"code":"<你的访问口令>"}' | grep -i '^set-cookie'
+# → Set-Cookie: openmaic_access=... （出现这行就说明口令对）
+```
+
+没出现 `Set-Cookie` 就是口令错。Syllora 侧对应的报错是：
+
+| 现象 | 含义 |
+|---|---|
+| `云端拒绝了访问口令（401）。请检查 config.yaml 的 cloud.accessCode` | 口令不对 |
+| `云端未返回访问 cookie；请确认站点访问口令正确` | 口令对了但响应异常（多为站点未就绪） |
+| `无法连接云端 <地址>：fetch failed` | 地址不通：域名、端口、防火墙或 HTTPS 证书 |
+
+### 第 4 步：配好云端的模型（否则第一次生成必失败）
+
+**这一步最容易漏。** 云端没有任何模型时，生成会直接失败：
+
+```
+No model is configured for course.outline. Set one in the model settings,
+or assign the slot (or an ancestor) in openmaic.yml.
+```
+
+两种做法，**必须选一种**：
+
+- **让 Syllora 代填**（推荐）：在本地 `cloud` 里填 `provider` / `preset` / `model` / `api_key`，
+  Syllora 会先写云端供应商、校验 Key、再赋给根槽位 `llm`。
+- **在云端锁槽位**：改云端 `openmaic.yml`，全局生效、与 owner 无关。
+
+> **不要用"浏览器登录后台配一次"这条路**——它落在该浏览器的匿名 owner 上，
+> 而 Syllora 用访问码建立的是另一个会话，**看不到**。原因见后文
+> 「为什么应由 Syllora 代填」。
+
+### 这条链路实际用的是什么
+
+我们这次部署（`https://studyandchat.top`）跑通过的组合，可直接照抄：
+
+```yaml
+cloud:
+  base_url: https://studyandchat.top
+  access_code: <服务器 .env.local 里的 ACCESS_CODE>
+  provider: deepseek
+  preset: deepseek
+  model: deepseek-v4-flash
+  api_key: <你的 DeepSeek Key>
+```
+
+云端同时开这两个提速开关（写在云端 `.env.local`，改完要重启容器）：
+
+```bash
+PARALLEL_SCENE_CONCURRENCY=4
+LLM_THINKING_DISABLED=true
+```
+
+顺带提醒：**重启容器会打断正在进行的生成**，该章会记为失败（细节见
+[OPENMAIC_CLOUD_API.md](OPENMAIC_CLOUD_API.md) 的轮询一节）。
 
 ## 生成粒度与产物
 
@@ -169,6 +281,39 @@ PPTX 保真边界：
 3. **资料限制**（取自 `/api/generate-classroom/capabilities`）：最多 5 份、总 150 MB、单文件 50 MB，
    支持 `pdf` / `txt` / `markdown`。
 4. **访问口令**：云端未设 `ACCESS_CODE` 时门禁关闭，任何人都能访问——上公网前必须设置。
+
+## 性能：为什么慢，以及怎么快 11 倍
+
+实测数据（同一份 775 字资料、10–11 页课堂、真实云端）：
+
+| 云端配置 | 秒/页 | 11 页 | 40 页推算 |
+|---|---|---|---|
+| `pro` + 串行 + 开思维（**上游默认**） | 135 | 26 分钟 | ≈ 6.0 小时 |
+| `pro` + 并发 + 开思维 | 111 | 20 分钟 | ≈ 4.9 小时 |
+| `flash` + 串行 + 开思维 | 70 | 13 分钟 | ≈ 3.1 小时 |
+| `flash` + 并发 + 开思维 | 52 | 8.8 分钟 | ≈ 2.3 小时 |
+| `pro` + 并发 + **关思维** | 21 | 4 分钟 | ≈ 57 分钟 |
+| **`flash` + 并发 + 关思维** | **12** | **2 分钟** | **≈ 33 分钟** |
+
+（40 页列是按每页耗时线性外推，不是实测。）
+
+**三个可配置的杠杆，按收益排序：**
+
+1. **关掉思维模式**（收益最大，约 6 倍）。`LLM_THINKING_DISABLED=true`。
+   思维模式对"输出大段结构化 JSON"是纯浪费：`pro` 关掉后从 135 秒/页降到 21 秒/页。
+2. **开启并发场景生成**（约 1.3–1.4 倍）。`PARALLEL_SCENE_CONCURRENCY=4`（上限 10）。
+   上游**默认 0 = 串行**，必须显式开启。官方注释提醒：若你的 Key 并发额度低，请调小或不开。
+3. **换更快的模型**（约 1.7 倍）。`flash` 12 秒/页 vs `pro` 21 秒/页（都关思维时）。
+
+**这些是云端部署级环境变量**，写在云端 `.env.local` 后需重启容器；Syllora 不会替用户改云端环境。
+命令示例见上文「端到端验证怎么做」附近的部署说明。
+
+**注意瓶颈不在网络**：实测单次普通问答 `pro` 仅 2 秒、`flash` 1 秒，同时发 6 个请求也不限流；
+服务器负载接近 0。耗时几乎全部来自模型逐页输出约 10KB 的结构化 JSON（一页含十余个画布元素）。
+
+**超时要跟着配置调。** Syllora 侧等待上限默认 120 分钟，可用
+`cloud.wait_timeout_minutes` 调整（1–1440 之间，非法值按未配置处理）。
+慢配置下 40 页要数小时，不放宽会**先于云端完成而超时**。
 
 ## 端到端验证怎么做
 
