@@ -6,7 +6,7 @@ const origin = new URL(saved.apiUrl);
 if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('Invalid review API origin');
 const config = {
   framework: null,
-  installCommand: 'pnpm install --frozen-lockfile --filter web...',
+  installCommand: 'pnpm install --frozen-lockfile --filter web... --filter @syllora/chat-service...',
   buildCommand: 'pnpm build:web',
   outputDirectory: 'apps/web/out',
   build: { env: { NEXT_PUBLIC_SYLLORA_API_URL: origin.origin, NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC: saved.publicAccess === true ? '1' : '0' } },

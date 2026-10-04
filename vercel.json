@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "installCommand": "pnpm install --frozen-lockfile --filter web...",
+  "installCommand": "pnpm install --frozen-lockfile --filter web... --filter @syllora/chat-service...",
   "buildCommand": "pnpm build:web",
   "outputDirectory": "apps/web/out",
   "build": {

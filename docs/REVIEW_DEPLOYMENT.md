@@ -72,7 +72,7 @@ pnpm build:web
 vercel deploy --prod --yes --build-env "NEXT_PUBLIC_SYLLORA_API_URL=$env:NEXT_PUBLIC_SYLLORA_API_URL" --build-env "NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC=$env:NEXT_PUBLIC_SYLLORA_REVIEW_PUBLIC"
 ```
 
-本机若没有全局 Vercel CLI，可以用已安装的 CLI 路径调用 `node <CLI路径> deploy ... --global-config <已认证目录>`。根目录 `vercel.json` 明确使用静态站点、`pnpm build:web` 和 `apps/web/out`；Vercel 构建只安装 web 所需依赖。配置参考 [Vercel 官方说明](https://vercel.com/docs/project-configuration/vercel-json)。
+本机若没有全局 Vercel CLI，可以用已安装的 CLI 路径调用 `node <CLI路径> deploy ... --global-config <已认证目录>`。根目录 `vercel.json` 明确使用静态站点、`pnpm build:web` 和 `apps/web/out`；Vercel 构建安装 web 及 chat-service 的依赖，因为阅读选区解析复用了后者的 Markdown 模块。配置参考 [Vercel 官方说明](https://vercel.com/docs/project-configuration/vercel-json)。
 
 配置生成脚本同时设置构建期 API 地址与公开模式标记；后端和前端开关须一致。若 ngrok 域名变化或切换公开模式，重新生成配置、构建并部署。若 Vercel 生产域名变化，用新的 `-FrontendOrigin` 重启后端；访问码模式需重新登录。不要把不确定的预览域名或通配域名加入允许来源。
 
