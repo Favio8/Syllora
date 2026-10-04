@@ -1,10 +1,14 @@
-# Syllora
+# AI软件赛道 - Syllora - 子非鱼
 
 **Turn every course into a learning system.**
 
 把每一门课程，变成一个会持续进化的学习系统。
 
 Syllora 是基于 StudyClaw 直接复用开发的本机 AI 学习工作台。首版提供课程与资料管理、引用问答、学习计划、单选题练习、证据状态和复习安排。当前交付为 MVP，不代表整份 PRD 的发布验收已经完成。
+
+## 在线测试
+https://syllora-review.vercel.app/
+（需开启代理）
 
 ## 下载（网盘）
 
@@ -108,8 +112,6 @@ vendor/                             保留的上游基础组件与许可
 scripts/syllora-serve.mjs           Syllora 启动入口
 ```
 
-原 StudyClaw 源码及文档保留，原 README 见 [docs/upstream/StudyClaw-README.md](docs/upstream/StudyClaw-README.md)。其 SM-2、掌握度概率、Agent 工具和桌面应用说明不代表当前 Syllora 首页的产品承诺。
-
 Syllora 使用独立的规则：两道不同题独立正确达到初步掌握，至少经过 24 小时再完成到期复测；复习间隔为 24／72／168 小时。辅助作答不计独立证据，答错后重新补强。
 
 ## 本地数据
@@ -157,9 +159,12 @@ pnpm typecheck
 pnpm test
 pnpm build:web
 ```
+## 许可与商用
+
+Syllora 是闭源商业软件：本仓库公开代码用于展示、技术评测与安全审阅，不授予复制、修改、分发或任何商业用途的许可；商业使用须取得版权人书面授权。完整条款（授权范围、禁止行为、第三方组件边界与联系方式）见 LICENSE。
 
 浏览器联调脚本 `scripts/syllora-e2e.ts` 使用明确标识的本地模型测试服务，不代表真实模型效果；产物写入外层工作区 `tmp/`。
 
 设置分为模型配置、显示与交互、数据管理（归档管理/诊断日志）；称呼与每日目标在左下角用户资料中修改。日志通过鉴权接口读取，最多七份、每份最近 256 KiB，可导出排查。桌面壳共享配置位于 `<userData>/syllora-data/.syllora/`，与课程原始资料分开保存。Anthropic Base URL 可填写 API 根地址或含 `/v1` 的地址；旧配置缺少 `protocol` 时沿用 OpenAI 兼容协议。当前 Anthropic 适配支持文本与工具调用，暂不提供图片输入及可配置扩展思考。
 
-沿用 [MIT License](LICENSE)，保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的上游归属与许可。
+
