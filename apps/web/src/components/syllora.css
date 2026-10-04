@@ -259,3 +259,18 @@
 .sy-slide-canvas{width:100%;max-width:900px;border:1px solid var(--sy-line);border-radius:8px;overflow:hidden;background:#fff}
 .sy-view-switch{display:flex;gap:6px;margin-bottom:12px}
 .sy-view-switch button.is-selected{background:var(--sy-blue);color:#fff;border-color:var(--sy-blue)}
+/* Readable code and formulas in both extracted text and DocMind layout. */
+.reading-paper pre,.reading-explanation pre{background:var(--surface-soft,#f5f7fb);border:1px solid var(--line,#e4e8f0);border-radius:8px;padding:14px 16px;margin:14px 0;max-width:100%;overflow-x:auto;white-space:pre;line-height:1.65;font-size:13px;tab-size:2}
+.reading-paper pre code,.reading-explanation pre code{font-family:Consolas,"SFMono-Regular",monospace;white-space:inherit;overflow-wrap:normal}
+.reading-paper :not(pre)>code,.reading-explanation :not(pre)>code{background:var(--surface-soft,#f5f7fb);border-radius:4px;padding:2px 4px;font-family:Consolas,monospace}
+.reading-paper .katex-display,.reading-explanation .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden;padding:8px 0}
+.sy-nw-toolbar{flex-wrap:wrap;gap:3px}
+.sy-nw-prose ul{list-style:disc}.sy-nw-prose ol{list-style:decimal}
+.sy-nw-prose blockquote{border-left:3px solid var(--sy-line);margin:12px 0;padding:2px 14px;color:var(--sy-muted)}
+.sy-nw-prose pre{background:var(--surface-soft,#f5f7fb);border:1px solid var(--sy-line);border-radius:8px;padding:12px;white-space:pre;overflow-x:auto;font:13px/1.6 Consolas,monospace}
+.sy-nw-prose :not(pre)>code{background:var(--surface-soft,#f5f7fb);padding:2px 4px;border-radius:4px;font-family:Consolas,monospace}
+.sy-nw-prose mark{background:#fff09c;color:#332b12;border-radius:2px;padding:1px 0}
+.sy-nw-prose a{color:var(--sy-blue);text-decoration:underline}.sy-nw-prose hr{border:0;border-top:1px solid var(--sy-line);margin:18px 0}
+.sy-nw-link-form{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}.sy-nw-link-form input{flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--sy-line);border-radius:6px}
+.sy-evidence-picker{position:relative}.sy-evidence-picker summary{cursor:pointer;border:1px solid var(--sy-line);border-radius:6px;padding:8px 12px;font-size:13px}
+.sy-evidence-picker[open]{flex-basis:100%}.sy-evidence-options{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:8px}.sy-evidence-options button{text-align:left;white-space:normal}

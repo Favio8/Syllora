@@ -9,13 +9,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
-import { Bold, Heading1, Heading2, LoaderCircle } from "lucide-react";
+import { Bold, Heading1, Heading2, LoaderCircle, Italic, Strikethrough, Highlighter, List, ListOrdered, Quote, Code, SquareCode, Link, Undo2, Redo2, Minus, ImagePlus } from "lucide-react";
 import { api, noteAssetUrl } from "../lib/api";
+import { NotesHighlight } from '../lib/notesHighlight';
 
 /** 相对引用 → 带 token 的完整 URL（编辑器内部显示用）。 */
 export function resolveAssets(md: string, courseId: string): string {
@@ -72,6 +73,9 @@ export default function NotesEditor({ courseId, value, noteId, onChange, onEdito
   courseRef.current = courseId;
   const [uploading, setUploading] = useState(false);
   const uploadingRef = useRef(false);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const [linkRange, setLinkRange] = useState<{ from: number; to: number } | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
 
   /** 上传一组图片并插入正文。 */
   const uploadFiles = useCallback(
@@ -102,7 +106,8 @@ export default function NotesEditor({ courseId, value, noteId, onChange, onEdito
     {
       immediatelyRender: false,
       extensions: [
-        StarterKit,
+        StarterKit.configure({ link: { openOnClick: false } }),
+        NotesHighlight,
         Image.configure({ allowBase64: false }),
         Placeholder.configure({ placeholder: "支持 Markdown；选中文字点「关联」；可直接粘贴或拖入图片。" }),
         Markdown.configure({ html: false, linkify: true, breaks: true, transformPastedText: true }),
@@ -136,6 +141,8 @@ export default function NotesEditor({ courseId, value, noteId, onChange, onEdito
     [],
   );
 
+  useEditorState({ editor, selector: ({ transactionNumber }) => transactionNumber });
+
   // 暴露给父组件（AI 续写插入、关联插入、滚动到图片）
   useEffect(() => {
     editorRef.current = editor;
@@ -145,17 +152,24 @@ export default function NotesEditor({ courseId, value, noteId, onChange, onEdito
   // 切换笔记时重设内容（不触发 onUpdate，避免误标为已修改）
   useEffect(() => {
     if (!editor) return;
+    setLinkRange(null);
     editor.commands.setContent(resolveAssets(value, courseId), { emitUpdate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId, editor]);
 
   const toolbarBtn = (active: boolean) => `sy-nw-tb${active ? " is-active" : ""}`;
+  const formatButton = (label: string, icon: ReactNode, active: boolean, run: () => void, disabled = false) =>
+    <button type="button" className={toolbarBtn(active)} title={label} aria-label={label} aria-pressed={active} disabled={!editor || disabled}
+      onMouseDown={event => event.preventDefault()} onClick={run}>{icon}</button>;
 
   return (
     <div className="sy-nw-editor-root">
       <div className="sy-nw-toolbar" role="toolbar" aria-label="格式">
         <button type="button" className={toolbarBtn(!!editor?.isActive("bold"))} title="加粗" aria-label="加粗"
           onClick={() => editor?.chain().focus().toggleBold().run()}><Bold size={15} /></button>
+        {formatButton('斜体', <Italic size={15} />, !!editor?.isActive('italic'), () => { editor?.chain().focus().toggleItalic().run(); })}
+        {formatButton('删除线', <Strikethrough size={15} />, !!editor?.isActive('strike'), () => { editor?.chain().focus().toggleStrike().run(); })}
+        {formatButton('高亮', <Highlighter size={15} />, !!editor?.isActive('highlight'), () => { editor?.chain().focus().toggleHighlight().run(); })}
         <span className="sy-nw-tool-sep" />
         <button type="button" className={toolbarBtn(!!editor?.isActive("heading", { level: 1 }))} title="一级标题" aria-label="一级标题"
           onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}><Heading1 size={15} /></button>
@@ -163,10 +177,37 @@ export default function NotesEditor({ courseId, value, noteId, onChange, onEdito
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}><Heading2 size={15} /></button>
         <button type="button" className={toolbarBtn(!!editor?.isActive("heading", { level: 3 }))} title="三级标题" aria-label="三级标题"
           onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}><span className="sy-nw-h3">H3</span></button>
+        <span className="sy-nw-tool-sep" />
+        {formatButton('无序列表', <List size={15} />, !!editor?.isActive('bulletList'), () => { editor?.chain().focus().toggleBulletList().run(); })}
+        {formatButton('有序列表', <ListOrdered size={15} />, !!editor?.isActive('orderedList'), () => { editor?.chain().focus().toggleOrderedList().run(); })}
+        {formatButton('引用', <Quote size={15} />, !!editor?.isActive('blockquote'), () => { editor?.chain().focus().toggleBlockquote().run(); })}
+        {formatButton('行内代码', <Code size={15} />, !!editor?.isActive('code'), () => { editor?.chain().focus().toggleCode().run(); })}
+        {formatButton('代码块', <SquareCode size={15} />, !!editor?.isActive('codeBlock'), () => { editor?.chain().focus().toggleCodeBlock().run(); })}
+        {formatButton('分隔线', <Minus size={15} />, false, () => { editor?.chain().focus().setHorizontalRule().run(); })}
+        {formatButton('链接', <Link size={15} />, !!editor?.isActive('link'), () => {
+          if (!editor) return; const { from, to } = editor.state.selection; setLinkRange({ from, to }); setLinkUrl(String(editor.getAttributes('link').href ?? ''));
+        })}
+        {formatButton('插入图片', <ImagePlus size={15} />, false, () => imageInput.current?.click(), uploading)}
+        {formatButton('撤销', <Undo2 size={15} />, false, () => { editor?.chain().focus().undo().run(); }, !editor?.can().undo())}
+        {formatButton('重做', <Redo2 size={15} />, false, () => { editor?.chain().focus().redo().run(); }, !editor?.can().redo())}
         {extraToolbar && <span className="sy-nw-tool-sep" />}
         {extraToolbar}
         {uploading && <span className="sy-nw-tb-busy"><LoaderCircle size={13} className="sy-spin" />图片上传中…</span>}
       </div>
+      <input ref={imageInput} type="file" accept="image/*" multiple hidden aria-label="选择笔记图片" onChange={event => { void uploadFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+      {linkRange && <form className="sy-nw-link-form" onSubmit={event => {
+        event.preventDefault(); if (!editor) return;
+        const href = linkUrl.trim();
+        if (!/^(https?:\/\/|mailto:)/i.test(href)) { onError('链接请使用 https://、http:// 或 mailto: 地址'); return; }
+        const chain = editor.chain().focus().setTextSelection(linkRange).extendMarkRange('link');
+        if (linkRange.from === linkRange.to && !editor.isActive('link')) chain.insertContent({ type: 'text', text: href, marks: [{ type: 'link', attrs: { href } }] }).run();
+        else chain.setLink({ href }).run();
+        setLinkRange(null);
+      }}>
+        <input autoFocus aria-label="链接地址" placeholder="https://example.com" value={linkUrl} onChange={event => setLinkUrl(event.target.value)} />
+        <button type="submit">应用链接</button><button type="button" onClick={() => { editor?.chain().focus().setTextSelection(linkRange).extendMarkRange('link').unsetLink().run(); setLinkRange(null); }}>移除链接</button>
+        <button type="button" onClick={() => setLinkRange(null)}>取消</button>
+      </form>}
       <EditorContent editor={editor} className="sy-nw-editor-content" />
     </div>
   );

@@ -101,3 +101,16 @@ vercel deploy --prod --yes --build-env "NEXT_PUBLIC_SYLLORA_API_URL=$env:NEXT_PU
 ## 设计参考
 
 参考 [Open WebUI 的显式认证开关](https://github.com/open-webui/open-webui/blob/main/backend/open_webui/env.py) 与 [AnythingLLM 的单用户认证中间件](https://github.com/Mintplex-Labs/anything-llm/blob/master/server/utils/middleware/validatedRequest.js)。两者均在持续维护；这里只采用可选公开模式的思路，沿用 Syllora 的 Next.js/Node 架构，不引入其依赖或复制源码。AnythingLLM 为 MIT；Open WebUI 当前不是标准 SPDX 许可证标识，因此不直接复用其实现。Syllora 要求显式设置评审公开开关，避免凭据配置缺失导致普通本机模式意外免认证。
+
+## 阅读、笔记与任务通知（2026-10-04）
+
+- 辅助阅读支持多行 `\[ … \]` 公式与 `math` 围栏，并为 PDF 提取出的 curl、JavaScript / TypeScript 代码保留等宽排版和换行；普通段落与引用原文不改写。原 PDF 若未保留公式结构，仍可通过原件预览核对。
+- 笔记继续使用 TipTap + Markdown，增加斜体、删除线、高亮（保存为 `==文字==`）、有序/无序列表、引用、行内代码、代码块、分隔线、链接、图片选择、撤销与重做。新增依赖为同版本的 `@tiptap/extension-highlight` 和 `markdown-it-mark`，用于确保高亮保存后可还原。
+- 笔记 AI 使用 8,000 tokens 输出预算，最长等待 120 秒；截断与超时分别返回 `NOTE_OUTPUT_TRUNCATED`、`NOTE_TIMEOUT`，其他生成失败返回 `NOTE_GENERATION_FAILED`。失败保留正文与输入；结果应用时通过 Markdown 解析器插入，标题、列表和代码块可继续编辑。
+- `POST /api/syllora/dismissJob` 接收 `{ payload: { courseId, jobId } }`，仅允许隐藏本课程已结束的任务通知。任务增加可选 `dismissedAt` 字段，刷新/重启后仍隐藏；任务 ID、请求 ID、结果和学习记录保留。已有 `clearJobs` 改为批量设置该字段，进行中的任务保留；旧数据无需迁移。
+- 练习依据按来源 ID 去重，多来源统一从「查看依据（N 条）」展开，以资料名和位置区分。
+- 公开评审模式的本机静态页面跳过旧的令牌换票页，与公开 API 行为保持一致；普通本机与访问码模式仍保留原鉴权。
+
+本轮验证：相关前端 25 项、后端 29 项及评审 HTTP 5 项测试通过，`pnpm typecheck`、`pnpm build:web` 通过。真实浏览器验证了现有 PDF 的 13 个代码块、笔记 Markdown 结构、高亮保存与重开，以及真实笔记 AI 返回；这些结果不代表已还原 PDF 提取时丢失的公式语义。
+
+编辑器方案参考：[TipTap](https://github.com/ueberdosis/tiptap)、[Milkdown](https://github.com/Milkdown/milkdown)、[Slate](https://github.com/ianstormtaylor/slate)（均为 MIT，2026-10-04 查询时近期仍有更新）。继续沿用现有 TipTap 的 ProseMirror 扩展机制；Milkdown 的 Markdown 优先架构与 Slate 的自定义编辑模型都需要迁移现有编辑器、选区与图片逻辑，本次不迁移。

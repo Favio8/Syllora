@@ -19,7 +19,7 @@ export interface SylloraState {
   uiPreferences?:{name:string;theme:'light'|'dark';dailyMinutes:number;revision:number};
   activity?:Array<{id:string;courseId:string;at:number;kind:'task'|'chat'|'reading';minutes:number;taskId?:string;planVersion:number}>;
   courses:CourseView[];
-  jobs:Array<{requestId?:string;resultMessageId?:string;id:string;courseId:string;state:string;message:string;model:string;calls:number;inputTokens:number|null;outputTokens:number|null;progress?:{stage:string;done:number;total:number;failures:string[];etaMs?:number};coverage?:JobCoverage|null;createdAt?:number;finishedAt?:number|null;elapsedMs?:number|null;promptVersion?:string;ruleVersion?:string;errorCode?:string|null;usageKnownCalls?:{input:number;output:number};classroomId?:string}>;
+  jobs:Array<{dismissedAt?:number;requestId?:string;resultMessageId?:string;id:string;courseId:string;state:string;message:string;model:string;calls:number;inputTokens:number|null;outputTokens:number|null;progress?:{stage:string;done:number;total:number;failures:string[];etaMs?:number};coverage?:JobCoverage|null;createdAt?:number;finishedAt?:number|null;elapsedMs?:number|null;promptVersion?:string;ruleVersion?:string;errorCode?:string|null;usageKnownCalls?:{input:number;output:number};classroomId?:string}>;
   settings:{consent:boolean;calls:number};
   projects?:Array<{id:string;path:string;name:string;error:string|null;deletion?:'pending'|'failed'}>;
   legacyCourses?:Array<{id:string;name:string;points:number}>;

@@ -427,7 +427,7 @@ describe('虚拟课堂：增量取场景、删除、清除历史任务', () => {
     await expect(projects.classroomDelete(s.id, 'stage-ABC123', false)).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 
-  it('clears finished jobs only, per course or globally', async () => {
+  it('dismisses finished job notifications while retaining recovery records', async () => {
     const base = await startCloud()
     const s = await setup({ cloud: cloudConfig(base) })
     const projects = s.projects
@@ -440,8 +440,8 @@ describe('虚拟课堂：增量取场景、删除、清除历史任务', () => {
     expect(before.jobs.some(job => job.id === first.jobId && job.state === 'succeeded')).toBe(true)
     const cleared = await projects.handle('clearJobs', { courseId: s.id }) as { cleared: number }
     expect(cleared.cleared).toBeGreaterThanOrEqual(1)
-    const after = await projects.handle('state', {}) as { jobs: Array<{ id: string }> }
-    expect(after.jobs.some(job => job.id === first.jobId)).toBe(false)
+    const after = await projects.handle('state', {}) as { jobs: Array<{ id: string; dismissedAt?: number }> }
+    expect(after.jobs.find(job => job.id === first.jobId)?.dismissedAt).toBeGreaterThan(0)
     // 全局清除（不带 courseId）也要能跑。
     expect((await projects.handle('clearJobs', {}) as { cleared: number }).cleared).toBe(0)
   })
@@ -470,3 +470,21 @@ describe('虚拟课堂：音频读取边界', () => {
     expect(requests).toHaveLength(count)
   })
 })
+
+describe('任务通知持久化', () => {
+  it('dismisses only the selected course job and survives reopening without losing the result', async () => {
+    const base = await startCloud(); const s = await setup({ cloud: cloudConfig(base) });
+    const input = { courseId: s.id, requestId: randomUUID(), requirement: '生成本章课堂', materialIds: [], attachmentIds: [], roles: [] };
+    const first = await s.projects.handle('classroom/generate', input) as { jobId: string };
+    await expect(s.projects.handle('dismissJob', { courseId: s.id, jobId: first.jobId })).rejects.toMatchObject({ code: 'JOB_RUNNING' });
+    await waitForJob(s.projects, s.id, first.jobId, state => state.status === 'succeeded');
+    await s.projects.settleJobs(() => true);
+    await expect(s.projects.handle('dismissJob', { courseId: randomUUID(), jobId: first.jobId })).rejects.toThrow();
+    await expect(s.projects.handle('dismissJob', { courseId: s.id, jobId: first.jobId })).resolves.toEqual({ dismissed: true });
+    const restored = new SylloraProjects(s.app, { cloud: cloudConfig(base) });
+    const state = await restored.handle('state', {}) as { jobs: Array<{ id: string; dismissedAt?: number }> };
+    expect(state.jobs.find(job => job.id === first.jobId)?.dismissedAt).toBeGreaterThan(0);
+    expect((await restored.classroomList(s.id)).classrooms).toHaveLength(1);
+    expect((await restored.handle('classroom/generate', input) as { jobId: string }).jobId).toBe(first.jobId);
+  });
+});

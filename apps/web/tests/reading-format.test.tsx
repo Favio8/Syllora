@@ -100,3 +100,28 @@ describe('B11：渲染辅助', () => {
     expect(tree.children[0]).toEqual({ type: 'code', value: 'a\nb', children: [] })
   })
 })
+
+describe('阅读公式与 PDF 代码回归', () => {
+  it('renders multiline bracket math and a math fence while preserving normal code', async () => {
+    withDocument({ ...base, sources: [
+      { id: 's1', kind: 'paragraph', text: '\\[\nA = \\begin{pmatrix}1&0\\\\0&1\\end{pmatrix}\n\\]' },
+      { id: 's2', kind: 'code', text: '```math\nx^2 + y^2 = z^2\n```' },
+      { id: 's3', kind: 'code', text: '```js\nconst x = "\\(literal\\)";\n```' },
+    ] } as unknown as Omit<ReadingDocument, 'courseId'>);
+    const { container } = render(<ReadingWorkspace {...props()} />);
+    await screen.findByLabelText('资料正文');
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(2);
+    expect(container.querySelector('pre code')).toHaveTextContent('const x = "\\(literal\\)";');
+  });
+  it('recognizes extracted curl and TypeScript without treating prose as code', async () => {
+    withDocument({ ...base, sources: [
+      { id: 's1', kind: 'paragraph', text: 'curl --request POST \\\n--url "${BASE_URL}/responses" \\\n--header "content-type: application/json"' },
+      { id: 's2', kind: 'paragraph', text: '// 说明\nconst result = run();\nreturn result;\n}' },
+      { id: 's3', kind: 'paragraph', text: '普通解释\n这一段介绍代码用途。' },
+    ] } as unknown as Omit<ReadingDocument, 'courseId'>);
+    const { container } = render(<ReadingWorkspace {...props()} />);
+    await screen.findByText(/普通解释/);
+    expect(container.querySelectorAll('pre code')).toHaveLength(2);
+    expect(container.querySelector('pre code')?.textContent).toContain('\n--url');
+  });
+});

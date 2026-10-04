@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects } from '../src/syllora-projects.ts'
 
 /**
@@ -14,14 +15,14 @@ afterEach(async () => { for (const root of roots.splice(0)) { if (!root.startsWi
 
 interface Note { id: string; title: string; wikilinks: string[]; createdAt: number; updatedAt: number }
 
-async function setup(options: { withModel?: boolean } = {}) {
+async function setup(options: { withModel?: boolean; client?: StructuredCallClient } = {}) {
   await mkdir(temp, { recursive: true })
   const root = await mkdtemp(join(temp, 'case-')), folder = join(root, 'course')
   roots.push(root)
   await mkdir(folder)
   // 笔记 AI 的入参校验发生在模型调用之前：给一个"看起来已配置"的 config 就能单独测校验分支。
   const projects = new SylloraProjects(join(root, 'app'), options.withModel
-    ? { config: async () => ({ providerId: 'fixture', model: 'fixture-model', baseUrl: 'http://127.0.0.1:9/v1', protocol: 'openai' as const, apiKey: 'fixture', apiKeyEnv: null, temperature: 0.3, maxConcurrency: 1, defaultMode: 'quick' as const }) }
+    ? { ...(options.client ? { client: () => options.client! } : {}), config: async () => ({ providerId: 'fixture', model: 'fixture-model', baseUrl: 'http://127.0.0.1:9/v1', protocol: 'openai' as const, apiKey: 'fixture', apiKeyEnv: null, temperature: 0.3, maxConcurrency: 1, defaultMode: 'quick' as const }) }
     : {})
   const opened = await projects.handle('openCourse', { path: folder }) as { id: string }
   return { root, folder, projects, id: opened.id }
@@ -135,5 +136,28 @@ describe('note write recovery and concurrency',()=>{
     await writeFile(join(s.folder,'notes','index.json'),'[]');
     expect((await list(s)).map(item=>item.id)).toContain(note.id);
     expect(JSON.parse(await readFile(join(s.folder,'notes','index.json'),'utf8'))).toHaveLength(1);
+  });
+});
+
+describe('笔记 AI 输出', () => {
+  it('allows a complete structured Markdown response beyond the old length limit', async () => {
+    const text = '## 扩写\n\n' + '完整讲解。'.repeat(900) + '\n\n```js\nconst x = 1;\n```';
+    const s = await setup({ withModel: true, client: { async *stream(options) {
+      expect(options.maxTokens).toBeGreaterThanOrEqual(8000);
+      yield { type: 'text-delta', text: JSON.stringify({ text, sourceIds: [] }) };
+    } } });
+    const note = await create(s, '笔记'); const before = await readFile(notePath(s, note.id), 'utf8');
+    const result = await s.projects.handle('notes/suggest', { courseId: s.id, action: 'expand', selection: '解释基础概念', body: '解释基础概念' }) as { text: string };
+    expect(result.text).toBe(text);
+    expect(await readFile(notePath(s, note.id), 'utf8')).toBe(before);
+  });
+  it('reports provider truncation specifically and does not modify the note', async () => {
+    const s = await setup({ withModel: true, client: { async *stream() {
+      yield { type: 'text-delta', text: '{"text":"未完成' };
+      yield { type: 'finish', reason: { kind: 'max-tokens' } };
+    } } });
+    const note = await create(s, '笔记'); const before = await readFile(notePath(s, note.id), 'utf8');
+    await expect(s.projects.handle('notes/suggest', { courseId: s.id, action: 'expand', selection: '基础概念' })).rejects.toMatchObject({ code: 'NOTE_OUTPUT_TRUNCATED' });
+    expect(await readFile(notePath(s, note.id), 'utf8')).toBe(before);
   });
 });

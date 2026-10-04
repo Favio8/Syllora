@@ -23,6 +23,7 @@ export interface TasksPageProps {
   onOpenFailures?: (courseId: string) => void;
   /** 清除历史任务（只清已结束的；进行中保留）。 */
   onClear?: () => void;
+  onDismiss?: (jobId: string) => void;
 }
 
 const STAGE: Record<string, string> = { organizing: '整理', parsing: '解析', scanning: '扫描' };
@@ -38,7 +39,8 @@ function formatElapsed(ms?: number | null): string {
   return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
 }
 
-export default function TasksPage({ jobs, courseName, onCancel, onOpenFailures, onClear }: TasksPageProps) {
+export default function TasksPage({ jobs: allJobs, courseName, onCancel, onOpenFailures, onClear, onDismiss }: TasksPageProps) {
+  const jobs = allJobs.filter(job => !job.dismissedAt);
   // 进行中的排最前，其余按创建时间倒序（最新的在上）。
   const sorted = [...jobs].sort((a, b) => {
     const ra = a.state === 'running' ? 0 : 1;
@@ -52,7 +54,7 @@ export default function TasksPage({ jobs, courseName, onCancel, onOpenFailures, 
     <div className="catalog-intro">
       <div className="eyebrow">任务</div>
       <div className="tasks-head-row">
-        <h1>{running > 0 ? `${running} 个任务进行中` : failed > 0 ? `${failed} 个任务需要处理` : jobs.length ? '所有任务已完成' : '暂无任务'}</h1>
+        <h1>{running > 0 ? `${running} 个任务进行中` : failed > 0 ? `${failed} 个任务需要处理` : jobs.length ? '所有任务已结束' : '暂无任务'}</h1>
         {onClear && jobs.some(job => job.state !== 'running') && <button type="button" className="button small" onClick={onClear}><Trash2 size={14} />清除历史任务</button>}
       </div>
     </div>
@@ -92,6 +94,7 @@ export default function TasksPage({ jobs, courseName, onCancel, onOpenFailures, 
               </ul>}
             </div>
             <div className="task-card-actions">
+              {job.state !== 'running' && onDismiss && <button type="button" className="button" aria-label={`删除${courseName(job.courseId)}的任务通知`} onClick={() => onDismiss(job.id)}><Trash2 size={14} />删除通知</button>}
               {job.state === 'running' && <button type="button" className="button" onClick={() => onCancel(job.id)}>取消</button>}
               {job.state === 'failed' && onOpenFailures && <button type="button" className="button" onClick={() => onOpenFailures(job.courseId)}>查看失败页</button>}
             </div>

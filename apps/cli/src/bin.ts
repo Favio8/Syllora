@@ -595,8 +595,8 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   // 链接，页面从终端登录链接取得凭据并换取 HttpOnly 会话 Cookie。
   const staticHost: StaticHost | null = await createStaticHost({
     root: webDistRoot(),
-    bootstrap: token === null ? null : sessionHandshakeBootstrap('/api/session'),
-    bootstrapPage: token === null ? null : sessionBootstrapPage(bootstrapNonce),
+    bootstrap: token === null || review?.publicAccess ? null : sessionHandshakeBootstrap('/api/session'),
+    bootstrapPage: token === null || review?.publicAccess ? null : sessionBootstrapPage(bootstrapNonce),
   })
   const ctx = new Context()
   await ctx.plugin(Storage)

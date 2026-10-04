@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,7 @@ let root: string, child: ChildProcess, base: string, token: string
 async function start(publicAccess = false) {
   child = spawn(process.execPath, ['--import', 'tsx', 'apps/cli/src/bin.ts', 'serve', '--port', '0'], {
     cwd: repo, windowsHide: true, stdio: 'ignore',
-    env: { ...process.env, SYLLORA_SKIP_DEMO_SEED: '1', TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_REVIEW_PUBLIC: publicAccess ? '1' : '0', SYLLORA_ALLOWED_ORIGINS: origin },
+    env: { ...process.env, SYLLORA_WEB_DIST: join(root, 'web'), SYLLORA_SKIP_DEMO_SEED: '1', TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_REVIEW_PUBLIC: publicAccess ? '1' : '0', SYLLORA_ALLOWED_ORIGINS: origin },
   })
   for (let n = 0; n < 200; n++) {
     const state = await readFile(join(root, 'home', 'host.json'), 'utf8').then(JSON.parse).catch(() => null)
@@ -28,9 +28,15 @@ async function stop() {
 function post(method: string, payload: unknown, credential = token) {
   return fetch(`${base}/api/${method}`, { method: 'POST', headers: { Origin: origin, Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ payload }) })
 }
-beforeAll(async () => { root = await mkdtemp(join(tmpdir(), 'syllora-review-http-')); await start() })
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), 'syllora-review-http-'))
+  await mkdir(join(root, 'web'))
+  await writeFile(join(root, 'web', 'index.html'), '<html><head></head><body>review-app-fixture</body></html>')
+  await start()
+})
 afterAll(async () => { await stop(); if (root) await rm(root, { recursive: true, force: true }) })
 it('enforces exact CORS, bearer and Secure cookie authentication', async () => {
+  expect(await fetch(base).then(r => r.text())).not.toContain('review-app-fixture')
   const options = await fetch(`${base}/api/syllora/state`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Headers': 'Authorization,ngrok-skip-browser-warning,x-material-filename' } })
   expect(options.status).toBe(204)
   expect(options.headers.get('Access-Control-Allow-Origin')).toBe(origin)
@@ -83,6 +89,9 @@ it('does not cache authenticated review note assets', async () => {
 })
 it('explicitly opens business and supplier management without credentials while preserving boundaries', async () => {
   await stop(); await start(true)
+  const html = await fetch(base).then(r => r.text())
+  expect(html).toContain('review-app-fixture')
+  expect(html).not.toContain('本地访问令牌')
   const session = await fetch(`${base}/api/session`, { method: 'POST', headers: { Origin: origin } })
   expect(await session.json()).toEqual({ ok: true, session: 'public' })
   expect(session.headers.get('Set-Cookie')).toBeNull()

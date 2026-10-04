@@ -25,3 +25,10 @@ describe("公式渲染（KaTeX）", () => {
     expect(container.textContent ?? "").toContain("后面还有正文");
   });
 });
+
+it('keeps inline code and nested fence examples literal when normalizing math', () => {
+  const { container } = render(<MarkdownView content={'`\\(literal\\)`\n\n````markdown\n```js\n$$literal$$\n```\n````\n\n\\[\nx^2\n\\]'} />);
+  expect(container.querySelectorAll('.katex-display')).toHaveLength(1);
+  expect(container.querySelector('pre')?.textContent).toContain('$$literal$$');
+  expect(container.querySelector('code')?.textContent).toBe('\\(literal\\)');
+});

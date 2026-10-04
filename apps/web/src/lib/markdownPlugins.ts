@@ -32,13 +32,21 @@ export const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginProps['rehypePlugins'] = [[r
 export function normalizeMathDelimiters(markdown: string): string {
   if (!markdown.includes('$$') && !markdown.includes('\\(') && !markdown.includes('\\[')) return markdown;
   const out: string[] = [];
-  let fence = false;
+  let fence: { char: string; size: number } | null = null;
   for (const line of markdown.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) { fence = !fence; out.push(line); continue }
-    if (fence) { out.push(line); continue }
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      out.push(line);
+      if (marker && marker[1]![0] === fence.char && marker[1]!.length >= fence.size && marker[2]!.trim() === '') fence = null;
+      continue;
+    }
+    if (marker) { fence = { char: marker[1]![0]!, size: marker[1]!.length }; out.push(line); continue }
+    if (/^\s*\\[\[\]]\s*$/.test(line)) { out.push('$$'); continue }
     const single = /^\s*\$\$(.+?)\$\$\s*$/.exec(line) ?? /^\s*\\\[(.+?)\\\]\s*$/.exec(line);
     if (single) { out.push('$$', single[1]!, '$$'); continue }
-    out.push(line.replace(/\\\((.+?)\\\)/g, (_whole, body: string) => `$${body}$`));
+    // Backtick spans are literal examples, including math-looking text inside them.
+    const spans = line.split(/(`+[^`]*`+)/g);
+    out.push(spans.map(part => part.startsWith('`') ? part : part.replace(/\\\((.+?)\\\)/g, (_whole, body: string) => `$${body}$`)).join(''));
   }
   return out.join('\n');
 }

@@ -10,7 +10,7 @@ import { MaterialPreview } from '../../../components/syllora-project-ui';
 import type { Course, ReadingAssistance, ReadingDocument } from '@/src/features/workbench/types';
 import { readingService } from '@/src/features/workbench/services';
 import { api, materialDocumentUrl } from '@/src/lib/api';
-import { remarkSoftBreaks, splitFence } from '@/src/features/workbench/reading-format';
+import { looksLikeExtractedCode, remarkSoftBreaks, splitFence } from '@/src/features/workbench/reading-format';
 
 /**
  * B11：按后端给出的 `kind` 分支渲染正文。
@@ -27,7 +27,7 @@ import { remarkSoftBreaks, splitFence } from '@/src/features/workbench/reading-f
 const READING_REMARK_PLUGINS = [...(MARKDOWN_REMARK_PLUGINS ?? []), remarkSoftBreaks];
 
 function SourceBody({ text, kind }: { text: string; kind?: string }) {
-  if (kind === 'code') {
+  if ((kind === 'code' && !/^\s*`{3,}math\s*\n/.test(text)) || ((!kind || kind === 'paragraph') && looksLikeExtractedCode(text))) {
     const { language, code } = splitFence(text);
     return <pre className="reading-code"><code className={language ? `language-${language}` : undefined}>{code}</code></pre>;
   }

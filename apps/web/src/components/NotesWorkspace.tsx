@@ -41,29 +41,6 @@ const AI_ACTIONS: Array<{ id: NoteAiAction; label: string; tip: string }> = [
   { id: "shorten", label: "精简", tip: "删冗余、保留关键信息（需选中）" },
 ];
 
-/** 把纯文本产物转成块级节点：空行分段，连续 `- ` 行成项目符号列表。
- *  直接插入字符串会被当成一个文本节点，多段内容会塌成一段。 */
-function textToContent(text: string): Array<Record<string, unknown>> {
-  const nodes: Array<Record<string, unknown>> = [];
-  const paragraph = (line: string) => ({ type: "paragraph", content: line === "" ? [] : [{ type: "text", text: line }] });
-  for (const block of text.split(/\n{2,}/).map((item) => item.trim()).filter((item) => item !== "")) {
-    let bullets: string[] = [];
-    const flush = () => {
-      if (bullets.length === 0) return;
-      nodes.push({ type: "bulletList", content: bullets.map((item) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: item }] }] })) });
-      bullets = [];
-    };
-    for (const line of block.split("\n")) {
-      const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-      if (bullet) { bullets.push(bullet[1]!.trim()); continue }
-      flush();
-      nodes.push(paragraph(line));
-    }
-    flush();
-  }
-  return nodes.length > 0 ? nodes : [paragraph(text)];
-}
-
 const formatUpdated = (at: number) => new Date(at).toLocaleString("zh-CN", { hour12: false });
 
 export default function NotesWorkspace({ courseId, courseName, onClose, onSwitchMode, courses = [], onSwitchCourse }: Props) {
@@ -330,9 +307,9 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
         setError("原文已变化，请重新选中后再试");
         return;
       }
-      ed.chain().focus().insertContentAt({ from: target.from, to: target.to }, textToContent(aiResult.text)).run();
+      ed.chain().focus().insertContentAt({ from: target.from, to: target.to }, aiResult.text).run();
     } else {
-      ed.chain().focus().insertContent(textToContent(aiResult.text)).run();
+      ed.chain().focus().insertContent(aiResult.text).run();
     }
     setAiResult(null);
   };

@@ -17,12 +17,26 @@
 
 const FENCE_RE = /^\s*(`{3,}|~{3,})\s*([^\s`]*)\s*$/
 
+/** PDF text extraction may discard Markdown fences; recognize strong code signatures only. */
+export function looksLikeExtractedCode(text: string): boolean {
+  const lines = text.trim().split(/\r?\n/)
+  if (lines.length < 2) return false
+  if (/^curl\s+(?:--|https?:)/.test(lines[0]!)) return true
+  const start = /^\s*(?:\/\/|(?:export\s+)?(?:async\s+)?function\b|(?:const|let|var|import|class)\s+|return\s+\w+[.(])/.test(lines[0]!)
+  const signals = lines.filter(line => /^\s*(?:\/\/|(?:const|let|var|return|await|async|function|if|for)\b|[{}][,;]?\s*$)/.test(line)).length
+  return start && signals >= 3
+}
+
 /** 拆掉代码围栏行，返回语言与正文。围栏缺失时原样返回（防御性）。 */
 export function splitFence(text: string): { language: string; code: string } {
   const lines = text.split(/\r?\n/)
   while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
   const match = FENCE_RE.exec(lines[0] ?? '')
-  if (!match) return { language: '', code: lines.join('\n') }
+  if (!match) {
+    // Long code blocks are split into source chunks; a continuation may contain only the closing fence.
+    if (/^\s*(?:`{3,}|~{3,})\s*$/.test(lines.at(-1) ?? '')) lines.pop()
+    return { language: '', code: lines.join('\n') }
+  }
   const character = match[1]![0]!
   const length = match[1]!.length
   let body = lines.slice(1)

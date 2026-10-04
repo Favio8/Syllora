@@ -124,6 +124,9 @@ importers:
       '@openmaic/renderer':
         specifier: 0.1.11
         version: 0.1.11(echarts@6.1.0)(motion@13.5.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(shiki@4.5.0)(tailwindcss@4.3.3)
+      '@tiptap/extension-highlight':
+        specifier: 3.31.4
+        version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))
       '@tiptap/extension-image':
         specifier: ^3.31.4
         version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))
@@ -160,6 +163,9 @@ importers:
       lucide-react:
         specifier: ^1.33.0
         version: 1.33.0(react@19.2.8)
+      markdown-it-mark:
+        specifier: 4.0.0
+        version: 4.0.0
       mind-elixir:
         specifier: 5.15.0
         version: 5.15.0
@@ -2101,6 +2107,11 @@ packages:
     peerDependencies:
       '@tiptap/core': 3.31.4
       '@tiptap/pm': 3.31.4
+
+  '@tiptap/extension-highlight@3.31.4':
+    resolution: {integrity: sha512-mv6h1eJTp6nZ850JB59T/o6AP/nAVP/GrQwhSTM2eeegcKUn7IdeerPZfvkZbYlvV5ilGPAoSOmYtWW7ZiEkmQ==}
+    peerDependencies:
+      '@tiptap/core': 3.31.4
 
   '@tiptap/extension-image@3.31.4':
     resolution: {integrity: sha512-vtD+rK73abJnPRKOjU37sQTCa5Auyg451yhqZD/3lZKiFJDBHAZKI7lQARkXBQYK289hBhK6yMIwofoqCBvi3g==}
@@ -4448,6 +4459,9 @@ packages:
 
   markdown-it-task-lists@2.1.1:
     resolution: {integrity: sha512-TxFAc76Jnhb2OUu+n3yz9RMu4CwGfaT788br6HhEDlvWfdeJcLUsxk1Hgw2yJio0OXsxv7pyIPmvECY7bMbluA==}
+
+  markdown-it-mark@4.0.0:
+    resolution: {integrity: sha512-YLhzaOsU9THO/cal0lUjfMjrqSMPjjyjChYM7oyj4DnyaXEzA8gnW6cVJeyCrCVeyesrY2PlEdUYJSPFYL4Nkg==}
 
   markdown-it@14.3.2:
     resolution: {integrity: sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==}
@@ -7437,6 +7451,10 @@ snapshots:
       '@tiptap/core': 3.31.4(@tiptap/pm@3.31.4)
       '@tiptap/pm': 3.31.4
 
+  '@tiptap/extension-highlight@3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))':
+    dependencies:
+      '@tiptap/core': 3.31.4(@tiptap/pm@3.31.4)
+
   '@tiptap/extension-image@3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))':
     dependencies:
       '@tiptap/core': 3.31.4(@tiptap/pm@3.31.4)
@@ -10171,6 +10189,8 @@ snapshots:
       xmlbuilder: 10.1.1
 
   markdown-it-task-lists@2.1.1: {}
+
+  markdown-it-mark@4.0.0: {}
 
   markdown-it@14.3.2:
     dependencies:

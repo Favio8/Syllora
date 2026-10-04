@@ -30,7 +30,7 @@ export default function NotificationCapsule({ jobs, active = false, onOpen }: No
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
 
   const running = jobs.filter(job => job.state === 'running');
-  const failed = jobs.filter(job => job.state === 'failed');
+  const failed = jobs.filter(job => job.state === 'failed' && !job.dismissedAt);
   const first = running[0]?.progress;
   const summary = running.length > 0
     ? `${running.length > 1 ? `${running.length} 个任务进行中` : '整理中'}${first ? ` ${first.done}/${first.total}` : ''}`
