@@ -39,10 +39,10 @@ describe('cloud.wait_timeout_minutes 解析', () => {
     return loadChatConfig(root)
   }
 
-  it('配好 base_url 与 access_code 时启用幻灯片并带上毫秒上限', async () => {
-    const config = await make(45)
+  it.each([1, 45, 1440])('合法值 %s 分钟启用幻灯片并带上毫秒上限', async minutes => {
+    const config = await make(minutes)
     expect(config.slides).toBe(true)
-    expect(config.cloud?.waitTimeoutMs).toBe(45 * 60_000)
+    expect(config.cloud?.waitTimeoutMs).toBe(minutes * 60_000)
   })
 
   it('未配置时退回客户端默认（不带 waitTimeoutMs）', async () => {
@@ -52,7 +52,7 @@ describe('cloud.wait_timeout_minutes 解析', () => {
   })
 
   it('非法值按未配置处理，而不是变成 0 或 NaN 导致立刻超时', async () => {
-    for (const bad of [0, -5, Number.NaN, '30', null, 24 * 60 + 1]) {
+    for (const bad of [0, 0.5, 1e-12, -5, Number.NaN, Number.POSITIVE_INFINITY, '30', null, 24 * 60 + 1]) {
       const config = await make(bad)
       expect(config.cloud?.waitTimeoutMs, `输入 ${String(bad)}`).toBeUndefined()
     }

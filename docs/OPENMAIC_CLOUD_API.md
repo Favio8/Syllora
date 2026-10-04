@@ -63,7 +63,7 @@ GET /api/access-code/status
 POST /api/access-code/verify
 content-type: application/json
 
-{ "code": "VrkmT41PmBbZPt6iIn1wICck" }
+{ "code": "<站点访问口令>" }
 ```
 
 响应：
@@ -236,7 +236,7 @@ Syllora 的做法是累计连续失败超过 10 次才放弃，但 4xx（如口�
 **不影响讲义发布**，下次初始化会重新生成（成功过的章节走缓存不重算）。
 
 > 排查这一条时顺带确认了资源不是瓶颈：3.5 GB 内存的机器上容器只占约 145 MB（4%），
-> `RestartCount=0`、`OOMKilled=false`、无内核 OOM 记录。**并发不会把服务器压垮**。
+> `RestartCount=0`、`OOMKilled=false`、无内核 OOM 记录。该次测试未发现资源耗尽；更高并发仍需按实际负载验证。
 
 ---
 

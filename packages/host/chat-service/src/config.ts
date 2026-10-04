@@ -248,7 +248,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
   // 所以允许配置；非法值（0、负数、非数、超过一天）按「未配置」处理，用客户端默认值。
   const waitMinutesRaw = config.cloud?.wait_timeout_minutes
   const waitTimeoutMs = typeof waitMinutesRaw === 'number' && Number.isFinite(waitMinutesRaw)
-    && waitMinutesRaw > 0 && waitMinutesRaw <= 24 * 60
+    && waitMinutesRaw >= 1 && waitMinutesRaw <= 24 * 60
     ? Math.round(waitMinutesRaw * 60_000)
     : null
   const cloud = await resolveCloudBlock(workspaceRoot, config)

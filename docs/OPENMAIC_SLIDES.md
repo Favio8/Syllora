@@ -72,7 +72,7 @@ grep '^ACCESS_CODE=' /opt/openmaic/.env.local | cut -d= -f2-
 ```
 
 > 若云端 `.env.local` 没设 `ACCESS_CODE`，门禁是关闭的——任何人都能访问，
-> 此时本地也要把 `access_code` 填成同一个空值才连得上（但不该这样上公网）。
+> 当前 Syllora 要求非空访问口令；请先在云端设置 `ACCESS_CODE`，再填写本机连接配置。
 
 ### 第 2 步：本地填 `config.yaml`
 
@@ -86,8 +86,8 @@ cloud:
   access_code: <第 1 步取到的值>
 ```
 
-**注意作用范围**：`config.yaml` 在**课程目录**下。多个课程要各自配一份；
-放在上级目录的共享配置不会自动带下来。
+**注意作用范围**：也可通过设置页保存共享云端连接，虚拟课堂会在课程未配置时回落到共享设置。
+手写课程 `config.yaml` 时须核对实际生效配置；讲义初始化的配置选择还取决于课程是否配置了自己的模型。
 
 ### 第 3 步：确认真的连上了
 
@@ -152,7 +152,7 @@ cloud:
   api_key: <你的 DeepSeek Key>
 ```
 
-云端同时开这三个提速开关（写在云端 `.env.local`，改完要重启容器）：
+云端同时开这两个提速开关（写在云端 `.env.local`，改完要重启容器）：
 
 ```bash
 PARALLEL_SCENE_CONCURRENCY=4
