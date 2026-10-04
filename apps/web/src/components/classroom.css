@@ -1,0 +1,271 @@
+/**
+ * 虚拟课堂样式（本项目新增）。
+ *
+ * 上游工作台的规则都是无层样式，特异性也各不相同；这里把课堂整体包在 `.sy-classroom`
+ * 岛内，除了岛自身的排版，只覆写必要的上游规则，避免污染主应用（与 agent-chat.css 同一策略）。
+ * 深色主题走主应用的 `<html data-theme="dark">`。
+ */
+
+.sy-classroom {
+  --cl-line: var(--border-line, rgba(0, 0, 0, 0.1));
+  --cl-faint: var(--text-faint, rgba(20, 20, 25, 0.55));
+  --cl-primary: var(--accent-focus, #2f6bff);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 18px 22px 26px;
+  overflow-y: auto;
+}
+.sy-classroom h1 { font-size: 20px; margin: 2px 0 0; }
+.sy-classroom h2 { font-size: 15px; margin: 0; }
+.sy-classroom .cl-muted { color: var(--cl-faint); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.sy-classroom .cl-error {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0; padding: 8px 10px; border-radius: 9px;
+  border: 1px solid rgba(226, 82, 82, 0.4); background: rgba(226, 82, 82, 0.08);
+  font-size: 12.5px; color: #b23a3a;
+}
+.sy-classroom .cl-ok { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #1a8f5a; }
+.sy-classroom .cl-bad { font-size: 12.5px; color: #b23a3a; }
+
+/* 任务页标题行（「清除历史任务」按钮） */
+.tasks-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* ---- 顶部 ---- */
+.cl-head { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; }
+.cl-head-main { min-width: 0; }
+.cl-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; letter-spacing: 0.06em; color: var(--cl-faint); text-transform: uppercase; }
+.cl-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--cl-faint); }
+.cl-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cl-status { font-size: 12px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--cl-line); color: var(--cl-faint); }
+.cl-status.is-ok { border-color: rgba(26, 143, 90, 0.45); color: #1a8f5a; }
+.cl-status.is-off { border-color: rgba(214, 150, 36, 0.5); color: #a9741a; }
+
+.cl-empty { margin: auto; text-align: center; color: var(--cl-faint); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cl-empty h2 { font-size: 17px; color: var(--text-primary, #1c1c22); }
+.cl-empty code { font-size: 12px; background: rgba(0, 0, 0, 0.05); padding: 1px 5px; border-radius: 5px; }
+
+/* ---- 输入卡片 + 列表 ---- */
+/* 课堂列表位于生成卡下方（单列堆叠）；卡片占满宽度，列表用自适应卡片网格排布。 */
+.cl-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.cl-card {
+  border: 1px solid var(--cl-line); border-radius: 16px; padding: 16px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.7));
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 12px 32px -26px rgba(20, 20, 40, 0.5);
+}
+.cl-card-top { display: flex; align-items: center; gap: 10px; }
+.cl-avatar {
+  width: 38px; height: 38px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(47, 107, 255, 0.12); color: var(--cl-primary);
+}
+.cl-nick input, .cl-persona input {
+  height: 38px; border-radius: 999px; padding: 0 14px; font-size: 13px;
+  border: 1px solid var(--cl-line); background: transparent; color: inherit; outline: none;
+}
+.cl-nick input { width: 150px; font-weight: 600; }
+.cl-persona { flex: 1; min-width: 0; }
+.cl-persona input { width: 100%; }
+.cl-nick input:focus, .cl-persona input:focus, .cl-card textarea:focus { border-color: var(--cl-primary); }
+
+.cl-field { display: block; }
+.cl-card textarea {
+  width: 100%; resize: vertical; min-height: 96px;
+  border: 1px solid var(--cl-line); border-radius: 14px; padding: 12px 14px;
+  font-size: 14px; line-height: 1.6; background: transparent; color: inherit; outline: none;
+}
+.cl-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -6px; }
+.cl-example {
+  border: 1px dashed var(--cl-line); border-radius: 999px; padding: 4px 10px;
+  font-size: 12px; color: var(--cl-faint); background: transparent; cursor: pointer;
+}
+.cl-example:hover { color: var(--cl-primary); border-color: var(--cl-primary); }
+
+.cl-roles, .cl-materials { display: flex; flex-direction: column; gap: 8px; }
+.cl-roles { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.cl-roles-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cl-faint); }
+.cl-role {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--cl-line); border-radius: 999px; padding: 3px 9px; font-size: 12px;
+}
+.cl-role.is-on { border-color: var(--cl-primary); }
+.cl-role.is-fixed { background: rgba(47, 107, 255, 0.07); }
+.cl-role button {
+  display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent;
+  font-size: 12px; color: inherit; cursor: pointer; padding: 0;
+}
+.cl-role select {
+  border: 1px solid var(--cl-line); border-radius: 999px; font-size: 11.5px;
+  background: transparent; color: inherit; padding: 1px 4px; max-width: 132px;
+}
+.cl-role select:disabled { opacity: 0.55; }
+
+.cl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--cl-line); border-radius: 999px; padding: 4px 10px;
+  font-size: 12px; background: transparent; color: inherit; cursor: pointer; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-chip.is-on { border-color: var(--cl-primary); color: var(--cl-primary); background: rgba(47, 107, 255, 0.07); }
+.cl-chip.is-ghost { border-style: dashed; color: var(--cl-faint); }
+
+.cl-footer { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.cl-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 附件是一个 <label>：应用的全局 label{display:block} 会让图标和文字分两行（看起来“歪”），这里显式拉回一行。 */
+.sy-classroom label.cl-tool, .sy-classroom .cl-tool {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--cl-line); border-radius: 999px; padding: 6px 11px;
+  font-size: 12.5px; background: transparent; color: inherit; cursor: pointer;
+}
+.cl-tool.is-on { border-color: var(--cl-primary); color: var(--cl-primary); }
+.cl-tool:disabled { opacity: 0.5; cursor: not-allowed; }
+.cl-notice {
+  margin: 0; display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--cl-faint);
+}
+
+.cl-list { border: 1px solid var(--cl-line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.cl-list header { display: flex; align-items: center; justify-content: space-between; }
+.cl-list h2 { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.cl-list ul {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* 行按内容定高：万一容器拿到确定高度，auto 行也不会被拉伸成整屏高。 */
+  align-content: start;
+  gap: 8px;
+}
+/* width 只给打开按钮：删除键一旦继承 width:100% 会占满整行，把标题挤到几十像素宽、
+   文字竖着折行、卡片被撑到 300px 高（2026-10-04 实际发生过）。 */
+.cl-list li button {
+  text-align: left; border: 1px solid var(--cl-line); border-radius: 11px;
+  padding: 8px 10px; background: transparent; color: inherit; cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.cl-list li button:hover { border-color: var(--cl-primary); }
+.cl-list strong { font-size: 13px; }
+.cl-list small { color: var(--cl-faint); font-size: 11.5px; }
+/* 标题与元信息单行省略：窄列里宁可截断也不竖排折行。 */
+.cl-list strong, .cl-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 播放器：生成中徽标 + 动作播放控制 */
+.cl-live-badge {
+  margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500;
+  border: 1px solid rgba(47, 107, 255, 0.45); color: var(--cl-primary); background: rgba(47, 107, 255, 0.08);
+}
+.cl-scene-pending { padding: 4px 2px; }
+.cl-actions-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-actions p { opacity: 0.62; }
+.cl-actions p.is-current { opacity: 1; font-weight: 500; }
+
+/* 课堂列表：每项右侧删除（两步确认） */
+.cl-list li.cl-item { display: flex; align-items: stretch; gap: 6px; }
+/* min-width: 0 允许标题在 flex 收缩时截断（默认 min-width:auto 会把按钮撑到不折行宽度）。 */
+.cl-list li.cl-item .cl-item-open { flex: 1; min-width: 0; }
+.cl-list .cl-item-delete {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 34px; padding: 0 8px; border: 1px solid var(--cl-line); border-radius: 10px;
+  background: transparent; color: var(--cl-faint); cursor: pointer; font-size: 11.5px;
+}
+.cl-list .cl-item-delete:hover { border-color: rgba(226, 82, 82, 0.55); color: #b23a3a; }
+.cl-list .cl-item-delete.is-confirming { border-color: rgba(226, 82, 82, 0.6); color: #b23a3a; background: rgba(226, 82, 82, 0.08); }
+
+/* ---- 生成进度 ---- */
+.cl-progress { border: 1px solid var(--cl-line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.cl-progress header { display: flex; flex-direction: column; gap: 8px; }
+.cl-bar { height: 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.07); overflow: hidden; }
+.cl-bar span { display: block; height: 100%; background: var(--cl-primary); border-radius: 999px; transition: width 0.4s ease; }
+.cl-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.cl-steps li { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--cl-faint); }
+.cl-steps li.is-active { color: var(--cl-primary); font-weight: 600; }
+.cl-steps li.is-done { color: #1a8f5a; }
+.cl-step-dot {
+  width: 20px; height: 20px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid currentColor; font-size: 11px;
+}
+.cl-progress-actions { display: flex; align-items: center; gap: 10px; }
+
+/* ---- 播放器 ---- */
+.cl-player { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.cl-player-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cl-player-title { min-width: 0; flex: 1; }
+.cl-player-title h2 { font-size: 15px; }
+.cl-player-title small { color: var(--cl-faint); font-size: 11.5px; }
+.cl-player-nav { display: inline-flex; align-items: center; gap: 8px; }
+.cl-player-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 980px) { .cl-player-body { grid-template-columns: minmax(0, 1fr); } }
+
+.cl-scene-rail { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; max-height: 62vh; overflow-y: auto; }
+.cl-scene-rail button {
+  width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto;
+  gap: 1px 8px; align-items: center; text-align: left;
+  border: 1px solid var(--cl-line); border-radius: 10px; padding: 6px 9px;
+  background: transparent; color: inherit; cursor: pointer;
+}
+.cl-scene-rail button.is-active { border-color: var(--cl-primary); background: rgba(47, 107, 255, 0.07); }
+.cl-scene-no { grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; border: 1px solid var(--cl-line); font-size: 11px; }
+.cl-scene-title { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-scene-rail small { color: var(--cl-faint); font-size: 11px; }
+
+.cl-stage { border: 1px solid var(--cl-line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 320px; }
+/* 画布容器必须有确定高度：渲染器按容器高度/宽度算 fit-scale，高度为 0 时整页不可见。 */
+.cl-canvas { width: 100%; max-width: 1000px; margin: 0 auto; aspect-ratio: 16 / 9; }
+/* 注意：不要在这里给 `.cl-canvas svg/canvas` 加全局尺寸规则。渲染器的 SVG 用自身尺寸属性
+   （例如聚光灯图层是 width/height="100%" + viewBox 0 0 100 100 + preserveAspectRatio="none"）定位，
+   任何作者样式的 height/max-width 都会覆盖这些属性：height:auto 会按 viewBox 的 1:1 固有比例
+   把 16:9 容器里的聚光灯图层纵向拉伸 1.78 倍，镂空与描边画到目标下方并被裁剪。 */
+.cl-actions { border-top: 1px dashed var(--cl-line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.cl-actions p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-secondary, inherit); }
+
+.cl-quiz { display: flex; flex-direction: column; gap: 14px; }
+.cl-question h3 { font-size: 13.5px; margin: 0 0 4px; }
+.cl-question > p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.7; }
+.cl-options { display: flex; flex-direction: column; gap: 6px; }
+.cl-options button {
+  text-align: left; border: 1px solid var(--cl-line); border-radius: 10px;
+  padding: 7px 11px; font-size: 13px; background: transparent; color: inherit; cursor: pointer;
+}
+.cl-options button.is-picked { border-color: var(--cl-primary); background: rgba(47, 107, 255, 0.08); }
+.cl-options button.is-answer { border-color: rgba(26, 143, 90, 0.5); }
+/* 选项代号（A/B/C…）：判分与选中均以它为准，文本只是展示。 */
+.cl-option-key { display: inline-block; min-width: 16px; margin-right: 6px; font-weight: 600; color: var(--cl-faint); }
+.cl-options button.is-picked .cl-option-key { color: var(--cl-primary); }
+.cl-options button.is-answer .cl-option-key { color: #1a8f5a; }
+/* 简答题：云端没有标准答案（hasAnswer=false），只输入与展示参考要点，不判对错。 */
+.cl-short textarea {
+  width: 100%; resize: vertical; min-height: 64px;
+  border: 1px solid var(--cl-line); border-radius: 10px; padding: 8px 11px;
+  font-size: 13px; line-height: 1.6; background: transparent; color: inherit; outline: none;
+}
+.cl-short textarea:focus { border-color: var(--cl-primary); }
+.cl-quiz-ref { font-size: 12.5px; color: var(--text-secondary, inherit); }
+.cl-quiz-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+
+.cl-interactive iframe {
+  width: 100%; min-height: 420px; border: 1px solid var(--cl-line); border-radius: 12px; background: #fff;
+}
+.cl-interactive { display: flex; flex-direction: column; gap: 8px; }
+
+.cl-player-foot { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+
+/* 深色主题：主应用用 <html data-theme="dark">，这里只调课堂自己的取色。 */
+html[data-theme='dark'] .sy-classroom {
+  --cl-line: rgba(255, 255, 255, 0.16);
+  --cl-faint: rgba(255, 255, 255, 0.55);
+}
+html[data-theme='dark'] .sy-classroom .cl-card,
+html[data-theme='dark'] .sy-classroom .cl-stage,
+html[data-theme='dark'] .sy-classroom .cl-progress,
+html[data-theme='dark'] .sy-classroom .cl-list { background: rgba(255, 255, 255, 0.03); }
+html[data-theme='dark'] .sy-classroom .cl-bar { background: rgba(255, 255, 255, 0.12); }
+html[data-theme='dark'] .sy-classroom .cl-error { color: #ff9a9a; }
+html[data-theme='dark'] .sy-classroom .cl-ok { color: #6dd8a5; }
+html[data-theme='dark'] .sy-classroom .cl-bad { color: #ff9a9a; }
+html[data-theme='dark'] .sy-classroom .cl-status.is-ok { color: #6dd8a5; }
+html[data-theme='dark'] .sy-classroom .cl-status.is-off { color: #e5b45f; }
+
+.spin { animation: sy-spin 1s linear infinite; }
+@keyframes sy-spin { to { transform: rotate(360deg); } }

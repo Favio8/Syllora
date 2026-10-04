@@ -29,15 +29,16 @@ const payload = {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("工具条里的 Agent 权限选择", () => {
-  it("触发键显示当前档位，展开后列出三档并带说明", async () => {
+  it("触发键显示当前档位，展开后列出三档（说明小字已按 UI 需求移除）", async () => {
     apiMocks.settings.mockResolvedValue(payload);
     render(<AgentPermissionPicker />);
     expect(await screen.findByRole("combobox", { name: "Agent 权限" })).toHaveTextContent("权限：工作区写入");
     fireEvent.click(screen.getByRole("combobox", { name: "Agent 权限" }));
     const list = await screen.findByRole("listbox", { name: "Agent 权限" });
     expect(list).toHaveTextContent("权限：只读");
-    expect(list).toHaveTextContent("读取和搜索自动执行，所有写入拒绝");
     expect(list).toHaveTextContent("权限：完全访问");
+    // 选项不再传 description：说明文字不应出现在下拉里。
+    expect(list).not.toHaveTextContent("读取和搜索自动执行，所有写入拒绝");
   });
 
   it("选中即保存（settings.update permissionPreset）并回显新档位", async () => {

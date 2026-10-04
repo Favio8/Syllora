@@ -5,7 +5,7 @@
  * 三栏：笔记列表（含图片树）｜ 富文本编辑器 + 底部 AI 输入框 ｜ 笔记图谱。
  * 正文始终是 Markdown（`[[双链]]` + `![](assets/x.png)`），图谱与后端解析不受影响。
  *
- * AI 输入框与主界面输入框同构：功能键在左（续写/总结/改写/扩写/润色/精简），
+ * AI 输入框与主界面输入框同构：功能键在左（续写/总结/扩写/润色/精简），
  * 模型座位与发送在右，并支持"选中一段 → 输入提示词 → 以该段为对象处理"
  * （选中的 {from,to} 在提交时冻结，结果先出卡片、再一键替换/插入，单事务一步撤销）。
  */
@@ -25,8 +25,8 @@ interface Props {
   courseId: string;
   courseName: string;
   onClose: () => void;
-  /** 切到对话学习 / 辅助阅读：由外壳负责离开笔记页并设置学习模式。 */
-  onSwitchMode: (mode: 'chat' | 'reading') => void;
+  /** 切到虚拟课堂 / 对话学习 / 辅助阅读：由外壳负责离开笔记页并设置学习模式。 */
+  onSwitchMode: (mode: 'chat' | 'reading' | 'classroom') => void;
   /** 需求七：笔记页内直接切换课程（左栏下拉）。未归档课程全量。 */
   courses?: Array<{ id: string; name: string }>;
   onSwitchCourse?: (courseId: string) => void | Promise<void>;
@@ -36,7 +36,6 @@ interface Props {
 const AI_ACTIONS: Array<{ id: NoteAiAction; label: string; tip: string }> = [
   { id: "continue", label: "AI 续写", tip: "接着光标处往下写" },
   { id: "summarize", label: "AI 总结", tip: "把笔记总结成要点" },
-  { id: "rewrite", label: "改写", tip: "换一种表达，意思不变（需选中）" },
   { id: "expand", label: "扩写", tip: "补足因果、步骤或例子（需选中）" },
   { id: "polish", label: "润色", tip: "修病句、标点与术语（需选中）" },
   { id: "shorten", label: "精简", tip: "删冗余、保留关键信息（需选中）" },
@@ -98,6 +97,11 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
   const newTitleRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
   const loadedRef = useRef<{ title: string; content: string } | null>(null);
+  // R05：请求世代守卫——迟到的 open/AI/保存响应不得回填另一课程或另一篇笔记。
+  const noteVersionRef = useRef<string | undefined>(undefined);
+  const openingRef = useRef(0);
+  const activeNoteRef = useRef<string | null>(null);
+  const aiRequestRef = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -124,6 +128,8 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
     setEditingId(null); setTitle(""); setContent(""); setSavedLinks([]);
     setAiResult(null); setAiPrompt(""); setSelection(null); setPendingLink(null); setLinking(false);
     loadedRef.current = null;
+    activeNoteRef.current = null; aiRequestRef.current++; openingRef.current++;
+    noteVersionRef.current = undefined; setAiBusy(false);
   }, [courseId]);
 
   // 输入框自动增高：下边界固定（在编辑器列底部），内容多只向上长。
@@ -137,8 +143,14 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
   const open = useCallback(
     async (noteId: string) => {
       setError("");
+      const request = ++openingRef.current;
+      activeNoteRef.current = noteId;
+      aiRequestRef.current++;
+      setAiBusy(false);
       try {
         const result = await api.notes.read(courseId, noteId);
+        if (request !== openingRef.current) return;
+        noteVersionRef.current = result.version;
         setEditingId(noteId);
         setTitle(result.meta.title);
         setContent(result.content);
@@ -150,7 +162,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
         setPendingLink(null);
         loadedRef.current = { title: result.meta.title, content: result.content };
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "无法打开笔记");
+        if (request === openingRef.current) setError(cause instanceof Error ? cause.message : "无法打开笔记");
       }
     },
     [courseId],
@@ -164,7 +176,7 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
     setConfirmAsk({ message: "这篇笔记有未保存的修改，确定放弃并返回？", confirmLabel: "放弃修改并返回", run: onClose });
   };
   /** 切模式前走同一条守卫，避免静默丢掉未保存的修改。 */
-  const switchMode = (surface: 'chat' | 'reading' | 'notes') => {
+  const switchMode = (surface: 'chat' | 'reading' | 'classroom' | 'notes') => {
     if (surface === 'notes') return;
     if (confirmLeave()) { onSwitchMode(surface); return; }
     setConfirmAsk({ message: "这篇笔记有未保存的修改，确定放弃并切换？", confirmLabel: "放弃修改并切换", run: () => onSwitchMode(surface) });
@@ -191,10 +203,13 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
 
   const save = async () => {
     if (editingId === null || title.trim() === "" || busy) return;
+    const target = editingId;
     setBusy(true);
     setError("");
     try {
-      const result = await api.notes.update(courseId, editingId, { title: title.trim(), content });
+      const result = await api.notes.update(courseId, editingId, { title: title.trim(), content, ...(noteVersionRef.current ? { baseVersion: noteVersionRef.current } : {}) });
+      if (activeNoteRef.current !== target) return;
+      noteVersionRef.current = result.version;
       setTitle(result.meta.title);
       setSavedLinks(result.meta.wikilinks);
       loadedRef.current = { title: result.meta.title, content };
@@ -281,6 +296,8 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
     setAiBusy(true);
     setError("");
     setAiResult(null);
+    const request = ++aiRequestRef.current;
+    const targetNote = activeNoteRef.current;
     try {
       const res = await api.notes.suggest(courseId, {
         title: title.trim(),
@@ -290,14 +307,15 @@ export default function NotesWorkspace({ courseId, courseName, onClose, onSwitch
         body: ed.state.doc.textBetween(0, ed.state.doc.content.size, "\n"),
         instruction,
       });
+      if (request !== aiRequestRef.current || targetNote !== activeNoteRef.current) return false;
       // 目标在提交时冻结：之后用户改动文档也不会把结果贴错地方。
       setAiResult({ text: res.text, sourceIds: res.sourceIds, action, target: picked });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "AI 处理失败");
+      if (request === aiRequestRef.current && targetNote === activeNoteRef.current) setError(cause instanceof Error ? cause.message : "AI 处理失败");
       return false;
     } finally {
-      setAiBusy(false);
+      if (request === aiRequestRef.current) setAiBusy(false);
     }
   };
 

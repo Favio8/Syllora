@@ -11,7 +11,7 @@
   },
   "routes": [
     {
-      "src": "/api/(session(?:/logout)?|syllora/material-file|syllora/notes/asset)",
+      "src": "/api/(session(?:/logout)?|syllora/material-file|syllora/material-document|syllora/notes/asset)",
       "dest": "https://casually-clarify-trapdoor.ngrok-free.dev/api/$1",
       "transforms": [
         {

@@ -73,11 +73,10 @@ async function loadSnapshot(courseDir: string): Promise<Snapshot> {
     : { course, message: '' }
 }
 
-type CourseView = ReturnType<typeof publicCourse>
 
 /** Usable material sources: published (or accepted partial) and still active. */
-function readableSources(view: CourseView): Array<{ materialName: string; materialId: string; anchor: string; sourceId: string; text: string }> {
-  return view.materials
+function readableSources(course: Course): Array<{ materialName: string; materialId: string; anchor: string; sourceId: string; text: string }> {
+  return course.materials
     .filter(material => material.status !== 'deleted' && material.active !== false && (material.status === 'ready' || material.accepted))
     .flatMap(material => material.sources.map(source => ({
       materialName: material.name,
@@ -110,7 +109,7 @@ async function readMaterial(ctx: ToolActionContext, args: Record<string, unknown
   const maxChars = intArg(args, 'maxChars', MAX_TEXT_CHARS, 200, 6000)
   const query = textArg(args, 'query')
   const materialId = textArg(args, 'materialId')
-  const sources = readableSources(view)
+  const sources = readableSources(snapshot.course)
   if (query === '' && materialId === '') {
     const materialLines = view.materials
       .filter(material => material.status !== 'deleted')

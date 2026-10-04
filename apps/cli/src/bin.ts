@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { onClientDisconnect } from './lib/client-disconnect.ts'
+import { seedDemoCourses, seedDemoProfile } from './demo-seed.ts'
 /**
  * Syllora CLI entry (M1): `syllora serve` runs the host — cordis
  * assembly (storage + workspace registry) and a node:http server that
@@ -24,8 +25,9 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import WorkspaceRegistry from '@syllora/workspace'
 import { AcpProtocolError, AcpRouter, parseAcpRequest, type AcpHost, type AcpNotification, type AcpRequest, type AcpUpdate } from '@syllora/acp'
 import { listCourseSummaries } from '@syllora/course-summary'
-import { migrateLegacyLayout, stateDirOf, extractPdfPages } from '@syllora/course-builder'
+import { migrateLegacyLayout, stateDirOf, extractPdfPages, extractTextToMarkdown } from '@syllora/course-builder'
 import { SylloraProjects, SylloraError, migrateSharedSettings } from '@syllora/chat-service'
+import { DocMindClient, docMindExtract, localExtract, resolveDocMindCredential, type ExtractInput, type ExtractResult } from '@syllora/chat-service'
 import { dispatch, type HostServices, type SessionSearchResultView } from '@syllora/apiproxy'
 import { pickNativeDirectory } from '@syllora/directory-picker-native'
 import {
@@ -35,6 +37,8 @@ import {
   createSession,
   deleteProvider,
   discoverModels,
+  cloudConfigPayload,
+  docmindConfigPayload,
   forkSession,
   listSessions,
   loadChatConfig,
@@ -48,6 +52,8 @@ import {
   searchSessions,
   saveProvider,
   setCredential,
+  setCloudConfig,
+  setDocMindCredential,
   setSharedConfigRoot,
   settingsPayload,
   streamReadingAsk,
@@ -67,7 +73,7 @@ import { createCourseService } from '@syllora/chat-service'
 import { AgentRegistry } from '@syllora/agent'
 import { hostRpc, authHeaders, defaultClientDeps } from './lib/client.ts'
 import { UsageError } from './lib/args.ts'
-import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
+import { isLoopbackOrigin, PayloadTooLargeError, readRequestBody, readRequestBodyBytes, RequestBodyTimeoutError, sanitizeErrorMessage } from './lib/http-guards.ts'
 import { installHostFileLogging } from './lib/host-logger.ts'
 import { prepareReviewMode } from './lib/review-mode.ts'
 import { createStaticHost, sessionBootstrapPage, sessionHandshakeBootstrap } from './lib/static-host.ts'
@@ -618,6 +624,22 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   const settingsRoot = process.env.SYLLORA_DATA_DIR ? resolve(process.env.SYLLORA_DATA_DIR) : join(hostHome(), 'application')
   await mkdir(settingsRoot, { recursive: true })
   await migrateSharedSettings(settingsRoot, registry.list().map(item => item.path))
+  // 演示数据种子（用户要求：下载即用，含 AI 与虚拟课堂）：
+  // 空 profile 写入内嵌演示凭据（设置页可覆盖）；空课程表复制随包分发的示例课程。
+  // 失败不阻断启动——用户可以手动配置；SYLLORA_SKIP_DEMO_SEED=1 可整体关闭。
+  try {
+    const seedCoursesRoot = process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot, '.syllora')
+    const sampleRoot = process.env.SYLLORA_SAMPLE_DIR !== undefined
+      ? resolve(process.env.SYLLORA_SAMPLE_DIR)
+      : join(dirname(fileURLToPath(import.meta.url)), '..', 'sample-courses')
+    const seededProfile = await seedDemoProfile(settingsRoot)
+    const seededCourses = await seedDemoCourses({ settingsRoot, coursesRoot: seedCoursesRoot, sampleRoot })
+    if (seededProfile.length > 0 || seededCourses.length > 0) {
+      console.log(`[demo] 演示配置：${seededProfile.join('、') || '无'}；示例课程：${seededCourses.join('、') || '无'}`)
+    }
+  } catch (error) {
+    console.warn('[demo] 演示数据写入失败（不影响手动配置）：', error instanceof Error ? error.message : error)
+  }
   // CR-07：启动时校验凭据可解密（错配/损坏留明确告警，不等到第一次对话才炸）。
   await verifyCredentialsReadable(join(settingsRoot, '.syllora', 'credentials.json'))
   // 设置页把供应商写在共享设置目录，对话/构课解析的是课程目录：登记共享根，
@@ -626,7 +648,29 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
   setSharedConfigRoot(settingsRoot)
   const configFacts = async (): Promise<import('@syllora/chat-service').ResolvedChatConfig | null> =>
     await loadChatConfig(settingsRoot).catch(() => null)
-  const syllora = new SylloraProjects(settingsRoot, { managedCoursesRoot: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot,'.syllora'), pdf: extractPdfPages, registerProject: async path => {
+  /**
+   * 资料解析：上传的资料统一走 DocMind；没配凭据或云端明确拒绝该格式时本地回退，
+   * 并把「这份资料没走 DocMind」如实写进资料提示（不静默降级）。
+   */
+  const extractMaterial = async (input: ExtractInput): Promise<ExtractResult> => {
+    const credential = await resolveDocMindCredential(settingsRoot).catch(() => null)
+    if (credential) {
+      try {
+        return await docMindExtract({ ...input, client: new DocMindClient(credential) })
+      } catch (error) {
+        const unsupported = /暂不支持|不支持的文件类型|unsupported|file type|FileType/i.test(error instanceof Error ? error.message : String(error))
+        if (!unsupported) throw error
+        // 云端明确拒绝这个格式（例如纯文本）：本地直读，并保留可读原因。
+      }
+    }
+    return await localExtract({
+      ...input,
+      pdf: extractPdfPages,
+      document: (path) => extractTextToMarkdown(path),
+      reason: credential ? '云端不支持该格式' : '未配置 DocMind',
+    })
+  }
+  const syllora = new SylloraProjects(settingsRoot, { managedCoursesRoot: process.env.SYLLORA_COURSES_DIR ? resolve(process.env.SYLLORA_COURSES_DIR) : join(settingsRoot,'.syllora'), extract: extractMaterial, pdf: extractPdfPages, registerProject: async path => {
     if (review) await review.workspace(path)
     const workspace = await registry.create(path)
     await registry.setLastOpenedPath(workspace.workspace.path)
@@ -848,6 +892,19 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       remove: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '删除模型供应商'); return deleteProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       activate: async providerId => { requireWorkspaceRootForSettings(settingsRoot, '激活模型供应商'); return activateProvider(settingsRoot, providerId) as unknown as Record<string, unknown> },
       credential: async (providerId, apiKey) => { requireWorkspaceRootForSettings(settingsRoot, '保存 API Key'); return setCredential(settingsRoot, providerId, apiKey) as unknown as Record<string, unknown> },
+      docmind: {
+        get: async () => { requireWorkspaceRootForSettings(settingsRoot, '读取 DocMind 配置'); return docmindConfigPayload(settingsRoot) as unknown as Record<string, unknown> },
+        save: async input => {
+          requireWorkspaceRootForSettings(settingsRoot, '保存 DocMind 密钥')
+          await setDocMindCredential(settingsRoot, input as Parameters<typeof setDocMindCredential>[1])
+          // 落库后回读真实解析结果（environment 变量优先级更高，如实反映现状）。
+          return docmindConfigPayload(settingsRoot) as unknown as Record<string, unknown>
+        },
+      },
+      cloud: {
+        get: async () => cloudConfigPayload(settingsRoot) as unknown as Record<string, unknown>,
+        save: async input => setCloudConfig(settingsRoot, input as Parameters<typeof setCloudConfig>[1]) as unknown as Record<string, unknown>,
+      },
       // 需求七：连接测试按 discover 同一优先级解析密钥（表单新填 > 已加密存储 > 环境变量）。
       test: async input => {
         let apiKey = input.apiKey?.trim() ?? ''
@@ -866,6 +923,17 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       logs: () => readHostDiagnostics(),
     },
     courseService: wrapCourseService(),
+    classroomService: {
+      job: (courseId, jobId) => syllora.classroomJob(courseId, jobId),
+      live: (courseId, target) => syllora.classroomLive(courseId, target) as Promise<Record<string, unknown>>,
+      remove: (courseId, classroomId, cloud) => syllora.classroomDelete(courseId, classroomId, cloud) as Promise<Record<string, unknown>>,
+      get: (courseId, classroomId) => syllora.classroomGet(courseId, classroomId) as Promise<Record<string, unknown>>,
+      list: courseId => syllora.classroomList(courseId) as Promise<Record<string, unknown>>,
+      capabilities: courseId => syllora.classroomCapabilities(courseId) as Promise<Record<string, unknown>>,
+      saveProgress: (courseId, progress) => syllora.classroomSaveProgress(courseId, progress) as Promise<Record<string, unknown>>,
+      stageMaterial: (courseId, name, mime, bytes) => syllora.stageClassroomMaterial(courseId, name, mime, bytes) as Promise<Record<string, unknown>>,
+      attachments: courseId => syllora.classroomAttachments(courseId) as Promise<Record<string, unknown>>,
+    },
     toolProviders: () => ({
       subprocess: { available: false, reason: '默认拒绝无隔离的本机命令执行', installAction: '配置 sandbox Provider' },
       network: { available: true, reason: null, installAction: null },
@@ -1113,6 +1181,22 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         })()
         return
       }
+      if(url.pathname==='/api/syllora/material-document') {
+        // 解析产物（DocMind markdown 版式视图与本地化图片）：按资料读取，路径全程受控。
+        void (async()=>{
+          try {
+            const {contentType,data}=await syllora.readMaterialDocument(url.searchParams.get('courseId')??'',url.searchParams.get('materialId')??'',url.searchParams.get('path')??'')
+            response.writeHead(200,{'Content-Type':contentType,'Content-Length':String(data.length),'Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            response.end(request.method==='HEAD'?undefined:data)
+          } catch(error) {
+            if(response.headersSent||response.writableEnded||response.destroyed)return
+            const code=error instanceof SylloraError?error.code:'INTERNAL_ERROR'
+            const status=code==='INVALID_REQUEST'?400:code==='NOT_FOUND'?404:code==='LIMIT_EXCEEDED'?413:500
+            response.writeHead(status);response.end(JSON.stringify({error:{code,message:error instanceof SylloraError?error.message:'解析产物读取失败',details:null}}))
+          }
+        })()
+        return
+      }
       if(url.pathname==='/api/syllora/notes/asset') {
         void (async()=>{
           try {
@@ -1169,9 +1253,42 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
       })
       return
     }
+    if (method === 'syllora/classroom/material') {
+      // 虚拟课堂首页附件：与云端一致，body 是裸字节、文件名走 x-material-filename（百分号编码）。
+      // 走 Buffer 读取（readRequestBody 只回 UTF-8 字符串，二进制会被改字节）。
+      void (async () => {
+        try {
+          const courseId = url.searchParams.get('courseId') ?? ''
+          const rawName = request.headers['x-material-filename']
+          let name = '附件'
+          if (typeof rawName === 'string' && rawName.trim() !== '') { try { name = decodeURIComponent(rawName) } catch { name = rawName } }
+          const bytes = await readRequestBodyBytes(request, Math.ceil(52_428_800 * 1.05), 120_000)
+          if (bytes.length === 0) throw new SylloraError('INVALID_REQUEST', '上传内容为空')
+          const mime = String(request.headers['content-type'] ?? 'application/octet-stream').split(';')[0]?.trim() || 'application/octet-stream'
+          const result = await syllora.stageClassroomMaterial(courseId, name, mime, bytes)
+          response.writeHead(200)
+          response.end(JSON.stringify({ result }))
+        } catch (error) {
+          if (response.headersSent || response.writableEnded || response.destroyed) return
+          const code = error instanceof SylloraError ? error.code : error instanceof PayloadTooLargeError ? 'LIMIT_EXCEEDED' : 'INTERNAL_ERROR'
+          const status = code === 'INVALID_REQUEST' ? 400 : code === 'NOT_FOUND' ? 404 : code === 'LIMIT_EXCEEDED' ? 413 : 409
+          response.writeHead(status)
+          response.end(JSON.stringify({ error: { code, message: error instanceof SylloraError ? error.message : '附件上传失败', details: null } }))
+        }
+      })()
+      return
+    }
     void (async () => {
       try {
-        const body = await readRequestBody(request, method === 'syllora/import' ? 29 * 1024 * 1024 : undefined)
+        // 电子书投喂：与资料库 20MiB 不同，整本教材走独立 150MiB 闸口（syllora.ts
+        // EBOOK_MAX_BYTES），base64 上限 200MiB；此处对齐放大读取上限与读取时限。
+        const body = await readRequestBody(
+          request,
+          method === 'syllora/import' ? 210 * 1024 * 1024
+            : method === 'syllora/ebook/ingest' ? 210 * 1024 * 1024
+            : undefined,
+          method === 'syllora/ebook/ingest' ? 120_000 : undefined,
+        )
         // FL-04：这里原本包了一层 `try { ... } catch (error) { }` 的空 catch，
         // 把 `dispatch` 内部抛出的异常（而非返回的错误信封）整个吞掉：响应永不
         // `end()`，请求挂死成 socket hang up——恰好是下方边界注释声称要防的场景。
@@ -1605,6 +1722,7 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     // 生成器内部（如 courseDirOf 的课程校验）可能抛业务异常；SSE 头此时已
     // 发出，异常绝不能穿透到 RPC 兜底（headersSent 后再 writeHead 会以
     // ERR_HTTP_HEADERS_SENT 打崩整个进程）——就地转 error 帧收尾。
+    let streamFailed = false
     try {
       for await (const event of chatStream(workspaceRoot, courseId, {
         sessionId,
@@ -1622,11 +1740,13 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
         if (event.kind === 'meta') {
           resolvedSessionId = String(event.payload['sessionId'] ?? resolvedSessionId ?? '') || null
         }
+        if (event.kind === 'error') streamFailed = true
         const mapped = frameToSseData(event)
         writeFrame(mapped.event, mapped.data)
       }
     } catch (error) {
       if (abortController.signal.aborted) { response.end(); return }
+      streamFailed = true
       // BUG-005：SSE 错误帧同样可能携带上游凭据回显，出日志与帧前净化。
       const message = sanitizeErrorMessage(error instanceof Error ? error.message : String(error))
       console.error(`[syllora] chat/stream 失败:`, message)
@@ -1637,6 +1757,11 @@ async function serve(port: number, options: ServeOptions = {}): Promise<void> {
     }
     const completedSessionId = resolvedSessionId
     const usage = completedSessionId === null ? {} : await agentService.projection(`study-${completedSessionId}`).then(projection => projection.usage).catch(() => ({}))
+    // A closing SSE frame also follows failures; only an error-free turn counts.
+    if (!streamFailed && !abortController.signal.aborted && completedSessionId !== null) {
+      const turnKey = typeof input.requestId === 'string' && input.requestId !== '' ? input.requestId : `turn:${completedSessionId}:${Date.now()}`
+      await syllora.handle('chatTurn', { courseId, requestId: turnKey }).catch(() => undefined)
+    }
     writeFrame('done', { usage, turnId: completedSessionId })
     response.end()
   }

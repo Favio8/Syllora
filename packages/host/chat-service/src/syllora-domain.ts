@@ -1,7 +1,8 @@
 /** Syllora MVP rules. Original attempts are immutable; projections are replayable. */
 import { DEFAULT_REVIEW_HOURS, learningSettings, validReviewHours, type EvidenceRuleSnapshot, type LearningSettings } from './syllora-policy.js'
 import { currentSession, sessionMetrics, type LearningEvent, type LearningSession, type SessionJob, type SourceVersion } from './syllora-sessions.js'
-export interface ReadingContext {materialId:string;revision:string;selection:string;sourceIds:string[];mode:'explain'|'search'}
+/** 阅读上下文（统一成资料一种）：materialId/revision/sourceIds + 选区与模式。 */
+export type ReadingContext = { materialId: string; revision: string; selection: string; sourceIds: string[]; mode: 'explain' | 'search' }
 export interface LearningActivity {id:string;courseId:string;at:number;kind:'task'|'chat'|'reading';minutes:number;taskId?:string;planVersion:number}
 export const RULE_VERSION = 'syllora-v1'
 export function ruleSnapshot(course:Course):EvidenceRuleSnapshot { const settings=learningSettings(course);return {version:RULE_VERSION,settingsRevision:settings.revision,reviewHours:[...settings.reviewHours]} }
@@ -11,7 +12,20 @@ export type PageIssueReason = 'blank-page' | 'unextracted-text' | 'parse-failed'
 export interface PageIssue { num:number;reason:PageIssueReason }
 export interface MaterialFile { id:string;ext:string;bytes:number;name:string }
 export interface JobCoverage { sourcesUsed:number;sourcesTotal:number;charsUsed:number;charsTotal:number;materialsWithOmitted:string[];sourceIds:string[];revision:string|null }
-export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[]; path?: string; version?: string|number; revisionNumber?:number; versionOf?:string|null; file?:MaterialFile|null; pageIssues?:PageIssue[]; parseError?:string|null; history?: Source[]; missingOriginal?: boolean; warnings?: string[]; active?: boolean; size?:number; mtimeMs?:number }
+export interface Material { id: string; name: string; fingerprint: string; status: 'ready' | 'partial' | 'deleted'; accepted: boolean; pages: number; sources: Source[]; path?: string; version?: string|number; revisionNumber?:number; versionOf?:string|null; file?:MaterialFile|null; pageIssues?:PageIssue[]; parseError?:string|null; history?: Source[]; missingOriginal?: boolean; warnings?: string[]; active?: boolean; size?:number; mtimeMs?:number; engine?:MaterialEngine; document?:MaterialDocument|null }
+/**
+ * 资料解析引擎：`docmind` = 云端 DocMind（默认），`local` = 本机回退（未配置凭据、
+ * 或云端明确拒绝该格式时）。旧资料没有这个字段，读取时按未知处理，不重解析。
+ */
+export type MaterialEngine = 'docmind' | 'local'
+/** 解析产物（阅读页的章节大纲与版式视图用；正文与引证仍走 sources）。 */
+export interface MaterialDocument {
+  engine: MaterialEngine
+  hasMarkdown: boolean
+  images: number
+  /** DocMind markdown 的标题大纲；页码是尽力而为（分页格式才有）。 */
+  outline: Array<{ title: string; level: number; anchor: string; page: number | null }>
+}
 export interface Point { id: string; chapter: string; name: string; sourceIds: string[]; originKey?: string }
 export interface Question { id: string; pointId: string; taskId: string; slot: number; family: string; stem: string; options: string[]; answer: number; explanation: string; sourceIds: string[]; quote: string; status: 'valid' | 'disputed' | 'invalid'; assisted: boolean; dispute?: { reason:string; at:number } }
 export interface Attempt { id: string; questionId: string; option: number; correct: boolean; assisted: boolean; at: number; sequence: number; ruleSnapshot?:EvidenceRuleSnapshot; sessionId?:string; planVersion?:number; sourceVersions?:SourceVersion[]; nextActionId?:string }
@@ -23,6 +37,7 @@ export interface Plan { id: string; version: number; baseVersion: number; scope:
 export interface Message { reading?:ReadingContext;jobId?:string; id: string; role: 'user' | 'assistant'; text: string; sourceIds: string[]; at: number; report?:{reason:string;at:number} }
 export interface AnswerDraft { questionId: string; option: number }
 export interface Drafts { prompt: string; answers: AnswerDraft[]; version?:number }
+export interface PlanningDraft { revision:number;scope:string[];estimates:Record<string,number> }
 export interface PlanDiff {
   scopeAdded: string[]
   scopeRemoved: string[]
@@ -48,7 +63,7 @@ export interface NextAction {
   trigger: 'grade' | 'dispute' | 'plan' | 'review' | 'material' | 'task' | 'due' | 'archive' | 'init' | 'sync'
   practice: { pointId: string; text: string } | null
 }
-export interface Course { icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number }
+export interface Course { planningDraft?:PlanningDraft; icon?:string;activity?:LearningActivity[]; id: string; name: string; timezone: string; archived: boolean; materials: Material[]; points: Point[]; scope: string[]; plan: Plan | null; draft: Plan | null; questions: Question[]; attempts: Attempt[]; messages: Message[]; actions: NextAction[]; drafts: Drafts; changes: DenominatorChange[]; notice: ScheduleNotice | null; createdAt: number; learningSettings?:LearningSettings; sessions?:LearningSession[]; learningEvents?:LearningEvent[]; folder?: string; revision?: string; initializedAt?: number; /** 阅读标记（自评，不计学习证据）：资料 id → 大纲锚点 → 状态。 */ readingMarks?: Record<string, Record<string, 'mastered'|'learning'|'weak'>> }
 export const EVIDENCE_STATES = ['未评估', '待验证', '待加强', '初步掌握', '复测通过'] as const
 
 /** 笔记（课程附属，md 内容存 notes/{id}.md，元数据存 notes/index.json）。 */
@@ -94,7 +109,8 @@ export function normalizeCourse(course: Course) {
   if (!course.drafts || typeof course.drafts.prompt !== 'string' || !Array.isArray(course.drafts.answers)) course.drafts = { prompt: '', answers: [] }
   if (!Array.isArray(course.changes)) course.changes = []
   if (course.notice === undefined) course.notice = null
-  course.materials=(course.materials??[]).map(material=>({...material,revisionNumber:material.revisionNumber??(typeof material.version==='number'?material.version:1),version:material.version??1,versionOf:material.versionOf??null,file:material.file??null,pageIssues:material.pageIssues??[],parseError:material.parseError??null}))
+  course.materials=(course.materials??[]).map(material=>({...material,revisionNumber:material.revisionNumber??(typeof material.version==='number'?material.version:1),version:material.version??1,versionOf:material.versionOf??null,file:material.file??null,pageIssues:material.pageIssues??[],parseError:material.parseError??null,document:material.document??null}))
+  if (!course.readingMarks || typeof course.readingMarks !== 'object') course.readingMarks = {}
   course.plan = normalizePlan(course.plan)
   course.draft = normalizePlan(course.draft)
 }
@@ -437,6 +453,19 @@ export function diffPlan(oldPlan: Plan | null, newDraft: Plan): DetailedPlanDiff
   return { added, removed, moved, changed, unchanged }
 }
 
+/** 来源的定位投影：state 轮询只带这些字段，正文按需取（source RPC / 阅读文档）。 */
+export type SourceRef = Omit<Source, 'text'>
+
+/**
+ * 来源的「轻投影」：state 轮询只带定位信息（id/锚点/章节/偏移），正文按需取。
+ * 整本教材解析后 sources 是几十万字，全文进每次轮询会把 state 拖垮；正文只在
+ * 「资料来源」弹层与阅读助手组装摘录时按需读取。
+ */
+function liteSource(source: Source) {
+  const { text: _text, ...rest } = source
+  return rest
+}
+
 export function publicCourse(course: Course, now: number, jobs:SessionJob[] = []) {
   normalizeCourse(course)
   const distribution = Object.fromEntries(EVIDENCE_STATES.map(state => [state, course.scope.filter(id => evidence(course, id).state === state).length])) as Record<(typeof EVIDENCE_STATES)[number], number>
@@ -450,7 +479,7 @@ export function publicCourse(course: Course, now: number, jobs:SessionJob[] = []
     activeSession:currentSession(course,now),
     metrics:sessionMetrics(course,now,jobs),
     blockedPointIds: course.points.filter(point => !pointHasSources(course, point.id)).map(point => point.id),
-    materials:course.materials.map(material=>({...material,previewUrl:material.status!=='deleted'&&!material.missingOriginal&&(material.file||material.path?.toLowerCase().endsWith('.pdf'))?`/api/syllora/material-file?courseId=${encodeURIComponent(course.id)}&materialId=${encodeURIComponent(material.id)}`:null})),
+    materials:course.materials.map(material=>({...material,sources:material.sources.map(liteSource),history:material.history?.map(liteSource),previewUrl:material.status!=='deleted'&&!material.missingOriginal&&(material.file||material.path?.toLowerCase().endsWith('.pdf'))?`/api/syllora/material-file?courseId=${encodeURIComponent(course.id)}&materialId=${encodeURIComponent(material.id)}`:null})),
     questions: course.questions.map(question => {
       const answered = course.attempts.some(attempt => attempt.questionId === question.id)
       const { answer, explanation, quote, ...safe } = question

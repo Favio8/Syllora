@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, GraduationCap, FolderOpen, BrainCircuit, UserRound, Settings, CircleHelp, LogOut, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import type { Course, View } from '@/src/features/workbench/types';
@@ -15,10 +15,12 @@ export type UserAction = 'profile' | 'settings' | 'guide' | 'agreement' | 'logou
 const RAIL_SLOT_PX = 53;
 const RAIL_SLOT_TOLERANCE_PX = 0.5;
 
-export default function Sidebar({ courses, selected, view, mobileOpen, onClose, onView, onCourse, onCreate, onUserAction, onReorder }: {
-  courses: Course[]; selected: string; view: View; mobileOpen: boolean; onClose: () => void; onView: (view: View) => void; onCourse: (id: string) => void; onCreate: () => void; onUserAction: (action: UserAction) => void;
+export default function Sidebar({ courses, selected, view, mobileOpen, onClose, onView, onCourse, onUserAction, onReorder, notifications }: {
+  courses: Course[]; selected: string; view: View; mobileOpen: boolean; onClose: () => void; onView: (view: View) => void; onCourse: (id: string) => void; onUserAction: (action: UserAction) => void;
   /** 需求一：拖拽/浮层排序落位后回调（全部课程的完整顺序）。 */
   onReorder?: (ids: string[]) => void;
+  /** 通知胶囊：渲染在导航（复习与巩固）下方。 */
+  notifications?: ReactNode;
 }) {
   const [tooltip, setTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -105,8 +107,7 @@ export default function Sidebar({ courses, selected, view, mobileOpen, onClose, 
     {mobileOpen && <button className="mobile-backdrop" aria-label="关闭导航" onClick={onClose} />}
     <aside className={`sidebar icon-rail ${mobileOpen ? 'mobile-open' : ''}`} aria-label="主导航">
       <div className="rail-brand"><button className={`brand-icon ${view === 'home' ? 'is-home' : ''}`} {...hoverProps('返回主页')} onClick={() => { setTooltip(null); onView('home'); }}><BookOpen size={23} strokeWidth={1.8} /></button><button className="icon-button mobile-only rail-mobile-close" onClick={onClose} aria-label="关闭侧栏"><X size={15} /></button></div>
-      <button className="rail-button rail-create" {...hoverProps('新建课程')} onClick={() => { setTooltip(null); onCreate(); }}><Plus size={21} /></button>
-      <nav className="rail-nav">{nav.map(({ id, label, icon: Icon }) => <button className={`rail-button ${view === id ? 'active' : ''}`} aria-current={view === id ? 'page' : undefined} key={id} {...hoverProps(label)} onClick={() => { setTooltip(null); onView(id); }}><Icon size={21} strokeWidth={1.65} /></button>)}</nav>
+      <nav className="rail-nav">{nav.map(({ id, label, icon: Icon }) => <button className={`rail-button ${view === id ? 'active' : ''}`} aria-current={view === id ? 'page' : undefined} key={id} {...hoverProps(label)} onClick={() => { setTooltip(null); onView(id); }}><Icon size={21} strokeWidth={1.65} /></button>)}</nav>{notifications}
       <div className="rail-divider" />
       {(() => {
         // 需求一：可用高度内排列；超出时末尾固定「…」折叠按钮。留一个槽位给

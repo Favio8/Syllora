@@ -1,9 +1,9 @@
 /**
- * 学习模式切换：对话学习 / 辅助阅读 / 笔记。
+ * 学习模式切换：虚拟课堂 / 对话学习 / 辅助阅读 / 笔记。
  * 顶栏与笔记页头部共用同一份实现，保证"进笔记后这组按键仍然固定可见"。
- * 三个按键不带图标、等宽居中（样式见 features/workbench/integrated.css 的 .learning-mode-switch）。
+ * 四个按键不带图标、等宽居中（样式见 features/workbench/integrated.css 的 .learning-mode-switch）。
  */
-export type LearningSurface = 'chat' | 'reading' | 'notes';
+export type LearningSurface = 'classroom' | 'chat' | 'reading' | 'notes';
 
 export default function LearningModeSwitch({ disabled, current, onSelect }: {
   disabled: boolean;
@@ -11,6 +11,7 @@ export default function LearningModeSwitch({ disabled, current, onSelect }: {
   onSelect: (surface: LearningSurface) => void;
 }) {
   const items: Array<{ id: LearningSurface; label: string }> = [
+    { id: 'classroom', label: '虚拟课堂' },
     { id: 'chat', label: '对话学习' },
     { id: 'reading', label: '辅助阅读' },
     { id: 'notes', label: '笔记' },

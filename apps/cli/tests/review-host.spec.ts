@@ -12,7 +12,7 @@ let root: string, child: ChildProcess, base: string, token: string
 async function start(publicAccess = false) {
   child = spawn(process.execPath, ['--import', 'tsx', 'apps/cli/src/bin.ts', 'serve', '--port', '0'], {
     cwd: repo, windowsHide: true, stdio: 'ignore',
-    env: { ...process.env, TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_REVIEW_PUBLIC: publicAccess ? '1' : '0', SYLLORA_ALLOWED_ORIGINS: origin },
+    env: { ...process.env, SYLLORA_SKIP_DEMO_SEED: '1', TSX_TSCONFIG_PATH: join(repo, 'tsconfig.base.json'), SYLLORA_REVIEW_MODE: '1', SYLLORA_REVIEW_ROOT: root, SYLLORA_REVIEW_PUBLIC: publicAccess ? '1' : '0', SYLLORA_ALLOWED_ORIGINS: origin },
   })
   for (let n = 0; n < 200; n++) {
     const state = await readFile(join(root, 'home', 'host.json'), 'utf8').then(JSON.parse).catch(() => null)
@@ -31,9 +31,10 @@ function post(method: string, payload: unknown, credential = token) {
 beforeAll(async () => { root = await mkdtemp(join(tmpdir(), 'syllora-review-http-')); await start() })
 afterAll(async () => { await stop(); if (root) await rm(root, { recursive: true, force: true }) })
 it('enforces exact CORS, bearer and Secure cookie authentication', async () => {
-  const options = await fetch(`${base}/api/syllora/state`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Headers': 'Authorization,ngrok-skip-browser-warning' } })
+  const options = await fetch(`${base}/api/syllora/state`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Headers': 'Authorization,ngrok-skip-browser-warning,x-material-filename' } })
   expect(options.status).toBe(204)
   expect(options.headers.get('Access-Control-Allow-Origin')).toBe(origin)
+  expect(options.headers.get('Access-Control-Allow-Headers')).toContain('x-material-filename')
   const rogue = await fetch(`${base}/api/syllora/state`, { method: 'OPTIONS', headers: { Origin: 'https://attacker.example' } })
   expect(rogue.status).toBe(403); expect(rogue.headers.get('Access-Control-Allow-Origin')).toBeNull()
   expect((await post('syllora/state', {}, 'wrong')).status).toBe(401)

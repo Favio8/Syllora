@@ -18,6 +18,10 @@ import { isModalOpen } from "@/src/lib/modalStack";
 import { useAppStore } from "@/src/store/useAppStore";
 import type { PanelTab } from "@/src/store/useAppStore";
 
+export function hasOpenModal() {
+  return isModalOpen() || Array.from(document.querySelectorAll<HTMLElement>('dialog[open], [aria-modal="true"]')).some(el=>el.getClientRects().length>0);
+}
+
 const TAB_ORDER: PanelTab[] = ["progress", "syllabus", "heatmap", "quiz"];
 const ZONE_ORDER = ["left", "input", "right"] as const;
 type Zone = (typeof ZONE_ORDER)[number];
@@ -47,6 +51,7 @@ function focusZone(zone: Zone) {
 export function useKeyboardShortcuts() {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if(event.defaultPrevented)return;
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
       const inEditable =
@@ -66,14 +71,14 @@ export function useKeyboardShortcuts() {
           // 向导/各类确认框，含非 store 的本地弹层）时不叠开 Palette，避免
           // 半叠加态；旧实现只查三个 store 旗标，MaterialsDialog 打开时
           // Ctrl+K 仍会叠开。
-          if (isModalOpen()) return;
+          if (hasOpenModal()) return;
           event.preventDefault();
           state.setPaletteOpen(!state.paletteOpen);
           return;
         }
         // UI-20：其余 Ctrl 组合键不再穿透弹层——Palette 搜索框里按 Ctrl+N
         // 会静默新建会话、设置弹层里会静默切 Tab。Ctrl+K 留作弹层互斥开关。
-        if (state.paletteOpen || isModalOpen()) return;
+        if (state.paletteOpen || hasOpenModal()) return;
         if (key === "n") {
           event.preventDefault();
           // UI-22：失败原因（无项目 vs 请求失败）由 createNewSession 内部
@@ -83,12 +88,14 @@ export function useKeyboardShortcuts() {
         }
         // 右栏折叠：收进去把宽度让给中栏对话（右栏头部按钮同效）。
         if (key === "b") {
+          if(document.querySelector('.sy-app'))return; // Syllora owns its visible panel state.
           event.preventDefault();
           state.setRightPanelCollapsed(!state.rightPanelCollapsed);
           return;
         }
         const n = Number(event.key);
         if (n >= 1 && n <= 4) {
+          if(document.querySelector('.sy-app'))return;
           event.preventDefault();
           state.setActiveTab(TAB_ORDER[n - 1]);
         }
@@ -118,6 +125,7 @@ export function useKeyboardShortcuts() {
 
       // -- 无修饰键 ---------------------------------------------------------
       if (event.key === "Escape") {
+        if(hasOpenModal()&&!state.paletteOpen)return;
         if (state.paletteOpen) {
           event.preventDefault();
           state.setPaletteOpen(false);
@@ -141,7 +149,8 @@ export function useKeyboardShortcuts() {
         // W-10：判定改查 modal 栈（isModalOpen）——覆盖材料/向导/确认框等
         // 非 store 本地弹层；弹层内的循环由 useFocusTrap 的 capture 处理器
         // 负责（边界 preventDefault），中段交由浏览器原生 Tab。
-        if (state.paletteOpen || isModalOpen()) return; // 弹层让位原生 Tab
+        if (state.paletteOpen || hasOpenModal()) return; // 弹层让位原生 Tab
+        if(!ZONE_ORDER.every(zone=>document.querySelector(`[data-focus-zone="${zone}"]`)))return;
         event.preventDefault();
         const zone = currentZone() ?? "left";
         const delta = event.shiftKey ? -1 : 1;

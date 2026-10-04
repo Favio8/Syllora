@@ -44,13 +44,15 @@ function props() {
 
 const SELECTED = '被选中的文字'
 
-/** 伪造页面选区：容器必须在正文 article 内，且 Range 的 rect 在 jsdom 里要自行补。 */
+/** 伪造页面选区：容器必须在正文 article 内，且 Range 的 rect 在 jsdom 里要自行补；
+ *  工具栏的来源标注依赖 `range.intersectsNode(节点)`，纯对象也得带上这个方法。 */
 function selectArticleText() {
   const article = document.querySelector('.reading-paper')
   const range = {
     startContainer: article,
     endContainer: article,
     getBoundingClientRect: () => ({ left: 120, top: 240, width: 80, height: 18, bottom: 258, right: 200, x: 120, y: 240 }),
+    intersectsNode: () => true,
   }
   vi.spyOn(window, 'getSelection').mockReturnValue({
     isCollapsed: false,

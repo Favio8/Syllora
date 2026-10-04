@@ -10,7 +10,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); sessionStorage.clea
 describe('review browser transport', () => {
   it('sends REST, uploads and SSE directly with a tab-scoped bearer and no cross-site cookie', async () => {
     setReviewToken('test-access-code'); request.mockResolvedValue(new Response('{}'));
-    for (const path of ['/api/syllora/state', '/api/courses/c/sources', '/api/syllora/agentStream']) {
+    for (const path of ['/api/syllora/state', '/api/courses/c/sources', '/api/syllora/agentStream', '/api/syllora/classroom/material?courseId=c']) {
       await reviewFetch(path, { method: 'POST' });
       const [url, init] = request.mock.calls.at(-1)!;
       expect(url).toBe(`https://review.ngrok-free.app${path}`);
@@ -26,6 +26,9 @@ describe('review browser transport', () => {
     await reviewFetch('/api/syllora/material-file?courseId=c&sourceId=s');
     expect(request.mock.calls[0]![0]).toBe('/api/syllora/material-file?courseId=c&sourceId=s');
     expect(request.mock.calls[0]![1].credentials).toBe('same-origin');
+    await reviewFetch('/api/syllora/material-document?courseId=c&materialId=m&path=images/figure.png');
+    expect(request.mock.calls[1]![0]).toBe('/api/syllora/material-document?courseId=c&materialId=m&path=images/figure.png');
+    expect(request.mock.calls[1]![1].credentials).toBe('same-origin');
     expect(() => reviewFetch('/api/../../outside')).toThrow('路径');
     expect(() => reviewFetch('//attacker.test/api/state')).toThrow('路径');
   });

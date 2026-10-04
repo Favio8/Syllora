@@ -15,19 +15,19 @@ function state(course:Course) {
 describe('PRD scheduled actions and material recovery UI',()=>{
   it('keeps unsaved settings and the original base version when another page saves, then loads new values only explicitly',async()=>{
     const course=fixture();const requests:any[]=[];const fetch=vi.fn(async(url:string,options?:RequestInit)=>{if(url.endsWith('/learningSettings')){const payload=JSON.parse(String(options?.body)).payload;requests.push(payload);return {ok:false,json:async()=>({error:{code:'VERSION_CONFLICT',message:'学习设置已被另一页面修改'}})}}return {ok:true,json:async()=>({result:state(course)})}});vi.stubGlobal('fetch',fetch);
-    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByText(/· 已选 1 个知识点/));fireEvent.click(screen.getByText('复习间隔设置'));fireEvent.change(screen.getByLabelText('首次补强与复测（小时）'),{target:{value:'48'}});fireEvent.change(screen.getByLabelText('会话闲置关闭（分钟）'),{target:{value:'45'}});
+    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*已选 1 个知识点/}));fireEvent.click(screen.getByText('复习间隔设置'));fireEvent.change(screen.getByLabelText('首次补强与复测（小时）'),{target:{value:'48'}});fireEvent.change(screen.getByLabelText('会话闲置关闭（分钟）'),{target:{value:'45'}});
     const oldCalls=fetch.mock.calls.length;course.learningSettings={revision:1,reviewHours:[72,120,240],sessionIdleMinutes:60};await waitFor(()=>expect(fetch.mock.calls.length).toBeGreaterThan(oldCalls),{timeout:3000});
     expect(screen.getByLabelText('首次补强与复测（小时）')).toHaveValue(48);expect(screen.getByLabelText('会话闲置关闭（分钟）')).toHaveValue(45);expect(screen.getByText(/你的未保存输入和原修订号已保留/)).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'保存未来复习间隔'}));await screen.findByText('学习设置已被另一页面修改');expect(requests[0]).toMatchObject({baseVersion:0,reviewHours:[48,72,168],sessionIdleMinutes:45});
     fireEvent.click(screen.getByRole('button',{name:'放弃草稿并载入最新设置'}));expect(screen.getByLabelText('首次补强与复测（小时）')).toHaveValue(72);expect(screen.getByLabelText('会话闲置关闭（分钟）')).toHaveValue(60);
   })
   it('updates a clean form on polling and does not discard a subsequent edit while its own successful save catches up',async()=>{
-    const course=fixture(),requests:any[]=[];const fetch=vi.fn(async(url:string,options?:RequestInit)=>{if(url.endsWith('/learningSettings')){requests.push(JSON.parse(String(options?.body)).payload);return {ok:true,json:async()=>({result:{saved:true}})}}return {ok:true,json:async()=>({result:state(course)})}});vi.stubGlobal('fetch',fetch);render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByText(/· 已选 1 个知识点/));fireEvent.click(screen.getByText('复习间隔设置'));
+    const course=fixture(),requests:any[]=[];const fetch=vi.fn(async(url:string,options?:RequestInit)=>{if(url.endsWith('/learningSettings')){requests.push(JSON.parse(String(options?.body)).payload);return {ok:true,json:async()=>({result:{saved:true}})}}return {ok:true,json:async()=>({result:state(course)})}});vi.stubGlobal('fetch',fetch);render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*已选 1 个知识点/}));fireEvent.click(screen.getByText('复习间隔设置'));
     course.learningSettings={revision:1,reviewHours:[48,96,240],sessionIdleMinutes:45};await waitFor(()=>expect(screen.getByLabelText('首次补强与复测（小时）')).toHaveValue(48),{timeout:3000});fireEvent.change(screen.getByLabelText('首次补强与复测（小时）'),{target:{value:'60'}});fireEvent.click(screen.getByRole('button',{name:'保存未来复习间隔'}));await waitFor(()=>expect(requests).toHaveLength(1));await waitFor(()=>expect(screen.getByRole('button',{name:'保存未来复习间隔'})).not.toBeDisabled());fireEvent.change(screen.getByLabelText('首次补强与复测（小时）'),{target:{value:'72'}});
     const before=fetch.mock.calls.length;course.learningSettings={revision:2,reviewHours:[60,96,240],sessionIdleMinutes:45};await waitFor(()=>expect(fetch.mock.calls.length).toBeGreaterThan(before),{timeout:3000});expect(screen.getByLabelText('首次补强与复测（小时）')).toHaveValue(72);expect(screen.queryByText(/你的未保存输入和原修订号已保留/)).toBeNull();fireEvent.click(screen.getByRole('button',{name:'保存未来复习间隔'}));await waitFor(()=>expect(requests).toHaveLength(2));expect(requests[1]).toMatchObject({baseVersion:2,reviewHours:[72,96,240]})
   })
   it('validates editable future intervals and preserves unsaved input after a storage failure',async()=>{
     const course=fixture();const fetch=vi.fn(async(url:string)=>url.endsWith('/learningSettings')?{ok:false,json:async()=>({error:{message:'合成保存失败'}})}:{ok:true,json:async()=>({result:state(course)})});vi.stubGlobal('fetch',fetch);
-    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByText(/· 已选 1 个知识点/));fireEvent.click(screen.getByText('复习间隔设置'));
+    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*已选 1 个知识点/}));fireEvent.click(screen.getByText('复习间隔设置'));
     const input=screen.getByLabelText('首次补强与复测（小时）');fireEvent.change(input,{target:{value:'12'}});fireEvent.click(screen.getByRole('button',{name:'保存未来复习间隔'}));
     expect(screen.getByText('请输入不递减的三个整数小时，范围 24–8760。')).toBeVisible();expect(fetch.mock.calls.every(([url])=>!url.endsWith('/learningSettings'))).toBe(true);
     fireEvent.change(input,{target:{value:'48'}});fireEvent.click(screen.getByRole('button',{name:'保存未来复习间隔'}));await screen.findByText('合成保存失败');expect(input).toHaveValue(48);
@@ -37,7 +37,7 @@ describe('PRD scheduled actions and material recovery UI',()=>{
     const course=fixture();course.questions.push({id:'q',pointId:'p',taskId:'old',slot:0,family:'fixture',stem:'合成错题：单位矩阵保持什么？',options:['向量','答案 B','答案 C','答案 D'],answer:0,explanation:'合成解析：单位矩阵保持原向量。',sourceIds:['s'],quote:'合成来源',status:'valid',assisted:false});
     course.attempts.push({id:'attempt',questionId:'q',option:1,correct:false,assisted:false,at:Date.now(),sequence:0});
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({result:state(course)})}));
-    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByText(/· 已选 1 个知识点/));
+    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true});fireEvent.click(screen.getByRole('button',{name:'复习与巩固'}));fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*已选 1 个知识点/}));
     fireEvent.click(screen.getByText('错题记录 · 1 题'));
     expect(screen.getByRole('heading',{name:'合成错题：单位矩阵保持什么？'})).toBeVisible();
     expect(screen.getByText('你的选项 B：答案 B')).toBeVisible();expect(screen.getByText('正确选项 A：向量')).toBeVisible();
@@ -59,10 +59,14 @@ describe('PRD scheduled actions and material recovery UI',()=>{
     const course=fixture();course.plan=buildPlan(course,{scope:['p'],dailyMinutes:40,days:7,restDays:[]},Date.now(),()=> 'task')
     course.plan.tasks[0]!.date=addDate(localDate(Date.now(),course.timezone),1);recordNext(course,Date.now(),()=> 'action','plan')
     const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({result:state(course)})});vi.stubGlobal('fetch',fetch)
-    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByRole('heading',{name:'等待已确认任务的计划日期'})
-    expect(screen.getByRole('button',{name:/^继续/})).toBeDisabled()
-    expect(screen.getByText(/可执行时间：/)).toBeVisible()
-    // 任务列表已移入「计划管理」整页：先在工作台断言下一步卡片，再点入口看任务状态
+    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByText('合成 UI 课程',{exact:true})
+    // 工作台的「下一步」卡片已随 UI 重构移除；未来任务的可执行时间改在右栏「学习记录」对话框里查看。
+    fireEvent.click(await screen.findByRole('button',{name:'学习记录'}))
+    const log=await screen.findByRole('dialog',{name:'学习记录'})
+    expect(log.textContent).toContain('等待已确认任务的计划日期')
+    expect(await screen.findByText(/可执行 /)).toBeVisible()
+    fireEvent.click(screen.getByRole('button',{name:'关闭学习记录'}))
+    // 任务列表已移入「计划管理」整页：未来日期的任务不可提前开始。
     fireEvent.click(screen.getByRole('button',{name:/^计划管理/}))
     expect(screen.getByRole('button',{name:/旧知识点.*待开始/})).toBeDisabled()
     expect(fetch.mock.calls.every(([url])=>url==='/api/syllora/state')).toBe(true)
@@ -81,13 +85,14 @@ describe('PRD scheduled actions and material recovery UI',()=>{
       }
       return {ok:true,json:async()=>({result:state(course)})}
     });vi.stubGlobal('fetch',fetch)
-    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByRole('heading',{name:'补充资料后继续当前知识点'})
+    render(<Syllora/>);fireEvent.click(await screen.findByRole('button',{name:/合成 UI 课程.*个知识点/}));await screen.findByRole('heading',{name:'恢复「旧知识点」的资料来源'})
     expect(screen.queryByRole('button',{name:'获取资料讲解'})).toBeNull()
     expect(screen.getByRole('button',{name:'确认关联并恢复学习'})).toBeDisabled()
     fireEvent.click(screen.getByRole('combobox',{name:'补充资料中的知识点'}));fireEvent.click(screen.getByRole('option',{name:'补充章 · 补充知识点'}))
     fireEvent.click(screen.getByRole('button',{name:'确认关联并恢复学习'}))
-    await waitFor(()=>expect(screen.getByRole('heading',{name:'继续当前任务'})).toBeVisible())
-    fireEvent.click(screen.getByRole('button',{name:/^练习$/}));expect(screen.getByRole('button',{name:'获取资料讲解'})).toBeEnabled()
+    // 恢复后不再有拦截提示；练习重新可进入且可以获取讲解（下一步卡片已随 UI 重构移除）。
+    await waitFor(()=>expect(screen.queryByRole('heading',{name:'恢复「旧知识点」的资料来源'})).toBeNull())
+    fireEvent.click(screen.getByRole('button',{name:/^练习$/}));await waitFor(()=>expect(screen.getByRole('button',{name:'获取资料讲解'})).toBeEnabled())
   })
 })
 

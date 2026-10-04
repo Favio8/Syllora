@@ -45,6 +45,121 @@ import type {
 import type { HarnessTask, Syllabus } from "@/src/types";
 import { reviewFetch } from './review-transport';
 
+/** DocMind 文档解析设置（settings.docmind.*）：是否已配置 + 端点。 */
+export interface DocMindSettings {
+  configured: boolean;
+  endpoint: string;
+}
+
+/** settings.docmind.save 的入参（partial 语义：缺省字段保留现值）。 */
+export interface DocMindSaveInput {
+  accessKeyId?: string;
+  accessKeySecret?: string;
+  endpoint?: string | null;
+}
+
+/** 云端 OpenMAIC 连接（settings.cloud.*）：口令只存本机密封凭据，接口不回显。 */
+export interface CloudSettings {
+  configured: boolean;
+  baseUrl: string;
+  hasAccessCode: boolean;
+  provider: string;
+  preset: string;
+  model: string;
+  hasModelKey: boolean;
+}
+
+/** settings.cloud.save 的入参（partial 语义：缺省字段保留现值，空串清除）。 */
+export interface CloudSaveInput {
+  baseUrl?: string;
+  accessCode?: string;
+  provider?: string;
+  preset?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+/** 云端能力探测（classroom.capabilities）：未配置连接时 configured=false。 */
+export interface ClassroomCapabilities {
+  configured: boolean;
+  baseUrl: string | null;
+  capabilities: Record<string, boolean>;
+  materials: { maxCount: number; maxTotalBytes: number; maxDocumentBytes: number; formats: string[] };
+}
+
+/** 本地已下载的课堂元信息（classroom.list / classroom.get）。 */
+export interface ClassroomMeta {
+  classroomId: string;
+  title: string;
+  requirement: string;
+  materialIds: string[];
+  sourceCount: number;
+  sceneCount: number;
+  sceneTypes: Record<string, number>;
+  generatedAt: number;
+  fetchedAt: number;
+  cloudBase: string;
+}
+
+export interface ClassroomProgress { sceneId: string | null; answers: Record<string, string[]>; updatedAt: number }
+
+/** 课堂场景：slide 有 canvas；quiz / interactive 没有（渲染器必须分支，不能当成少页）。 */
+export interface ClassroomScene {
+  id: string;
+  type?: string;
+  order?: number;
+  title?: string;
+  actions?: Array<{ id?: string; type?: string; text?: string; [key: string]: unknown }>;
+  content?: { type?: string; canvas?: unknown; questions?: ClassroomQuestion[]; url?: string; html?: string; widgetType?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+export interface ClassroomQuestion {
+  id?: string;
+  type?: 'single' | 'multiple' | 'short_answer' | string;
+  question?: string;
+  /** 选项：`value` 是代号（"A"），`label` 是显示文本；`answer` 存代号数组（官方 DSL 口径）。 */
+  options?: Array<{ label?: string; value?: string }>;
+  answer?: string[];
+  analysis?: string;
+  /** 云端是否可自动判分：简答题为 false（无标准答案），只给参考要点。 */
+  hasAnswer?: boolean;
+  /** 简答题的评分要点（机器评分用，不在界面展示）。 */
+  commentPrompt?: string;
+  points?: number;
+}
+
+export interface ClassroomDocument {
+  meta: ClassroomMeta;
+  stage: Record<string, unknown> | null;
+  scenes: ClassroomScene[];
+  outline?: unknown;
+  progress: ClassroomProgress;
+}
+
+/** classroom.job 的作业状态（字段对齐云端生成任务）。 */
+export interface ClassroomJobState {
+  jobId: string;
+  courseId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  step: string;
+  progress?: number | undefined;
+  scenesGenerated?: number | undefined;
+  totalScenes?: number | undefined;
+  classroomId?: string | undefined;
+  error?: string | undefined;
+  done: boolean;
+  updatedAt: number;
+}
+
+/** 课堂角色（首页输入卡片）：AI 教师必选，学生可多选。 */
+export interface ClassroomRole { id: string; name: string; kind: 'teacher' | 'student'; persona?: string; voice?: string }
+
+/** 解析产物 URL：path 为空取 DocMind markdown 版式正文，`images/<name>` 取本地化图片。 */
+export function materialDocumentUrl(courseId: string, materialId: string, path = ''): string {
+  return `/api/syllora/material-document?courseId=${encodeURIComponent(courseId)}&materialId=${encodeURIComponent(materialId)}${path === '' ? '' : `&path=${encodeURIComponent(path)}`}`;
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -594,6 +709,56 @@ export const api = {
     overwrite?: boolean;
   }) => rpc<SettingsPayload>("settings.saveProvider", payload),
 
+  /** DocMind 文档解析设置（settings.docmind.*）：是否已配置 + 端点。 */
+  docmindSettings: () =>
+    rpc<DocMindSettings>("settings.docmind.get"),
+
+  /** 保存 DocMind 凭据/端点：endpoint 传 null 表示用默认地址；缺省字段保留现值。 */
+  saveDocMind: (input: DocMindSaveInput) =>
+    rpc<SettingsPayload & { docmind?: DocMindSettings }>("settings.docmind.save", input),
+
+  /**
+   * 来源正文：state 里的来源只带定位信息（整本教材不再把全文塞进每次轮询），
+   * 「资料来源」弹层与阅读助手需要正文时按 id 单独取。
+   */
+  materialSource: (courseId: string, sourceId: string) =>
+    sylloraRpc<{ source: { id: string; text: string; anchor: string; materialId: string; section?: string } }>("source", { courseId, sourceId }),
+
+  /** 阅读标记（自评，不计学习证据）：status 传 null 清除该章节标记。 */
+  readingSetMark: (courseId: string, materialId: string, anchor: string, status: "mastered" | "learning" | "weak" | null) =>
+    sylloraRpc<{ saved: boolean; marks: Record<string, "mastered" | "learning" | "weak"> }>("readingSetMark", { courseId, materialId, anchor, status }),
+
+  /** 云端课堂连接（settings.cloud.*）：地址 + 访问口令（口令加密保存，不回显）。 */
+  cloudSettings: () =>
+    rpc<CloudSettings>("settings.cloud.get"),
+
+  /** 保存云端连接：缺省字段保留现值，空串清除该项。 */
+  saveCloud: (input: CloudSaveInput) =>
+    rpc<CloudSettings>("settings.cloud.save", input),
+
+  // ---- 虚拟课堂（点号方法）：作业轮询、课堂读取、列表、能力与进度 ----
+  classroomJob: (courseId: string, jobId: string) =>
+    rpc<ClassroomJobState>("classroom.job", { courseId, jobId }),
+  classroomGet: (courseId: string, classroomId: string) =>
+    rpc<ClassroomDocument>("classroom.get", { courseId, classroomId }),
+  classroomList: (courseId: string) =>
+    rpc<{ classrooms: ClassroomMeta[] }>("classroom.list", { courseId }),
+  classroomCapabilities: (courseId?: string) =>
+    rpc<ClassroomCapabilities>("classroom.capabilities", courseId ? { courseId } : {}),
+  classroomProgress: (courseId: string, classroomId: string, sceneId: string | null, answers: Record<string, string[]>) =>
+    rpc<{ saved: boolean }>("classroom.progress", { courseId, classroomId, sceneId, answers }),
+  /**
+   * 生成中也能取：给了 classroomId 取某份课堂，只给 jobId 则由宿主认领**正在生成**的课堂。
+   * 用于「先进入课堂，边学边生成后面几页」。
+   */
+  classroomLive: (courseId: string, target: { classroomId?: string; jobId?: string }) =>
+    rpc<{ classroomId: string | null; scenes: ClassroomScene[]; sceneTypes: Record<string, number>; count: number; generating: boolean }>("classroom.live", { courseId, ...target }),
+  /** 删除一份课堂：本地必删；cloud=true 时顺带删云端（失败不阻断本地删除）。 */
+  classroomDelete: (courseId: string, classroomId: string, cloud = false) =>
+    rpc<{ deleted: boolean; cloud: "skipped" | "deleted" | "failed" }>("classroom.delete", { courseId, classroomId, cloud }),
+  classroomAttachments: (courseId: string) =>
+    rpc<{ count: number; bytes: number; names: string[] }>("classroom.attachments", { courseId }),
+
   setProviderCredential: (providerId: string, apiKey: string) =>
     rpc<SettingsPayload>("settings.setCredential", { providerId, apiKey }),
 
@@ -632,11 +797,11 @@ export const api = {
     list: (courseId: string) =>
       sylloraRpc<{ notes: NoteMeta[] }>("notes/list", { courseId }),
     read: (courseId: string, noteId: string) =>
-      sylloraRpc<{ meta: NoteMeta; content: string }>("notes/read", { courseId, noteId }),
+      sylloraRpc<{ meta: NoteMeta; content: string; version: string }>("notes/read", { courseId, noteId }),
     create: (courseId: string, title: string) =>
       sylloraRpc<{ meta: NoteMeta }>("notes/create", { courseId, title }),
-    update: (courseId: string, noteId: string, payload: { title?: string; content?: string }) =>
-      sylloraRpc<{ meta: NoteMeta }>("notes/update", { courseId, noteId, ...payload }),
+    update: (courseId: string, noteId: string, payload: { title?: string; content?: string; baseVersion?:string }) =>
+      sylloraRpc<{ meta: NoteMeta; version: string }>("notes/update", { courseId, noteId, ...payload }),
     delete: (courseId: string, noteId: string) =>
       sylloraRpc<{ deleted: boolean }>("notes/delete", { courseId, noteId }),
     /** 笔记 AI：一次一种动作（续写/总结/扩写/改写/润色/精简/自定义指令）→ 可直接粘进笔记的正文。 */
@@ -646,4 +811,5 @@ export const api = {
     uploadImage: (courseId: string, payload: { ext: string; data: string }) =>
       sylloraRpc<{ name: string }>("notes/uploadImage", { courseId, ...payload }),
   },
+
 };

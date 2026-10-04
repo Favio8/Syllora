@@ -1,0 +1,92 @@
+[
+  {
+    "id": "49e53f1eb2d92cc140956e5ed562cc6d2396f5519da0ab548ffbef57bc9ee294",
+    "chapter": "1.1 矩阵及其运算",
+    "materialIds": [
+      "ff279f99-2597-5b9b-8047-92184ff0a46a"
+    ],
+    "sourceIds": [
+      "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+      "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+    ],
+    "intro": {
+      "text": "矩阵乘法：本节整理自「1.1 矩阵及其运算」。",
+      "sourceIds": [
+        "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c"
+      ]
+    },
+    "concepts": [
+      {
+        "name": "矩阵乘法",
+        "text": "本节给出矩阵的定义、相等条件，以及加法与数乘的运算规则；重点说明矩阵乘法的可乘条件与元素计算方式，并指出乘法不满足交换律，最后给出转置的定义与 (AB)ᵀ=BᵀAᵀ。",
+        "quote": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素。行数与列数都等于 n 的矩阵",
+        "sourceIds": [
+          "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+        ]
+      }
+    ],
+    "examples": [],
+    "connections": [],
+    "analogies": []
+  },
+  {
+    "id": "8483bb19bd9cb49f853fd5d22265f155f818f78cb4a8b6b039eaafe636a1f4f8",
+    "chapter": "1.2 行列式",
+    "materialIds": [
+      "ff279f99-2597-5b9b-8047-92184ff0a46a"
+    ],
+    "sourceIds": [
+      "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02",
+      "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488"
+    ],
+    "intro": {
+      "text": "行列式的性质：本节整理自「1.2 行列式」。",
+      "sourceIds": [
+        "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02"
+      ]
+    },
+    "concepts": [
+      {
+        "name": "行列式的性质",
+        "text": "本节给出 n 阶行列式的定义、余子式与代数余子式，以及按行展开的公式；重点列出行列式的主要性质——转置不变、两行互换变号、某行倍乘则整体倍乘、两行相同或成比例则为零、行加倍加不变，并说明用它们化上三角求值。",
+        "quote": "由 n² 个元素按一定规则确定的一个数称为 n 阶行列式，记为 D。二阶行列式等于主对角线元素之积减去副对角线元素之积；",
+        "sourceIds": [
+          "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488"
+        ]
+      }
+    ],
+    "examples": [],
+    "connections": [],
+    "analogies": []
+  },
+  {
+    "id": "649e0892ec99005768808071cffc5e32e6f242abfc2ec367033dd45d3a28b2b4",
+    "chapter": "1.3 线性方程组与矩阵的秩",
+    "materialIds": [
+      "ff279f99-2597-5b9b-8047-92184ff0a46a"
+    ],
+    "sourceIds": [
+      "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a",
+      "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79"
+    ],
+    "intro": {
+      "text": "线性方程组解的判定：本节整理自「1.3 线性方程组与矩阵的秩」。",
+      "sourceIds": [
+        "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a"
+      ]
+    },
+    "concepts": [
+      {
+        "name": "线性方程组解的判定",
+        "text": "本节给出线性方程组的矩阵形式与增广矩阵，说明初等行变换不改变解；进而用矩阵的秩判定解的情况：r(A)=r(A|b) 时才有解，秩等于未知量个数时解唯一，秩小于未知量个数时有无穷多解，自由未知量个数为 n-r。",
+        "quote": "含有 n 个未知量的线性方程组可以用矩阵形式 Ax=b 表示，其中 A 是系数矩阵，b 是常数项列向量。把常数项列并入系",
+        "sourceIds": [
+          "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79"
+        ]
+      }
+    ],
+    "examples": [],
+    "connections": [],
+    "analogies": []
+  }
+]

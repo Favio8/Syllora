@@ -30,8 +30,50 @@ node scripts/smoke-sidecar.mjs                 # 阶段二冒烟：免装 Node �
 node scripts/smoke-desktop.mjs                 # 阶段三冒烟：真实 electron . 整机验证
 pnpm --filter @syllora/desktop dev:desktop   # 开发壳（需组装过资源）
 $env:SYLLORA_DESKTOP_DEV_URL='http://127.0.0.1:8080'; electron .   # 联调外部 serve（不拉 sidecar）
-node node_modules/electron-builder/cli.js --win --publish never       # Windows NSIS 安装包 → dist/
+node scripts/build-installer.mjs --win --publish never   # Windows NSIS 安装包 → dist/
 ```
+
+## 构建前必读：课程目录会被 dist 重建清掉
+
+`electron-builder` 会**整体重建** `dist/<platform>-unpacked`，而课程目录默认就在
+`<exe 所在目录>/.syllora/`——直接跑 builder 会把用户资料一起删掉（2026-10-04 实际发生过一次：
+三门课变成「课程文件夹已移动或不存在」）。安装版有 `scripts/preserve-courses.nsh` 在升级/卸载时
+保全 `.syllora`，**直接运行 unpacked 目录时没有任何保护**。
+
+所以构建一律走包装脚本，它在构建前后搬运课程目录：
+
+```powershell
+node scripts/build-installer.mjs --win --publish never   # 构建前暂存 .syllora，构建后按课程合并还原
+node scripts/build-installer.mjs --preserve-only         # 只把上次构建遗留的暂存合并回来（不搬运现网数据）
+```
+
+- 暂存位置：`dist/.syllora-stash-<时间戳>-<平台>/syllora`；还原后无冲突即自动清掉。
+- 两边都有同一门课时以 unpacked 目录里的为准，暂存保留供人工核对（构建期间应用不会写入）。
+- `package.json` 的 `dist` / `dist:dir` / `dist:win|mac|linux` 已全部改走该包装。
+- 仍然建议：把课程目录放到固定的应用目录（安装版），而不是每次构建都会重建的 `dist/` 里；
+  真要长期用 unpacked 目录跑，请定期备份 `dist/win-unpacked/.syllora`。
+
+## 打包报 `⨯ fetch failed`：Electron 内核 zip（本机 GitHub 不可达）
+
+打包时需要 Electron 内核 `electron-v44.1.1-win32-x64.zip`（版本 = `electron` devDependency）。
+默认从 GitHub Releases 下载；本机网络不可达，且 @electron/get 即使命中 zip 缓存也要拉
+同目录的校验文件，于是整包失败（2026-10-04 实际发生）。两条路（第 2 条已实测通过）：
+
+```powershell
+# 1) 走 npmmirror 镜像（需要网络，只下载 zip 与校验文件）
+$env:ELECTRON_MIRROR='https://registry.npmmirror.com/-/binary/electron/'
+node scripts/build-installer.mjs --win --publish never
+
+# 2) 完全离线：直接指向 @electron/get 缓存里的 zip（<hash> 目录名 = 下载 URL 去掉文件名后的 sha256）
+$zip = Get-ChildItem "$env:LOCALAPPDATA\electron\Cache" -Recurse -Filter 'electron-v44.1.1-win32-x64.zip' |
+  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+node scripts/build-installer.mjs --win --publish never "-c.electronDist=$($zip.FullName)"
+```
+
+- `electronDist` 可指向 zip / 含该 zip 的目录 / 已解包的 Electron 目录（app-builder-lib 三种都支持）。
+- 走 `electronDist` 时 electron-builder **跳过默认清理**（`cleanupAfterUnpack`）：需手动删除
+  `resources/default_app.asar` 与根目录 `version`，并把 `LICENSE` 改名 `LICENSE.electron.txt`，
+  产物才与标准构建一致。
 
 ## 本机（Windows + pnpm 不在 PATH）注意
 

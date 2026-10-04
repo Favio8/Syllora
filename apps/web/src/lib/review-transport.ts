@@ -58,7 +58,7 @@ export function reviewFetch(path: string, init: RequestInit = {}): Promise<Respo
   if (reviewIsPublic()) headers.delete('Authorization');
   if (token) headers.set('Authorization', `Bearer ${token}`);
   headers.set('ngrok-skip-browser-warning', '1');
-  const media = target.pathname === '/api/syllora/material-file' || target.pathname === '/api/syllora/notes/asset';
+  const media = target.pathname === '/api/syllora/material-file' || target.pathname === '/api/syllora/material-document' || target.pathname === '/api/syllora/notes/asset';
   return fetch(media ? path : target.href, { ...init, credentials: media ? 'same-origin' : 'omit', headers }).then(response => {
     if (response.status === 401 && !reviewIsPublic()) window.dispatchEvent(new Event('syllora-review-unauthorized'));
     return response;

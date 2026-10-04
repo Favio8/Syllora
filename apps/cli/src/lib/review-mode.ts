@@ -58,7 +58,7 @@ export async function prepareReviewMode(env: NodeJS.ProcessEnv = process.env): P
       if (origin && (isLoopbackOrigin(origin) || origins.has(origin))) {
         response.setHeader('Access-Control-Allow-Origin', origin)
         response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
-        response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, x-syllora-token, ngrok-skip-browser-warning')
+        response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, x-syllora-token, x-material-filename, ngrok-skip-browser-warning')
         response.setHeader('Access-Control-Max-Age', '300')
       }
     },

@@ -8,6 +8,32 @@ export type { FileCandidate } from './syllora-project-types.ts'
 export const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex')
 export function stableId(value:string) { const h=sha(value);return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}` }
 export const SOURCE_LIMIT = 20 * 1024 * 1024
+/**
+ * 资料解析上限（统一走 DocMind 之后放宽：整本教材要能进来）。
+ * - 单份：≤ 150 MiB 原件、≤ 400 页、≤ 150 万字符
+ * - 课程合计：≤ 1600 页、≤ 600 万字符
+ * 讲义仍按批处理（≤20 片段 / ≤8000 字符一批），整本书会分成很多批，可取消、有检查点。
+ */
+export const MATERIAL_LIMITS = {
+  maxBytesPerMaterial: 150 * 1024 * 1024,
+  maxPagesPerMaterial: 400,
+  maxCharsPerMaterial: 1_500_000,
+  maxPagesPerCourse: 1600,
+  maxCharsPerCourse: 6_000_000,
+} as const
+/**
+ * 可作为课程资料的扩展名：文档类交给 DocMind 解析；纯文本读入后同样提交 DocMind
+ * （用户要求「上传的数据处理都走 DocMind」），DocMind 明确拒绝该格式时才本地直读。
+ */
+export const SUPPORTED_MATERIAL_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.html', '.htm', '.md', '.txt'] as const
+/** 本地就绪（无需解析引擎）的纯文本格式。 */
+export const PLAIN_TEXT_EXTENSIONS = ['.md', '.txt'] as const
+export function isSupportedMaterial(path: string): boolean {
+  return (SUPPORTED_MATERIAL_EXTENSIONS as readonly string[]).includes(extname(path).toLowerCase())
+}
+export function isPlainTextMaterial(path: string): boolean {
+  return (PLAIN_TEXT_EXTENSIONS as readonly string[]).includes(extname(path).toLowerCase())
+}
 /** Preserve physical page numbers, including pages the parser did not return. */
 export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:string}>}):PageIssue[] {
   if(!Number.isInteger(result.total)||result.total<1||result.pages.some(p=>!Number.isInteger(p.num)||p.num<1||p.num>result.total))throw new Error('PDF 解析返回了无效页码')
@@ -16,7 +42,9 @@ export function pdfPageIssues(result:{total:number;pages:Array<{num:number;text:
 }
 // `notes` 是本应用管理的笔记目录（{课程根}/notes/）：用户自己的笔记不作为课程资料候选，
 // 否则每写一篇笔记都会出现在资料清单里，并可能被当作生成依据发送给模型。
-const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__', 'notes'])
+// `ebook` 是电子书产物目录（docmind/markdown.md、refined.md 等）；把它当课程资料扫描会让
+// 「更新课程讲义」把同一本书的多种产物重复计入，直接撞上 100,000 字符上限。
+const excluded = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'coverage', 'target', 'tmp', '__pycache__', 'notes', 'ebook'])
 
 export async function atomicJson(path: string, value: unknown) {
   return atomicText(path, JSON.stringify(value, null, 2))
@@ -97,8 +125,8 @@ export async function scanFiles(root: string, materials: Material[]): Promise<Fi
       const path = join(dir, entry.name), name = relative(root, path).split(sep).join('/')
       if (entry.isDirectory()) { await walk(path); continue }
       if (!entry.isFile()) continue
-      const info = await stat(path), size = info.size, mtimeMs = info.mtimeMs, supported = ['.pdf', '.md', '.txt'].includes(extname(entry.name).toLowerCase())
-      let status: FileCandidate['status'] = !supported ? 'unsupported' : size > SOURCE_LIMIT ? 'too-large' : 'ready'
+      const info = await stat(path), size = info.size, mtimeMs = info.mtimeMs, supported = isSupportedMaterial(entry.name)
+      let status: FileCandidate['status'] = !supported ? 'unsupported' : size > MATERIAL_LIMITS.maxBytesPerMaterial ? 'too-large' : 'ready'
       let fingerprint: string | null = null
       if (status === 'ready') {
         const previous = known.get(name)

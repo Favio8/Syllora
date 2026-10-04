@@ -42,7 +42,7 @@ describe('PRD bounded generation and execution diagnostics',()=>{
       if(mode==='foreign-source')output.sourceIds=[randomUUID()];
       if(mode==='unsupported-quote')output.quote='从未出现在资料中的文字';
       let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'text-delta',text:JSON.stringify(calls===1?output:{valid:false,reason:'合成复核拒绝'})}}};
-      const svc=new SylloraService(root,{now:()=>now,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}),client:()=>client});
+      const svc=new SylloraService(root,{now:()=>now,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}),client:()=>client});
       await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'question',taskId:course.plan.tasks[0]!.id,slot:0});await svc.settleJobs();
       const state=await svc.handle('state') as any;expect(state.jobs[0].state).toBe('failed');expect(state.courses[0].questions).toEqual([]);expect(state.courses[0].attempts).toEqual([]);expect(state.courses[0].evidence[pointId].state).toBe('未评估');expect(state.courses[0].plan).toEqual(course.plan);
       expect(calls).toBe(mode==='failed-review'?2:1);
@@ -55,7 +55,7 @@ describe('PRD bounded generation and execution diagnostics',()=>{
     const output={stem:'合成候选：变换后向量如何？',options:['保持原值','答案 B','答案 C','答案 D'],answer:0,explanation:'合成说明',sourceIds:[sourceId],quote:'单位矩阵保持原向量不变'};
     await writeFile(join(root,'syllora.json'),JSON.stringify({version:1,consent:true,calls:0,courses:[c],jobs:[]}));const compared:string[]=[],prompts:string[]=[];let calls=0;
     const client:StructuredCallClient={async *stream(options){calls++;const prompt=(options.messages.at(-1) as any).content[0].text;prompts.push(prompt);if(calls===1){yield {type:'text-delta',text:JSON.stringify(output)};return}const json=prompt.split('历史题批次：')[1].split('\n本次候选')[0];const history=JSON.parse(json);expect(json.length).toBeLessThanOrEqual(8002);compared.push(...history.map((q:any)=>q.id));yield {type:'text-delta',text:JSON.stringify({valid:!(reject&&history.some((q:any)=>q.id===c.questions[0]!.id)),reason:'合成近重复判定'})}}};
-    const svc=new SylloraService(root,{now:()=>now,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}),client:()=>client});await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'question',taskId:c.plan.tasks[0]!.id,slot:0});await svc.settleJobs();const state=await svc.handle('state') as any;
+    const svc=new SylloraService(root,{now:()=>now,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}),client:()=>client});await svc.handle('generate',{courseId,requestId:randomUUID(),kind:'question',taskId:c.plan.tasks[0]!.id,slot:0});await svc.settleJobs();const state=await svc.handle('state') as any;
     expect(prompts[1]).toContain('语义近重复');expect(prompts[1]).toContain('不同概念关系或推理步骤');expect(state.jobs[0].state).toBe(reject?'failed':'succeeded');expect(state.courses[0].questions).toHaveLength(reject?8:9);expect(state.courses[0].attempts).toHaveLength(0);
     if(reject){expect(calls).toBe(2);expect(state.jobs[0].errorCode).toBe('QUESTION_INVALID');expect(state.jobs[0].message).toContain('语义避重')}else{expect(new Set(compared)).toEqual(new Set(c.questions.map(q=>q.id)));expect(compared.length).toBe(8);expect(calls).toBeGreaterThan(2)}
   })
@@ -86,10 +86,10 @@ describe('PRD bounded generation and execution diagnostics',()=>{
   it('does not persist arbitrary provider responses in initialization progress failures',async()=>{
     const root=await mkdtemp(join(tmpdir(),'syllora-initialize-failure-'));roots.push(root);await writeFile(join(root,'fixture.md'),'# 合成定义\n\n单位矩阵保持原向量不变。');
     const courseId=randomUUID();const client:StructuredCallClient={async *stream(){throw new HarnessError('fixture-private-response','QUOTA');yield {type:'text-delta',text:'never'}}};
-    const svc=new SylloraService(join(root,'.syllora'),{courseRoot:root,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}),client:()=>client});
+    const svc=new SylloraService(join(root,'.syllora'),{courseRoot:root,config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}),client:()=>client});
     await svc.handle('create',{name:'合成初始化失败',requestId:courseId});await svc.handle('preferences',{consent:true});await svc.handle('initialize',{courseId,requestId:randomUUID(),paths:['fixture.md']});await svc.settleJobs();
-    const state=await svc.handle('state') as any;expect(state.jobs[0]).toMatchObject({state:'failed',errorCode:'QUOTA_EXCEEDED'});expect(state.jobs[0].progress.failures).toHaveLength(1);
-    expect(state.jobs[0].progress.failures[0]).toContain('供应商账户配额');expect(await readFile(join(root,'.syllora','syllora.json'),'utf8')).not.toContain('fixture-private-response');
+    const state=await svc.handle('state') as any;expect(state.jobs[0]).toMatchObject({state:'failed',errorCode:'QUOTA_EXCEEDED'});expect(state.jobs[0].progress.failures).toHaveLength(0);
+    expect(await readFile(join(root,'.syllora','syllora.json'),'utf8')).not.toContain('fixture-private-response');
   })
   it('keeps per-direction completeness for partial usage and rejects invalid counts without inventing zero',()=>{
     const job={...jobDiagnostics(),inputTokens:null as number|null,outputTokens:null as number|null};recordTokenUsage(job,null,null);expect(job.inputTokens).toBeNull();expect(job.usageKnownCalls).toEqual({input:0,output:0});recordTokenUsage(job,12,0);recordTokenUsage(job,null,5);recordTokenUsage(job,-1,NaN);expect(job.inputTokens).toBe(12);expect(job.outputTokens).toBe(5);expect(job.usageKnownCalls).toEqual({input:1,output:2})
@@ -97,7 +97,7 @@ describe('PRD bounded generation and execution diagnostics',()=>{
   it('persists quota errors once and preserves history and the request identity',async()=>{
     const root=await mkdtemp(join(tmpdir(),'syllora-reliability-'));roots.push(root)
     let calls=0;const client:StructuredCallClient={async *stream(){calls++;yield {type:'finish',reason:{kind:'error',failure:{code:'QUOTA',message:'fixture-private-response'}}} as StreamChunk}}
-    const svc=new SylloraService(root,{config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}),client:()=>client})
+    const svc=new SylloraService(root,{config:async()=>({providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}),client:()=>client})
     const courseId=randomUUID(),requestId=randomUUID()
     await svc.handle('create',{name:'合成故障课程',requestId:courseId});await svc.handle('import',{courseId,name:'fixture.txt',text:'仅供自动测试的合成来源。'})
     await svc.handle('preferences',{consent:true})

@@ -4,7 +4,7 @@ import { basename, extname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { SylloraError, SylloraService } from './syllora.ts'
 import { normalizeCourse, type Course } from './syllora-domain.ts'
-import { atomicJson, jsonFile, managedDirectory, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
+import { atomicJson, isSupportedMaterial, jsonFile, managedDirectory, MATERIAL_LIMITS, removeProducts, scanFiles, sha, SOURCE_LIMIT, stateDirectory, within } from './syllora-files.ts'
 import { loadChatConfig } from './config.ts'
 
 import { courseIconSchema, defaultUiPreferences, uiPreferencesSchema, type UiPreferences } from './syllora-ui.ts'
@@ -28,10 +28,66 @@ export class SylloraProjects {
     if(!z.string().uuid().safeParse(courseId).success||!z.string().uuid().safeParse(materialId).success)throw new SylloraError('INVALID_REQUEST','课程或资料 ID 不正确')
     return (await this.service(courseId)).readMaterialFile(courseId,materialId)
   }
+  /** 解析产物读取（GET /api/syllora/material-document 用）：版式 markdown 与本地化图片。 */
+  async readMaterialDocument(courseId:string,materialId:string,relPath:string) {
+    if(!z.string().uuid().safeParse(courseId).success||!z.string().uuid().safeParse(materialId).success)throw new SylloraError('INVALID_REQUEST','课程或资料 ID 不正确')
+    return (await this.service(courseId)).readMaterialDocument(courseId,materialId,relPath)
+  }
   /** 笔记图片读取（GET /api/syllora/notes/asset 用）；文件名白名单在 service 内校验。 */
   async readNoteAsset(courseId:string,name:string) {
     if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
     return (await this.service(courseId)).readNoteAsset(courseId,name)
+  }
+  /**
+   * 虚拟课堂（点号方法 classroom.*）：作业轮询、课堂读取、进度与能力探测。
+   * 与 syllora 专线一致，读写都落在课程自己的 SylloraService 上（课堂产物在课程目录里）。
+   */
+  async classroomJob(courseId:string,jobId:string):Promise<Record<string,unknown>> {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomJob({courseId,jobId}) as unknown as Record<string,unknown>
+  }
+  async classroomGet(courseId:string,classroomId:string) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomGet({courseId,classroomId})
+  }
+  async classroomLive(courseId:string,target:{classroomId?:string;jobId?:string}):Promise<Record<string,unknown>> {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomLive({courseId,...target}) as unknown as Record<string,unknown>
+  }
+  async classroomDelete(courseId:string,classroomId:string,cloud:boolean):Promise<Record<string,unknown>> {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomDelete({courseId,classroomId,cloud}) as unknown as Record<string,unknown>
+  }
+  async classroomList(courseId:string) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomList({courseId})
+  }
+  async classroomSaveProgress(courseId:string,progress:{classroomId:string;sceneId:string|null;answers:Record<string,string[]>}) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomProgressSave({courseId,...progress})
+  }
+  /** 能力探测不绑定课程：课程 id 缺省时用共享设置目录的连接配置（设置页也要读）。 */
+  async classroomCapabilities(courseId?:string|null) {
+    if(typeof courseId==='string'&&courseId.trim()!==''){
+      if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+      return (await this.service(courseId)).classroomCapabilities()
+    }
+    // 无课程时也沿用同一份注入选项（测试/部署里显式给了 cloud 连接的情况）。
+    return new SylloraService(this.root,{...this.options,fileName:'syllora.json'}).classroomCapabilities()
+  }
+  /** 首页附件暂存（POST /api/syllora/classroom/material 的落点）。 */
+  async stageClassroomMaterial(courseId:string,name:string,mime:string,bytes:Uint8Array) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).stageClassroomMaterial(courseId,name,mime,bytes)
+  }
+  async classroomAttachments(courseId:string) {
+    if(!z.string().uuid().safeParse(courseId).success)throw new SylloraError('INVALID_REQUEST','课程 ID 不正确')
+    return (await this.service(courseId)).classroomAttachmentsInfo(courseId)
+  }
+  /** 等待后台 worker 收束（课堂生成、初始化等）；selector 缺省等待全部课程。 */
+  async settleJobs(select:(courseId:string)=>boolean=()=>true):Promise<void> {
+    await this.load()
+    await Promise.allSettled([...this.services.entries()].filter(([courseId])=>select(courseId)).map(([,service])=>service.settleJobs()))
   }
   private async load() {
     // CR-14：`ready` 一旦失败就会把整个进程钉死——projects.json 读一次失败
@@ -104,6 +160,16 @@ export class SylloraProjects {
         z.string().uuid().parse(project.id)
         const base=await this.managedRoot(),destination=join(base,project.id)
         if(resolve(project.path)===destination)continue
+        if (!(await stat(project.path).catch(error=>{if(error.code==='ENOENT')return null;throw error}))) {
+          if(await realpath(destination)!==destination)throw new Error('目标课程目录不能是目录链接');
+          const recovered=await jsonFile<StoredCourse>(join(await stateDirectory(destination),'course.json'))
+          if(recovered?.courses.length===1&&recovered.courses[0]?.id===project.id) {
+            const updated=this.projects.map(item=>item.id===project.id?{...item,path:destination}:item)
+            await this.options.registerProject?.(destination)
+            await atomicJson(join(this.root,'.syllora','projects.json'),updated)
+            this.projects=updated;continue
+          }
+        }
         const source=await realpath(project.path),stateDir=await stateDirectory(source)
         const snapshot=await jsonFile<StoredCourse>(join(stateDir,'course.json'))
         if(!snapshot||snapshot.courses.length!==1||snapshot.courses[0]?.id!==project.id)throw new Error('课程状态与目录身份不一致')
@@ -118,6 +184,10 @@ export class SylloraProjects {
         } else {
           staging=await managedDirectory(base,`.migration-${project.id}-${randomUUID()}`)
           await cp(stateDir,join(staging,'.syllora'),{recursive:true,errorOnExist:true,force:false,filter:async path=>{if((await lstat(path)).isSymbolicLink())throw new Error('课程记录含目录或文件链接');return !['config.yaml','credentials.json'].includes(basename(path))}})
+          const notes=join(source,'notes')
+          if(await lstat(notes).catch(error=>{if(error.code==='ENOENT')return null;throw error})) {
+            await cp(notes,join(staging,'notes'),{recursive:true,errorOnExist:true,force:false,filter:async path=>{if((await lstat(path)).isSymbolicLink())throw new Error('笔记含目录或文件链接');return true}})
+          }
           for(const file of files) {
             const original=await within(source,file.path),target=join(staging,file.path)
             await mkdir(resolve(target,'..'),{recursive:true});await copyFile(original,target)
@@ -206,6 +276,14 @@ export class SylloraProjects {
       const legacy=await jsonFile<StoredCourse>(join(this.root,'syllora.json'))
       return {courses,jobs,uiPreferences:await this.uiPreferences(),activity:courses.flatMap(course=>(course as Course).activity??[]),projects,legacyCourses:(legacy?.courses??[]).filter(c=>!this.projects.some(p=>p.id===c.id)).map(c=>({id:c.id,name:c.name,points:c.points.length})),settings:{...(await this.preferences()),calls:calls+(legacy?.calls??0)}}
     }
+    // 任务页「清除历史任务」：不带 courseId 就清全部课程（逐课程服务汇总），带 courseId 走下面的课程分发。
+    if (action === 'clearJobs' && (payload === undefined || typeof payload !== 'object' || !('courseId' in (payload as Record<string, unknown>)))) {
+      let cleared = 0
+      for (const project of this.projects) {
+        try { cleared += ((await (await this.service(project.id)).handle('clearJobs', {})) as { cleared: number }).cleared } catch { /* 单门课读不出来不影响其它课程。 */ }
+      }
+      return { cleared }
+    }
     // Compatibility alias; creation now always uses an application-managed directory.
     if(action==='create')return this.createManaged(payload)
     if(action==='migrateCourse')return this.migrate(payload)
@@ -270,13 +348,15 @@ export class SylloraProjects {
     return result
   }
   private async saveUpload(payload:unknown) {
-    const p=z.object({courseId:z.string().uuid(),name:z.string().trim().min(1).max(240),text:z.string().max(200000).optional(),base64:z.string().max(28_000_000).optional()}).parse(payload)
+    // 上限与 MATERIAL_LIMITS 对齐：base64 体积 ≈ 4/3 原字节 + 余量（150 MiB → 210 MB 字符）。
+    const p=z.object({courseId:z.string().uuid(),name:z.string().trim().min(1).max(240),text:z.string().max(200000).optional(),base64:z.string().max(210_000_000).optional()}).parse(payload)
     const service=await this.service(p.courseId), state=await service.handle('state',{}) as {courses:Course[];jobs:Array<{id:string;state:string}>}
     if(state.courses[0]?.archived)throw new SylloraError('ARCHIVED','请先恢复归档课程')
     const project=this.projects.find(v=>v.id===p.courseId)!, name=basename(p.name.replaceAll('\\','/'))
-    if(!['.pdf','.md','.txt'].includes(extname(name).toLowerCase()))throw new SylloraError('UNSUPPORTED_INPUT','仅支持文本 PDF、MD/TXT')
+    if(!isSupportedMaterial(name))throw new SylloraError('UNSUPPORTED_INPUT','仅支持 PDF、Word、PPT、Excel、HTML、Markdown、TXT')
     const bytes=p.base64?Buffer.from(p.base64,'base64'):Buffer.from(p.text??'','utf8')
-    if(bytes.length>SOURCE_LIMIT)throw new SylloraError('LIMIT_EXCEEDED','单文件不能超过 20 MiB')
+    const limitMb=Math.round(MATERIAL_LIMITS.maxBytesPerMaterial/1024/1024)
+    if(bytes.length>MATERIAL_LIMITS.maxBytesPerMaterial)throw new SylloraError('LIMIT_EXCEEDED',`单文件不能超过 ${limitMb} MiB`)
     // 判重会决定用户这次上传是否落盘，所以不能只信扫描得到的指纹（它可能对未变化文件复用旧值）：
     // 命中候选要读回字节核对，否则过期指纹会把用户的上传静默丢掉。
     const digest=sha(bytes), candidate=(await scanFiles(project.path,state.courses[0]!.materials)).find(f=>f.fingerprint===digest)

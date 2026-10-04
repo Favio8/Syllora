@@ -1,12 +1,13 @@
 # 评审部署运行说明
 
-用途：维护单评委浏览器实例。日期：2026-10-03。状态：已部署；用户随后确认全部功能免访问码开放，包括供应商管理。依据：已确认的 Vercel 静态前端、本机 Node Host 与 ngrok 方案及该权限调整。
+用途：维护单评委浏览器实例。更新日期：2026-10-04。状态：全部功能免访问码开放，包括供应商管理。依据：已确认的 Vercel 静态前端、本机 Node Host 与 ngrok 方案，以及同步最新 main 后的部署适配。
 
 ## 入口与数据
 
 - 评委入口：<https://syllora-review.vercel.app>。当前免访问码，直接进入；默认部署仍要求访问码，须显式启用公开模式。
 - 前端通过 `NEXT_PUBLIC_SYLLORA_API_URL` 直接请求 ngrok HTTPS 的 REST、上传与 SSE。这个变量只保存公网后端域名。
-- `/api/session`、`/api/session/logout`、PDF 原件与笔记图片经过 Vercel 转发。访问码模式的会话 Cookie 是 Secure、HttpOnly、SameSite=Strict；公开模式无需凭据或 Cookie。两种模式的响应均禁止缓存。
+- `/api/session`、`/api/session/logout`、PDF 原件、解析文档及其图片、笔记图片经过 Vercel 转发。访问码模式的会话 Cookie 是 Secure、HttpOnly、SameSite=Strict；公开模式无需凭据或 Cookie。两种模式的响应均禁止缓存。
+- 虚拟课堂 RPC 和附件上传直连 ngrok；跨域预检允许上传所需的 `x-material-filename` 头。Vercel 上传排除 CLI 和桌面目录，模型及文档解析凭据留在本机后端。
 - `.syllora-review/home/` 保存进程发现信息与日志；`data/` 保存独立的模型设置与凭据；`courses/` 保存课程、讲义、笔记、计划与会话。
 - `.syllora-review/` 被 Git 与 Vercel 上传忽略。访问码模式的评审访问码只保存在当前浏览器标签页的 sessionStorage；退出时清除。公开模式清除旧的浏览器访问码，不将任何访问码或模型密钥写入构建。
 - 普通 `pnpm serve` 沿用现有本机行为，不切换到评审数据目录。
@@ -81,8 +82,7 @@ vercel deploy --prod --yes --build-env "NEXT_PUBLIC_SYLLORA_API_URL=$env:NEXT_PU
 - 日志：`.syllora-review/backend.stdout.log`、`backend.stderr.log`、`tunnel.stdout.log`、`tunnel.stderr.log`、`keepawake.stderr.log`；详细 Host 日志在 `home/logs/`。日志为本机诊断资料，分享前先去除凭据。
 - 断网：保留课程和输入，不重复点击生成。重新联网后刷新状态，使用原任务 ID；前端现有幂等请求机制保留原请求 ID，生成与提交重试不会重复调用或计分。
 - 模型失败：查看任务失败原因、供应商余额和模型配置；已保存内容保留。取消只结束指定任务。
-- 资料整理引用：若模型去掉了 JSON 双引号前的转义反斜杠，系统只在能精确定位对应原文时还原原始引用；不会放行编造、改值或跨片段拼接的依据。引用校验失败的重试会携带具体失败引用和允许原文，成功章节继续复用缓存。
-- 整理输出截断：输出额度遵循供应商的 `max_tokens`，未配置时使用适配器默认 16,384；截断后会在有限的一次重试中要求精简并完整输出，不能发布截断的讲义。持续截断时缩小资料范围或调整供应商输出额度。
+- 资料整理采用最新 main 的摘要提炼、讲义和课件流程；失败反馈、引用核验与重试策略随主分支实现。DocMind 凭据配置成功时走阿里云解析；未配置或云端明确不支持该格式时本地回退，并显示原因。
 - 后端退出：先停止记录的进程，再重新启动；旧运行中任务会明确标记进程中断。已经发布的讲义与记录保留。
 - 公网 401：访问码模式重新复制当前码登录；公开模式核对前后端配置是否一致。403：检查确切生产来源配置。无法连接：先核对本机后端与隧道日志。
 

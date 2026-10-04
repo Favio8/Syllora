@@ -91,6 +91,56 @@ export async function readRequestBody(
 }
 
 /**
+ * 二进制安全版：与 readRequestBody 同样的上限/超时/413 语义，但返回原始字节。
+ * 附件上传（虚拟课堂）传的是文件裸 body，转成 UTF-8 字符串会改字节，必须走这里。
+ */
+export async function readRequestBodyBytes(
+  request: ChunkSource,
+  maxBytes: number = MAX_JSON_BODY_BYTES,
+  timeoutMs: number = REQUEST_BODY_TIMEOUT_MS,
+): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  let total = 0
+  return await new Promise<Buffer>((resolve, reject) => {
+    let tooLarge = false
+    let settled = false
+    const settle = (action: () => void): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      action()
+    }
+    const timer = setTimeout(() => {
+      settle(() => reject(new RequestBodyTimeoutError(timeoutMs)))
+      request.destroy()
+    }, timeoutMs)
+    request.on('data', chunk => {
+      if (tooLarge || settled) return
+      total += chunk.length
+      if (total > maxBytes) {
+        tooLarge = true
+        chunks.length = 0
+        return
+      }
+      chunks.push(chunk)
+    })
+    request.on('end', () => {
+      if (tooLarge) {
+        settle(() => reject(new PayloadTooLargeError(maxBytes)))
+        return
+      }
+      settle(() => resolve(Buffer.concat(chunks)))
+    })
+    request.on('error', error => settle(() => reject(error)))
+    request.on('close', () => {
+      if (settled) return
+      settle(() => reject(new Error('request connection closed before body completed')))
+      request.destroy()
+    })
+  })
+}
+
+/**
  * BUG-005：错误消息出日志/出 API 前净化高置信凭据特征。上游异常（fetch 失败、
  * 厂商 4xx 回显）可能内嵌 apiKey/token（URL 查询参数、Authorization 头、
  * sk-/AIza/gsk_ 前缀密钥、URL 用户信息段），落盘到 host 日志或返回给调用方

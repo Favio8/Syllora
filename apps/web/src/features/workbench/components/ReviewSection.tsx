@@ -24,11 +24,24 @@ export function LearningPolicySettings({course,busy,onSave}:{course:CourseView;b
   return <ReviewDisclosure title="复习间隔设置" icon="settings"><p className="sy-muted">默认 24、72、168 小时，按实际经过时长计算。修改只影响之后新建立的周期，已有到期时间与历史作答不变。</p>{stale&&<div role="status"><p>学习设置已被另一页面修改。你的未保存输入和原修订号已保留；请载入最新设置后重新编辑。</p><button disabled={busy||course.archived} onClick={loadLatest}>放弃草稿并载入最新设置</button></div>}{['首次补强与复测','复测通过后的间隔','后续复习间隔'].map((label,i)=><label key={label}>{label}（小时）<input aria-label={`${label}（小时）`} type="number" min={24} max={8760} step={1} value={hours[i]} disabled={busy||course.archived} onChange={event=>{setHours(hours.map((old,index)=>index===i?event.target.value:old));setDirty(true)}}/></label>)}<label>会话闲置关闭（分钟）<input aria-label="会话闲置关闭（分钟）" type="number" min={5} max={1440} value={idle} disabled={busy||course.archived} onChange={event=>{setIdle(event.target.value);setDirty(true)}}/></label><p>默认 30 分钟无学习操作后关闭，轮询与刷新不续期；修改只影响以后开始的会话。</p>{error&&<p role="alert">{error}</p>}<button disabled={busy||course.archived} onClick={async()=>{const values=hours.map(Number);if(!Number.isInteger(Number(idle))||Number(idle)<5||Number(idle)>1440){setError('闲置关闭请输入 5–1440 的整数分钟。');return}if(values.some(value=>!Number.isSafeInteger(value)||value<24||value>8760)||values[0]!>values[1]!||values[1]!>values[2]!){setError('请输入不递减的三个整数小时，范围 24–8760。');return}setError('');if(await onSave({baseVersion:baseline.revision,reviewHours:values,sessionIdleMinutes:Number(idle)})){setBaseline({revision:baseline.revision+1,reviewHours:values,sessionIdleMinutes:Number(idle)});setDirty(false)}}}>保存未来复习间隔</button></ReviewDisclosure>;
 }
 
-export function WrongAnswerHistory({course,pointId,onSource,onDispute}:{course:CourseView;pointId:string;onSource:(id:string)=>void;onDispute:(id:string)=>void}) {
-  const wrong=course.questions.filter(question=>question.pointId===pointId&&question.status==='valid'&&course.attempts.some(attempt=>attempt.questionId===question.id&&!attempt.correct));
-  if(!wrong.length)return null;
-  return <details><summary>错题记录 · {wrong.length} 题</summary>{wrong.map(question=>{
+/** 某个知识点下「有效且答错过」的题。 */
+const wrongQuestions=(course:CourseView,pointId:string)=>course.questions.filter(question=>question.pointId===pointId&&question.status==='valid'&&course.attempts.some(attempt=>attempt.questionId===question.id&&!attempt.correct));
+
+/**
+ * 「错题记录 · N 题」按钮（原为内联展开的 <details>）。点击后由父层 ReviewBoards 打开弹窗：
+ * <dialog> 放在父层、不放进 .sy-review，免得被 syllora.css 里 .sy-review 的后代选择器
+ * （p / button 的外边距与字号）污染。外层 div 让按钮独占一行。
+ */
+export function WrongAnswerHistory({course,pointId,onOpen}:{course:CourseView;pointId:string;onOpen:()=>void}) {
+  const count=wrongQuestions(course,pointId).length;
+  if(!count)return null;
+  return <div><button type="button" className="button small" aria-haspopup="dialog" onClick={onOpen}>错题记录 · {count} 题</button></div>;
+}
+
+/** 弹窗里的错题列表（内容与原先内联展开的一致，按钮改为标准 .button.small）。 */
+export function WrongAnswerList({course,pointId,onSource,onDispute}:{course:CourseView;pointId:string;onSource:(id:string)=>void;onDispute:(id:string)=>void}) {
+  return <div className="wrong-modal-list">{wrongQuestions(course,pointId).map(question=>{
     const attempt=course.attempts.find(attempt=>attempt.questionId===question.id)!;
-    return <article className="sy-question" key={question.id} data-learning-kind="question" data-learning-id={question.id}><h4>{question.stem}</h4><p>你的选项 {String.fromCharCode(65+attempt.option)}：{question.options[attempt.option]}</p><small>{attempt.assisted?'辅助学习，不计独立证据':'独立错答'} · {formatTime(attempt.at,course.timezone)}</small>{question.answer!==undefined&&<p>正确选项 {String.fromCharCode(65+question.answer)}：{question.options[question.answer]}</p>}<p>{question.explanation}</p><blockquote>{question.quote}</blockquote><div className="sy-row">{question.sourceIds.map(sourceId=><button key={sourceId} onClick={()=>onSource(sourceId)}>查看错题依据</button>)}<button disabled={course.archived} onClick={()=>onDispute(question.id)}>报告此题问题</button></div></article>;
-  })}</details>;
+    return <article className="sy-question" key={question.id} data-learning-kind="question" data-learning-id={question.id}><h4>{question.stem}</h4><p>你的选项 {String.fromCharCode(65+attempt.option)}：{question.options[attempt.option]}</p><small>{attempt.assisted?'辅助学习，不计独立证据':'独立错答'} · {formatTime(attempt.at,course.timezone)}</small>{question.answer!==undefined&&<p>正确选项 {String.fromCharCode(65+question.answer)}：{question.options[question.answer]}</p>}<p>{question.explanation}</p><blockquote>{question.quote}</blockquote><div className="sy-row">{question.sourceIds.map(sourceId=><button key={sourceId} className="button small" onClick={()=>onSource(sourceId)}>查看错题依据</button>)}<button className="button small" disabled={course.archived} onClick={()=>onDispute(question.id)}>报告此题问题</button></div></article>;
+  })}</div>;
 }

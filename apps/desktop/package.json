@@ -10,11 +10,11 @@
     "check:runtime": "node scripts/check-runtime.mjs",
     "assemble": "node scripts/assemble-host.mjs",
     "dev:desktop": "node scripts/check-runtime.mjs && node node_modules/electron/cli.js .",
-    "dist:dir": "node scripts/check-runtime.mjs && node scripts/assemble-host.mjs && node node_modules/electron-builder/cli.js --dir",
-    "dist": "node scripts/check-runtime.mjs && node scripts/assemble-host.mjs && node node_modules/electron-builder/cli.js",
-    "dist:win": "node scripts/assemble-host.mjs && node node_modules/electron-builder/cli.js --win",
-    "dist:mac": "node scripts/assemble-host.mjs && node node_modules/electron-builder/cli.js --mac",
-    "dist:linux": "node scripts/assemble-host.mjs && node node_modules/electron-builder/cli.js --linux"
+    "dist:dir": "node scripts/check-runtime.mjs && node scripts/assemble-host.mjs && node scripts/build-installer.mjs --dir",
+    "dist": "node scripts/check-runtime.mjs && node scripts/assemble-host.mjs && node scripts/build-installer.mjs",
+    "dist:win": "node scripts/assemble-host.mjs && node scripts/build-installer.mjs --win",
+    "dist:mac": "node scripts/assemble-host.mjs && node scripts/build-installer.mjs --mac",
+    "dist:linux": "node scripts/assemble-host.mjs && node scripts/build-installer.mjs --linux"
   },
   "devDependencies": {
     "electron": "^44.1.1",

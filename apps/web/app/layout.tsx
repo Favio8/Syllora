@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// 对上游工作台样式的覆盖集中在这里（来自 mui-nextjs 的界面调整），避免改动与上游一致的 CSS 文件。
+import "./overrides.css";
 
 export const metadata: Metadata = {
   title: "Syllora · AI 学习工作台",

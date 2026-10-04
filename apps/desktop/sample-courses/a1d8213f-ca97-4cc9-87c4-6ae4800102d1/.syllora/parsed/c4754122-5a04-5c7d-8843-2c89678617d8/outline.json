@@ -1,0 +1,668 @@
+[
+  {
+    "title": "第 1 章 电路的基本规律",
+    "level": 2,
+    "anchor": "第-1-章-电路的基本规律",
+    "page": null
+  },
+  {
+    "title": "目录",
+    "level": 3,
+    "anchor": "目录",
+    "page": null
+  },
+  {
+    "title": "1.1 引言",
+    "level": 3,
+    "anchor": "11-引言",
+    "page": null
+  },
+  {
+    "title": "一、电路模型（Circuit Model）",
+    "level": 4,
+    "anchor": "一电路模型circuit-model",
+    "page": null
+  },
+  {
+    "title": "1. 电路（circuit）",
+    "level": 5,
+    "anchor": "1-电路circuit",
+    "page": null
+  },
+  {
+    "title": "2. 实际电路的组成（三要素）",
+    "level": 5,
+    "anchor": "2-实际电路的组成三要素",
+    "page": null
+  },
+  {
+    "title": "3. 实际电路的功能",
+    "level": 5,
+    "anchor": "3-实际电路的功能",
+    "page": null
+  },
+  {
+    "title": "4. 电路模型（理想化）",
+    "level": 5,
+    "anchor": "4-电路模型理想化",
+    "page": null
+  },
+  {
+    "title": "5. 几种常见的理想化元件（Ideal Circuit Elements）",
+    "level": 5,
+    "anchor": "5-几种常见的理想化元件ideal-circuit-elements",
+    "page": null
+  },
+  {
+    "title": "6. 说明",
+    "level": 5,
+    "anchor": "6-说明",
+    "page": null
+  },
+  {
+    "title": "二、电路类型",
+    "level": 4,
+    "anchor": "二电路类型",
+    "page": null
+  },
+  {
+    "title": "1. 集总（中）参数电路与分布参数电路",
+    "level": 5,
+    "anchor": "1-集总中参数电路与分布参数电路",
+    "page": null
+  },
+  {
+    "title": "2. 线性电路与非线性电路",
+    "level": 5,
+    "anchor": "2-线性电路与非线性电路",
+    "page": null
+  },
+  {
+    "title": "3. 时不变电路与时变电路",
+    "level": 5,
+    "anchor": "3-时不变电路与时变电路",
+    "page": null
+  },
+  {
+    "title": "4. 动态电路与电阻电路",
+    "level": 5,
+    "anchor": "4-动态电路与电阻电路",
+    "page": null
+  },
+  {
+    "title": "1.2 电路变量",
+    "level": 3,
+    "anchor": "12-电路变量",
+    "page": null
+  },
+  {
+    "title": "一、电流（Current）",
+    "level": 4,
+    "anchor": "一电流current",
+    "page": null
+  },
+  {
+    "title": "1. 电流的形成",
+    "level": 5,
+    "anchor": "1-电流的形成",
+    "page": null
+  },
+  {
+    "title": "2. 电流的大小——电流强度",
+    "level": 5,
+    "anchor": "2-电流的大小电流强度",
+    "page": null
+  },
+  {
+    "title": "3. 电流的方向——参考方向",
+    "level": 5,
+    "anchor": "3-电流的方向参考方向",
+    "page": null
+  },
+  {
+    "title": "4. 电流总结",
+    "level": 5,
+    "anchor": "4-电流总结",
+    "page": null
+  },
+  {
+    "title": "二、电压（Voltage）",
+    "level": 4,
+    "anchor": "二电压voltage",
+    "page": null
+  },
+  {
+    "title": "1. 电压的定义",
+    "level": 5,
+    "anchor": "1-电压的定义",
+    "page": null
+  },
+  {
+    "title": "2. 电压的极性（方向）",
+    "level": 5,
+    "anchor": "2-电压的极性方向",
+    "page": null
+  },
+  {
+    "title": "3. 关联参考方向",
+    "level": 5,
+    "anchor": "3-关联参考方向",
+    "page": null
+  },
+  {
+    "title": "4. 电压说明",
+    "level": 5,
+    "anchor": "4-电压说明",
+    "page": null
+  },
+  {
+    "title": "三、功率（Power）和能量（Energy）",
+    "level": 4,
+    "anchor": "三功率power和能量energy",
+    "page": null
+  },
+  {
+    "title": "1. 功率的定义",
+    "level": 5,
+    "anchor": "1-功率的定义",
+    "page": null
+  },
+  {
+    "title": "2. 功率与电压、电流的关系",
+    "level": 5,
+    "anchor": "2-功率与电压电流的关系",
+    "page": null
+  },
+  {
+    "title": "3. 功率的计算与判断",
+    "level": 5,
+    "anchor": "3-功率的计算与判断",
+    "page": null
+  },
+  {
+    "title": "4. 能量的计算",
+    "level": 5,
+    "anchor": "4-能量的计算",
+    "page": null
+  },
+  {
+    "title": "5. 常用国际单位制（SI）词头",
+    "level": 5,
+    "anchor": "5-常用国际单位制si词头",
+    "page": null
+  },
+  {
+    "title": "6. 额定值与电能计量",
+    "level": 5,
+    "anchor": "6-额定值与电能计量",
+    "page": null
+  },
+  {
+    "title": "1.3 基尔霍夫定律",
+    "level": 3,
+    "anchor": "13-基尔霍夫定律",
+    "page": null
+  },
+  {
+    "title": "背景与地位",
+    "level": 4,
+    "anchor": "背景与地位",
+    "page": null
+  },
+  {
+    "title": "电路的两类约束",
+    "level": 4,
+    "anchor": "电路的两类约束",
+    "page": null
+  },
+  {
+    "title": "一、电路术语（电路图）",
+    "level": 4,
+    "anchor": "一电路术语电路图",
+    "page": null
+  },
+  {
+    "title": "二、基尔霍夫电流定律（KCL）",
+    "level": 4,
+    "anchor": "二基尔霍夫电流定律kcl",
+    "page": null
+  },
+  {
+    "title": "1. KCL 内容",
+    "level": 5,
+    "anchor": "1-kcl-内容",
+    "page": null
+  },
+  {
+    "title": "2. 例题",
+    "level": 5,
+    "anchor": "2-例题",
+    "page": null
+  },
+  {
+    "title": "3. KCL 的扩展（广义节点）",
+    "level": 5,
+    "anchor": "3-kcl-的扩展广义节点",
+    "page": null
+  },
+  {
+    "title": "4. KCL 说明",
+    "level": 5,
+    "anchor": "4-kcl-说明",
+    "page": null
+  },
+  {
+    "title": "三、基尔霍夫电压定律（KVL）",
+    "level": 4,
+    "anchor": "三基尔霍夫电压定律kvl",
+    "page": null
+  },
+  {
+    "title": "1. KVL 内容",
+    "level": 5,
+    "anchor": "1-kvl-内容",
+    "page": null
+  },
+  {
+    "title": "2. 举例",
+    "level": 5,
+    "anchor": "2-举例",
+    "page": null
+  },
+  {
+    "title": "3. KVL 用于求两点间的电压",
+    "level": 5,
+    "anchor": "3-kvl-用于求两点间的电压",
+    "page": null
+  },
+  {
+    "title": "4. KVL 说明",
+    "level": 5,
+    "anchor": "4-kvl-说明",
+    "page": null
+  },
+  {
+    "title": "四、应用举例",
+    "level": 4,
+    "anchor": "四应用举例",
+    "page": null
+  },
+  {
+    "title": "1.4 电阻元件",
+    "level": 3,
+    "anchor": "14-电阻元件",
+    "page": null
+  },
+  {
+    "title": "一、电阻元件与欧姆定律",
+    "level": 4,
+    "anchor": "一电阻元件与欧姆定律",
+    "page": null
+  },
+  {
+    "title": "1. 二端电阻的定义",
+    "level": 5,
+    "anchor": "1-二端电阻的定义",
+    "page": null
+  },
+  {
+    "title": "2. 电阻的分类",
+    "level": 5,
+    "anchor": "2-电阻的分类",
+    "page": null
+  },
+  {
+    "title": "3. 欧姆定律（Ohm's Law）",
+    "level": 5,
+    "anchor": "3-欧姆定律ohms-law",
+    "page": null
+  },
+  {
+    "title": "4. 两种特殊情况",
+    "level": 5,
+    "anchor": "4-两种特殊情况",
+    "page": null
+  },
+  {
+    "title": "二、电阻吸收的功率",
+    "level": 4,
+    "anchor": "二电阻吸收的功率",
+    "page": null
+  },
+  {
+    "title": "三、端口电阻与多端电阻",
+    "level": 4,
+    "anchor": "三端口电阻与多端电阻",
+    "page": null
+  },
+  {
+    "title": "四、分立电阻与集成电阻（电阻器）",
+    "level": 4,
+    "anchor": "四分立电阻与集成电阻电阻器",
+    "page": null
+  },
+  {
+    "title": "1. 电流热效应",
+    "level": 5,
+    "anchor": "1-电流热效应",
+    "page": null
+  },
+  {
+    "title": "2. 额定值",
+    "level": 5,
+    "anchor": "2-额定值",
+    "page": null
+  },
+  {
+    "title": "3. 常见电阻器类型",
+    "level": 5,
+    "anchor": "3-常见电阻器类型",
+    "page": null
+  },
+  {
+    "title": "1.5 电源",
+    "level": 3,
+    "anchor": "15-电源",
+    "page": null
+  },
+  {
+    "title": "一、电压源",
+    "level": 4,
+    "anchor": "一电压源",
+    "page": null
+  },
+  {
+    "title": "1. 电压源定义",
+    "level": 5,
+    "anchor": "1-电压源定义",
+    "page": null
+  },
+  {
+    "title": "2. 电压源的性质",
+    "level": 5,
+    "anchor": "2-电压源的性质",
+    "page": null
+  },
+  {
+    "title": "3. 需注意的问题",
+    "level": 5,
+    "anchor": "3-需注意的问题",
+    "page": null
+  },
+  {
+    "title": "二、电流源",
+    "level": 4,
+    "anchor": "二电流源",
+    "page": null
+  },
+  {
+    "title": "1. 电流源定义",
+    "level": 5,
+    "anchor": "1-电流源定义",
+    "page": null
+  },
+  {
+    "title": "2. 电流源的性质",
+    "level": 5,
+    "anchor": "2-电流源的性质",
+    "page": null
+  },
+  {
+    "title": "3. 需注意的问题",
+    "level": 5,
+    "anchor": "3-需注意的问题-1",
+    "page": null
+  },
+  {
+    "title": "4. 举例",
+    "level": 5,
+    "anchor": "4-举例",
+    "page": null
+  },
+  {
+    "title": "三、参考点（零电位点）",
+    "level": 4,
+    "anchor": "三参考点零电位点",
+    "page": null
+  },
+  {
+    "title": "四、受控源",
+    "level": 4,
+    "anchor": "四受控源",
+    "page": null
+  },
+  {
+    "title": "1. 受控源的定义",
+    "level": 5,
+    "anchor": "1-受控源的定义",
+    "page": null
+  },
+  {
+    "title": "2. 四种受控源",
+    "level": 5,
+    "anchor": "2-四种受控源",
+    "page": null
+  },
+  {
+    "title": "3. 说明",
+    "level": 5,
+    "anchor": "3-说明",
+    "page": null
+  },
+  {
+    "title": "4. 举例",
+    "level": 5,
+    "anchor": "4-举例-1",
+    "page": null
+  },
+  {
+    "title": "1.6 电路等效（不含独立源）",
+    "level": 3,
+    "anchor": "16-电路等效不含独立源",
+    "page": null
+  },
+  {
+    "title": "一、电路等效的概念",
+    "level": 4,
+    "anchor": "一电路等效的概念",
+    "page": null
+  },
+  {
+    "title": "1. 电路等效的定义",
+    "level": 5,
+    "anchor": "1-电路等效的定义",
+    "page": null
+  },
+  {
+    "title": "2. 等效的含义",
+    "level": 5,
+    "anchor": "2-等效的含义",
+    "page": null
+  },
+  {
+    "title": "3. 判别示例（思考题）",
+    "level": 5,
+    "anchor": "3-判别示例思考题",
+    "page": null
+  },
+  {
+    "title": "4. 等效化简举例",
+    "level": 5,
+    "anchor": "4-等效化简举例",
+    "page": null
+  },
+  {
+    "title": "二、电阻的串联与并联等效",
+    "level": 4,
+    "anchor": "二电阻的串联与并联等效",
+    "page": null
+  },
+  {
+    "title": "1. 电阻的串联等效",
+    "level": 5,
+    "anchor": "1-电阻的串联等效",
+    "page": null
+  },
+  {
+    "title": "2. 电阻的并联等效",
+    "level": 5,
+    "anchor": "2-电阻的并联等效",
+    "page": null
+  },
+  {
+    "title": "3. 混联等效",
+    "level": 5,
+    "anchor": "3-混联等效",
+    "page": null
+  },
+  {
+    "title": "三、电阻的 Δ 形与 Y 形电路等效变换",
+    "level": 4,
+    "anchor": "三电阻的-δ-形与-y-形电路等效变换",
+    "page": null
+  },
+  {
+    "title": "1. 问题的提出",
+    "level": 5,
+    "anchor": "1-问题的提出",
+    "page": null
+  },
+  {
+    "title": "2. 等效的依据",
+    "level": 5,
+    "anchor": "2-等效的依据",
+    "page": null
+  },
+  {
+    "title": "3. △ 形与 Y 形电路互换公式",
+    "level": 5,
+    "anchor": "3-形与-y-形电路互换公式",
+    "page": null
+  },
+  {
+    "title": "四、等效电阻",
+    "level": 4,
+    "anchor": "四等效电阻",
+    "page": null
+  },
+  {
+    "title": "1.7 含独立源电路的等效",
+    "level": 3,
+    "anchor": "17-含独立源电路的等效",
+    "page": null
+  },
+  {
+    "title": "一、独立源的串联与并联",
+    "level": 4,
+    "anchor": "一独立源的串联与并联",
+    "page": null
+  },
+  {
+    "title": "1. 电压源的串联等效",
+    "level": 5,
+    "anchor": "1-电压源的串联等效",
+    "page": null
+  },
+  {
+    "title": "2. 电流源的并联等效",
+    "level": 5,
+    "anchor": "2-电流源的并联等效",
+    "page": null
+  },
+  {
+    "title": "3. 其他电源连接",
+    "level": 5,
+    "anchor": "3-其他电源连接",
+    "page": null
+  },
+  {
+    "title": "二、实际电源的两种模型及其等效互换",
+    "level": 4,
+    "anchor": "二实际电源的两种模型及其等效互换",
+    "page": null
+  },
+  {
+    "title": "1. 实际电源的模型",
+    "level": 5,
+    "anchor": "1-实际电源的模型",
+    "page": null
+  },
+  {
+    "title": "2. 电压源模型与电流源模型的互换等效",
+    "level": 5,
+    "anchor": "2-电压源模型与电流源模型的互换等效",
+    "page": null
+  },
+  {
+    "title": "3. 举例",
+    "level": 5,
+    "anchor": "3-举例",
+    "page": null
+  },
+  {
+    "title": "三、电源的等效转移",
+    "level": 4,
+    "anchor": "三电源的等效转移",
+    "page": null
+  },
+  {
+    "title": "1. 问题的提出与目的",
+    "level": 5,
+    "anchor": "1-问题的提出与目的",
+    "page": null
+  },
+  {
+    "title": "2. 电压源转移等效",
+    "level": 5,
+    "anchor": "2-电压源转移等效",
+    "page": null
+  },
+  {
+    "title": "3. 电流源转移等效",
+    "level": 5,
+    "anchor": "3-电流源转移等效",
+    "page": null
+  },
+  {
+    "title": "1.8 运算放大器",
+    "level": 3,
+    "anchor": "18-运算放大器",
+    "page": null
+  },
+  {
+    "title": "一、运放电路模型",
+    "level": 4,
+    "anchor": "一运放电路模型",
+    "page": null
+  },
+  {
+    "title": "二、理想运放的三种输入方式",
+    "level": 4,
+    "anchor": "二理想运放的三种输入方式",
+    "page": null
+  },
+  {
+    "title": "三、运放的两种典型运算",
+    "level": 4,
+    "anchor": "三运放的两种典型运算",
+    "page": null
+  },
+  {
+    "title": "1. 反相输入比例运算",
+    "level": 5,
+    "anchor": "1-反相输入比例运算",
+    "page": null
+  },
+  {
+    "title": "2. 反相加法运算",
+    "level": 5,
+    "anchor": "2-反相加法运算",
+    "page": null
+  },
+  {
+    "title": "本章小结",
+    "level": 3,
+    "anchor": "本章小结",
+    "page": null
+  }
+]

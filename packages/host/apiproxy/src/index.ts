@@ -162,6 +162,33 @@ export interface HostServices {
     exportProviders(): Promise<Record<string, unknown>>
     /** 需求七：导入（密钥一律不导入）。 */
     importProviders(payload: unknown): Promise<Record<string, unknown>>
+    /** DocMind 文档智能解析配置（密钥密封存储，get 只回 configured/endpoint）。 */
+    docmind: {
+      get(): Promise<Record<string, unknown>>
+      save(input: Record<string, unknown>): Promise<Record<string, unknown>>
+    }
+    /** 云端 OpenMAIC 连接（虚拟课堂/幻灯片共用）：口令只存密封凭据，get 只回是否已配置。 */
+    cloud: {
+      get(): Promise<Record<string, unknown>>
+      save(input: Record<string, unknown>): Promise<Record<string, unknown>>
+    }
+  }
+  /**
+   * 虚拟课堂（云端 OpenMAIC 生成，本地播放）。作业与产物按课程隔离；
+   * capabilities 不绑定课程（设置页也要读）；材料暂存服务于紧接着的一次生成。
+   */
+  readonly classroomService: {
+    job(courseId: string, jobId: string): Promise<Record<string, unknown>>
+    /** 生成中也能取：给了 classroomId 就取它，只给 jobId 就认领生成中的 stage。 */
+    live(courseId: string, target: { classroomId?: string; jobId?: string }): Promise<Record<string, unknown>>
+    /** 删除一份课堂：本地必删；cloud=true 时顺带删云端。 */
+    remove(courseId: string, classroomId: string, cloud: boolean): Promise<Record<string, unknown>>
+    get(courseId: string, classroomId: string): Promise<Record<string, unknown>>
+    list(courseId: string): Promise<Record<string, unknown>>
+    capabilities(courseId?: string | null): Promise<Record<string, unknown>>
+    saveProgress(courseId: string, progress: { classroomId: string; sceneId: string | null; answers: Record<string, string[]> }): Promise<Record<string, unknown>>
+    stageMaterial(courseId: string, name: string, mime: string, bytes: Uint8Array): Promise<Record<string, unknown>>
+    attachments(courseId: string): Promise<Record<string, unknown>>
   }
   /**
    * Host-side diagnostics. Logs live under the host home (`logs/host-*.log`),
@@ -655,6 +682,97 @@ const handlers = {
     payload: z.object({ payload: z.unknown() }),
     async run(payload: { payload: unknown }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
       return ok(await services.settingsService.importProviders(payload.payload))
+    },
+  },
+  // DocMind（电子书解析）配置：get 只返回 configured/endpoint，不含密钥；
+  // save 响应统一为 {configured,endpoint}（回读真实解析结果，环境变量优先级如实反映）。
+  'settings.docmind.get': {
+    payload: null,
+    async run(_payload: void, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.docmind.get())
+    },
+  },
+  'settings.docmind.save': {
+    payload: z.object({
+      accessKeyId: z.string().optional(),
+      accessKeySecret: z.string().optional(),
+      endpoint: z.string().nullish(),
+    }),
+    async run(payload: { accessKeyId?: string; accessKeySecret?: string; endpoint?: string | null }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.docmind.save(payload))
+    },
+  },
+  // 云端 OpenMAIC 连接配置：口令与模型 Key 一律写密封凭据，get 只回地址与是否已配置。
+  'settings.cloud.get': {
+    payload: null,
+    async run(_payload: void, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.cloud.get())
+    },
+  },
+  'settings.cloud.save': {
+    payload: z.object({
+      baseUrl: z.string().optional(),
+      accessCode: z.string().optional(),
+      provider: z.string().optional(),
+      preset: z.string().optional(),
+      model: z.string().optional(),
+      apiKey: z.string().optional(),
+    }),
+    async run(payload: { baseUrl?: string; accessCode?: string; provider?: string; preset?: string; model?: string; apiKey?: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.settingsService.cloud.save(payload))
+    },
+  },
+  'classroom.job': {
+    payload: z.object({ courseId: z.string().min(1), jobId: z.string().min(1).max(120) }),
+    async run(payload: { courseId: string; jobId: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.job(payload.courseId, payload.jobId))
+    },
+  },
+  'classroom.get': {
+    payload: z.object({ courseId: z.string().min(1), classroomId: z.string().min(1).max(80) }),
+    async run(payload: { courseId: string; classroomId: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.get(payload.courseId, payload.classroomId))
+    },
+  },
+  'classroom.list': {
+    payload: z.object({ courseId: z.string().min(1) }),
+    async run(payload: { courseId: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.list(payload.courseId))
+    },
+  },
+  'classroom.live': {
+    payload: z.object({ courseId: z.string().min(1), classroomId: z.string().min(1).max(80).optional(), jobId: z.string().min(1).max(120).optional() }),
+    async run(payload: { courseId: string; classroomId?: string; jobId?: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.live(payload.courseId, { ...(payload.classroomId !== undefined ? { classroomId: payload.classroomId } : {}), ...(payload.jobId !== undefined ? { jobId: payload.jobId } : {}) }))
+    },
+  },
+  'classroom.delete': {
+    payload: z.object({ courseId: z.string().min(1), classroomId: z.string().min(1).max(80), cloud: z.boolean().optional() }),
+    async run(payload: { courseId: string; classroomId: string; cloud?: boolean }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.remove(payload.courseId, payload.classroomId, payload.cloud === true))
+    },
+  },
+  'classroom.capabilities': {
+    payload: z.object({ courseId: z.string().min(1).nullish() }),
+    async run(payload: { courseId?: string | null }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.capabilities(payload.courseId ?? null))
+    },
+  },
+  'classroom.progress': {
+    payload: z.object({
+      courseId: z.string().min(1),
+      classroomId: z.string().min(1).max(80),
+      sceneId: z.string().max(120).nullable(),
+      answers: z.record(z.string().max(120), z.array(z.string().max(40)).max(8)),
+    }),
+    async run(payload: { courseId: string; classroomId: string; sceneId: string | null; answers: Record<string, string[]> }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.saveProgress(payload.courseId, { classroomId: payload.classroomId, sceneId: payload.sceneId, answers: payload.answers }))
+    },
+  },
+  'classroom.attachments': {
+    payload: z.object({ courseId: z.string().min(1) }),
+    async run(payload: { courseId: string }, services: HostServices): Promise<RpcResponse<Record<string, unknown>>> {
+      return ok(await services.classroomService.attachments(payload.courseId))
     },
   },
   'courses.syllabus': {

@@ -9,5 +9,6 @@ apps/*/node_modules
 apps/web/.next
 apps/web/out
 apps/desktop
+apps/cli
 tmp
 **/*.log
