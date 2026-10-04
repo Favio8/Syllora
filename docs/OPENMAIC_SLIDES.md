@@ -157,6 +157,47 @@ LLM_THINKING_DISABLED=true
 顺带提醒：**重启容器会打断正在进行的生成**，该章会记为失败（细节见
 [OPENMAIC_CLOUD_API.md](OPENMAIC_CLOUD_API.md) 的轮询一节）。
 
+### 可选：配置讲课旁白语音（TTS）
+
+课堂除了幻灯片，还会生成**讲课旁白语音**。不配 TTS 时课堂没有声音；配上之后实测
+一次 7 页课堂产出 **37 段旁白、约 20 MB**。
+
+配置写在**云端** `.env.local`（需要重启容器）：
+
+```bash
+# 阿里云百炼 / 千问AI平台 Key（前缀通常为 sk- 或 sk-ws-）
+TTS_QWEN_API_KEY=<你的语音 Key>
+TTS_QWEN_MODELS=qwen3-tts-flash,qwen3-tts-instruct-flash
+TTS_QWEN_BASE_URL=https://dashscope.aliyuncs.com/api/v1
+```
+
+以上三行对应云端 `qwen-tts` 预设；它默认模型就是 `qwen3-tts-flash`、默认音色 `Cherry`。
+**显式写出 `TTS_QWEN_MODELS` 与 `TTS_QWEN_BASE_URL` 更稳妥**，不必依赖隐式默认。
+
+> ⚠️ **密钥不要提交进仓库。** 它属于部署环境，放服务器 `.env.local`（权限 600）即可。
+> 仓库里只应有占位值。
+
+**怎么确认配好了**（按顺序，任一步失败都能定位）：
+
+```bash
+# 1) 服务端是否已识别该供应商（Key 会被脱敏，显示为空是正常的）
+curl -s -H "Cookie: openmaic_access=<cookie>" \
+  https://<你的站点>/api/server-providers | grep -o 'qwen-tts'
+
+# 2) 真实合成一句，看是否返回 base64 音频
+curl -s -X POST https://<你的站点>/api/generate/tts \
+  -H "Cookie: openmaic_access=<cookie>" -H 'content-type: application/json' \
+  -d '{"text":"测试","audioId":"verify-001","ttsProviderId":"qwen-tts","ttsVoice":"Cherry"}'
+# → {"success":true,"audioId":"verify-001","base64":"UklGR...","format":"wav"}
+```
+
+**成功的样子**：`success:true`、`format:"wav"`，`base64` 开头是 `UklGR`（即 `RIFF`，
+WAV 文件头）。解码后应是 `RIFF ... WAVE audio, Microsoft PCM, 16 bit, mono 24000 Hz`。
+
+生成完成后，任务返回的 `result.ttsCoverage` 会给出覆盖率（例如 `{total: 37, written: 37}`）。
+旁白音频**不落文件**，存在云端资产池里，取回方式见
+[OPENMAIC_CLOUD_API.md 的 4.3 节](OPENMAIC_CLOUD_API.md)。
+
 ## 生成粒度与产物
 
 **一章 = 一个云端课堂。** Syllora 的批次划分即章节划分，每章：

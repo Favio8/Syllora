@@ -63,7 +63,7 @@ GET /api/access-code/status
 POST /api/access-code/verify
 content-type: application/json
 
-{ "code": "VrkmT41PmBbZPt6iIn1wICck" }
+{ "code": "<站点访问口令，即服务器 .env.local 里的 ACCESS_CODE>" }
 ```
 
 响应：
@@ -373,30 +373,57 @@ data: {"type":"stage_freshness","stageId":"stage-GR1A4ZOHBuDZ","rev":9}
 
 > 鉴权与存在性：未鉴权访问 → **401**；不存在的 id → **404**（不暴露存在性，实测确认）。
 
-### 4.3 取生成的图片/音频
+### 4.3 取生成的图片/音频（含讲课旁白）
 
-#### `GET /api/classroom-media/{classroomId}/{...path}`
+`实测`
+
+生成的多媒体产物（含讲课旁白语音）**不落文件，而是存进「资产池」**：PostgreSQL 的
+`asset_entries` / `asset_blobs` 等表，按调用者（owner）分区。场景通过 `ast_*` id 引用它们。
+
+场景里的引用形态（实测）：
+
+```jsonc
+{ "type": "speech", "text": "同学们好！欢迎来到今天的数学课堂……", "audioId": "ast_8w5e42fbe2cgeymk3te6tc4vqm" }
+```
+
+#### `GET /api/persistence/assets/{assetId}/content` — 下载单个资产
+
+```http
+GET /api/persistence/assets/ast_8w5e42fbe2cgeymk3te6tc4vqm/content
+cookie: openmaic_access=...
+```
+
+实测结果：**`HTTP 200`，683,564 字节，`content-type: audio/wav`**。
+
+| 请求 | 结果 |
+|---|---|
+| `GET /api/persistence/assets/{id}/content` | ✅ **200 + 字节**（可下载） |
+| `POST` 同一路径 | 405 |
+| `GET /api/persistence/assets/{id}` | 405 |
+| `GET /api/persistence/assets` | 405 |
+
+**路径必须以 `/content` 结尾，方法必须是 GET**，两者缺一都得到 405。
+
+实测某次课堂生成后资产池的内容：**37 条 `audio/wav`，合计 20,983,388 字节（约 20 MB）**——
+与生成任务返回的 `ttsCoverage: {total: 37, written: 37}` 完全吻合。
+
+> **另一条路（不下载，本地重造）**：拿 `speech` 动作里的 `text` 调
+> `POST /api/generate/tts` 重新合成。字段是 `{text, audioId, ttsProviderId, ttsVoice}`
+> （**不是我最初猜的 `providerId`/`voiceId`**）。实测返回
+> `{success:true, audioId, base64, format:"wav"}`——**`base64` 字段里就是完整 WAV**。
+> 这条路会**重新计费**，但换音色或改文案时是唯一选择。
+
+#### `GET /api/classroom-media/{classroomId}/{...path}` — 旧版文件式通道
 
 `源码`
 
-生成的多媒体产物存在容器磁盘上（`OPENMAIC_CLASSROOMS_DIR`，默认在容器内），按扩展名回传 MIME：
+服务**旧版文件式课堂**（课程目录下的 `<id>/media` 与 `<id>/audio`）。
 
-| 扩展名 | MIME |
-|---|---|
-| `.png` / `.jpg` | `image/png` / `image/jpeg` |
-| `.mp3` | `audio/mpeg` |
-| `.wav` | `audio/wav` |
-| `.ogg` | `audio/ogg` |
-| `.aac` | `audio/aac` |
-| `.flac` | `audio/flac` |
-| `.m4a` | `audio/mp4` |
+**当前版本的服务端生成不再写这个目录**——实测容器内 `data/classrooms` 根本不存在，
+新课堂的音频要走上面的资产池接口。该路由仍支持 HTTP Range（可断点续传），
+按扩展名回传 MIME（`.png` / `.jpg` / `.mp3` / `.wav` / `.ogg` / `.aac` / `.flac` / `.m4a`）。
 
-支持 HTTP Range（可断点续传）。**具体路径需要先知道场景引用了哪些资源**——画布元素里
-`type: "image"` 的元素带 `src`，从那里取路径。
-
-实测：请求不存在的媒体路径返回 **404**。当前这个课堂没有生成媒体资源
-（画布只有文字元素），所以这条链路尚未端到端验证过——**取图片/音频是本次新增能力，
-还未实测成功过**。
+实测：请求不存在的媒体路径返回 **404**。
 
 ### 4.4 导出 MP4（可选）
 
@@ -469,9 +496,11 @@ data: {"type":"stage_freshness","stageId":"stage-GR1A4ZOHBuDZ","rev":9}
 | `slides/*.md` | 从 canvas 提取正文文本 | ✅ 已实现（降级视图） |
 | 单页 PNG | 本地 `@openmaic/renderer` 的 `slideToPng` | ✅ 已实现 |
 | 整份 PPTX | 本地 `pptxgenjs` 按画布坐标映射 | ✅ 已实现 |
-| 图片/音频原件 | 4.3 的媒体路由逐个下载 | ⬜ 未实现 |
-| 整份课堂 JSON | 4.2 `GET /api/stages/{id}` | ⬜ 未实现（现用 manifest+scenes） |
-| MP4 | 4.4 导出链路 | ⬜ 未实现（需云端配渲染服务） |
+| **讲课旁白语音（.wav）** | 从 `speech` 动作拿 `audioId`，走 4.3 的资产接口下载 | ✅ **接口已实测可用**（700 KB/段量级，尚未接入 Syllora） |
+| **旁白文本（字幕）** | `speech` 动作的 `text` 字段 | ✅ 数据已在场景里 |
+| 整份课堂 JSON | 4.2 `GET /api/stages/{id}` | ⬜ 未实现（现用 manifest+scenes，功能等价） |
+| 图片原件 | 同上，画布 `type: "image"` 元素带 `src` | ⬜ 未接入（接口同一条） |
+| MP4 | 4.4 导出链路 | ⬜ 未实现（需云端配 `RENDER_SERVICE_URL`） |
 
 **建议的目录结构**（与 Syllora 既有的 revision 模型一致）：
 
