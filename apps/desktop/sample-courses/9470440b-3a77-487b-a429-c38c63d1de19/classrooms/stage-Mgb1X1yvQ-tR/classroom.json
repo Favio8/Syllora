@@ -1,0 +1,3284 @@
+{
+  "stage": {
+    "id": "stage-Mgb1X1yvQ-tR",
+    "name": "矩阵、行列式与线性方程组",
+    "style": "interactive",
+    "createdAt": 1791065343443,
+    "updatedAt": 1791065343443,
+    "videoManifest": {},
+    "languageDirective": "全程使用中文授课，语言亲切自然，配合生活化例子讲解线性代数概念。专业术语（如矩阵、行列式、秩、增广矩阵等）使用标准中文表达，首次出现时给出简要定义。角色对话中「小艾老师」用耐心讲解的语气，「助教」用补充提醒的语气，并适当提示易错点。",
+    "generatedAgentConfigs": [
+      {
+        "id": "gen-server-0",
+        "name": "小艾老师",
+        "role": "teacher",
+        "color": "#3b82f6",
+        "avatar": "/avatars/teacher.png",
+        "persona": "主讲教师，授课亲切耐心，善于用生活化例子解释抽象概念，如用购物结账、路线规划等引入矩阵和线性方程组。讲解层层递进，注重互动引导，让学生在轻松氛围中理解线性代数的核心知识。",
+        "priority": 10
+      },
+      {
+        "id": "gen-server-1",
+        "name": "助教",
+        "role": "student",
+        "color": "#10b981",
+        "avatar": "/avatars/assist.png",
+        "persona": "学生助教，思维活跃，常在老师讲解后补充思路和直观理解，例如用图形化方式解释行列式、用实际情境解释秩的含义。同时会主动提醒易错点，如增广矩阵行变换注意事项、行列式性质误用等，语气友好且略带自省。",
+        "priority": 5
+      },
+      {
+        "id": "gen-server-2",
+        "name": "同学",
+        "role": "assistant",
+        "color": "#f59e0b",
+        "avatar": "/avatars/curious.png",
+        "persona": "学习者代表，带着真实课堂疑问参与讨论，偶尔提出自己在练习中的困惑，如“为什么这里不能直接消去这一行？”。认真思考，积极响应小艾老师的提问，并和助教互动确认理解是否正确。",
+        "priority": 7
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "scene_hfYXwCQcAl",
+      "type": "slide",
+      "order": 1,
+      "title": "课程导入：认识矩阵",
+      "actions": [
+        {
+          "id": "action_-v0cK1L4",
+          "type": "spotlight",
+          "elementId": "text_ZOPxRbga"
+        },
+        {
+          "id": "action_sDc1Ne1C",
+          "text": "同学们好，欢迎来到线性代数的课堂。今天我们将一起认识一个非常重要的数学工具——矩阵。它不仅是线性代数的核心概念，更是我们处理大量数据的得力助手。",
+          "type": "speech"
+        },
+        {
+          "id": "action_WzhZRc96",
+          "type": "spotlight",
+          "elementId": "text_0MpMinvS"
+        },
+        {
+          "id": "action__g5vaBQz",
+          "text": "我们先从一个熟悉的场景开始。看看这张班级成绩表，每一行代表一位同学，每一列代表一门科目。像这样把数据按照行列整齐排列，就是矩阵思想的雏形。",
+          "type": "speech"
+        },
+        {
+          "id": "action_PLuvEfeh",
+          "type": "spotlight",
+          "elementId": "text_kDTkX4iZ"
+        },
+        {
+          "id": "action_TaJ2TEKt",
+          "text": "现在我们给出矩阵的正式定义。矩阵是由 m 乘 n 个数排成的矩形数表。这里的 m 表示行数，n 表示列数。",
+          "type": "speech"
+        },
+        {
+          "id": "action_1qfuWXhR",
+          "type": "spotlight",
+          "elementId": "text_Auhrbi5M"
+        },
+        {
+          "id": "action_En-mQa_J",
+          "text": "注意，矩阵本身不参与运算时，它只是一个数表，不是一个具体的数值。但它为我们后续的运算和变换提供了结构化的表达方式。",
+          "type": "speech"
+        },
+        {
+          "id": "action_Mfxy7Ssd",
+          "type": "spotlight",
+          "elementId": "text_hP32QZzM"
+        },
+        {
+          "id": "action_xKxa5Ah9",
+          "text": "接下来关注两个关键概念。",
+          "type": "speech"
+        },
+        {
+          "id": "action_F4MjThjV",
+          "type": "spotlight",
+          "elementId": "text_hDv09BRi"
+        },
+        {
+          "id": "action_55vMhTaQ",
+          "text": "方阵是指行数等于列数的矩阵。而两个矩阵相等，需要同时满足两个条件：它们是同型的，也就是行数和列数都相同，并且对应位置的元素完全相等。这个条件在后续判断矩阵相等时会经常用到。",
+          "type": "speech"
+        },
+        {
+          "id": "action_Fnu3ZxoV",
+          "type": "spotlight",
+          "elementId": "text_1D76CgGT"
+        },
+        {
+          "id": "action_Q5OnmoD-",
+          "text": "了解了基本概念后，我们来看看本章的知识地图。",
+          "type": "speech"
+        },
+        {
+          "id": "action_8fbJ5bLo",
+          "type": "spotlight",
+          "elementId": "text_MBq2rbvb"
+        },
+        {
+          "id": "action_ZVUk2LiD",
+          "text": "我们将从矩阵的运算开始，逐步深入。",
+          "type": "speech"
+        },
+        {
+          "id": "action_mkXqeboa",
+          "type": "spotlight",
+          "elementId": "text_QWK2w3oD"
+        },
+        {
+          "id": "action_H-n29jJb",
+          "text": "然后学习行列式，它和矩阵紧密相关，是研究矩阵性质的重要工具。",
+          "type": "speech"
+        },
+        {
+          "id": "action_Bd-hccCi",
+          "type": "spotlight",
+          "elementId": "text_NJRyI6OD"
+        },
+        {
+          "id": "action_wLNy1yyu",
+          "text": "最后我们把线性方程组与秩的内容串联起来，形成一个完整的知识框架。今天先建立对矩阵的直观认识，后续的内容我们会一步步展开。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "LaHszjcebsv2w9_aEK1sC",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_ZOPxRbga",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px;text-align:center\"><strong>认识矩阵</strong></p>",
+              "defaultColor": "#1e3a5f",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_3h7Tm5Be",
+              "top": 134,
+              "fill": "#5b9bd5",
+              "left": 390,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 220,
+              "height": 4,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_waziZURc",
+              "top": 165,
+              "fill": "#ffffff",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_F7pHnIBN",
+              "top": 165,
+              "fill": "transparent",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_pubcZdbo",
+              "top": 183,
+              "fill": "#ed7d31",
+              "left": 78,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 5,
+              "height": 74,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_0MpMinvS",
+              "top": 183,
+              "left": 100,
+              "type": "text",
+              "width": 810,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\"><strong>生活场景</strong>：班级成绩表 — 行表示学生，列表示科目</p><p style=\"font-size:16px;color:#666666\">这种按行列排列的数据，正是线性代数中的核心工具 →</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_iGEB8Diq",
+              "top": 300,
+              "fill": "#e8f1fb",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 420,
+              "height": 190,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_kDTkX4iZ",
+              "top": 316,
+              "left": 85,
+              "type": "text",
+              "width": 370,
+              "height": 58,
+              "rotate": 0,
+              "content": "<p style=\"font-size:24px\"><strong>矩阵的定义</strong></p>",
+              "defaultColor": "#1e3a5f",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_Auhrbi5M",
+              "top": 386,
+              "left": 85,
+              "type": "text",
+              "width": 370,
+              "height": 88,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\">由 m × n 个数排成的</p><p style=\"font-size:16px\">矩形数表称为矩阵</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_xr_JQP7v",
+              "top": 300,
+              "fill": "#fdf3e7",
+              "left": 520,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 420,
+              "height": 190,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_hP32QZzM",
+              "top": 316,
+              "left": 545,
+              "type": "text",
+              "width": 370,
+              "height": 58,
+              "rotate": 0,
+              "content": "<p style=\"font-size:24px\"><strong>两个关键概念</strong></p>",
+              "defaultColor": "#92400e",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_hDv09BRi",
+              "top": 386,
+              "left": 545,
+              "type": "text",
+              "width": 370,
+              "height": 88,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\">• 方阵：行数 = 列数</p><p style=\"font-size:16px\">• 相等：同型且对应元素全相等</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_1D76CgGT",
+              "top": 512,
+              "left": 60,
+              "type": "text",
+              "width": 200,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\"><strong>本章知识地图</strong></p>",
+              "defaultColor": "#1e3a5f",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_slyGhB3U",
+              "top": 505,
+              "fill": "#5b9bd5",
+              "left": 270,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 140,
+              "height": 42,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_MBq2rbvb",
+              "top": 513,
+              "left": 290,
+              "type": "text",
+              "width": 100,
+              "height": 26,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">矩阵运算</p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_S2bC3dc6",
+              "end": [
+                50,
+                0
+              ],
+              "top": 526,
+              "left": 415,
+              "type": "line",
+              "color": "#b0b0b0",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "shape_Ie8NIBpw",
+              "top": 505,
+              "fill": "#70ad47",
+              "left": 470,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 140,
+              "height": 42,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_QWK2w3oD",
+              "top": 513,
+              "left": 490,
+              "type": "text",
+              "width": 100,
+              "height": 26,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">行列式</p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_HJm0hspt",
+              "end": [
+                50,
+                0
+              ],
+              "top": 526,
+              "left": 615,
+              "type": "line",
+              "color": "#b0b0b0",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "shape_evrrxA7x",
+              "top": 505,
+              "fill": "#ed7d31",
+              "left": 670,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 190,
+              "height": 42,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_NJRyI6OD",
+              "top": 513,
+              "left": 690,
+              "type": "text",
+              "width": 150,
+              "height": 26,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">线性方程组与秩</p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#f7f9fc"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065361100,
+      "outlineId": "scene_1",
+      "updatedAt": 1791065361100
+    },
+    {
+      "id": "scene_SvzFbD_-Wz",
+      "type": "slide",
+      "order": 2,
+      "title": "矩阵的基本运算",
+      "actions": [
+        {
+          "id": "action_jIMspToJ",
+          "type": "spotlight",
+          "elementId": "text_qwcwN-yq"
+        },
+        {
+          "id": "action_Z2OaOT_4",
+          "text": "同学们，今天我们进入矩阵的世界。矩阵听起来很抽象，但其实就是一张整齐的数字表格。我们先来认识矩阵最基本的三种运算：加法、数乘和转置。",
+          "type": "speech"
+        },
+        {
+          "id": "action_mWY2Z2BS",
+          "type": "spotlight",
+          "elementId": "text_Yr9yPLYX"
+        },
+        {
+          "id": "action__gDY1N-v",
+          "text": "先看矩阵加法。想象你有两张购物清单，一张是这周的，一张是下周的。要把它们合起来看总消费，怎么加？那就是把相同位置上的数字加起来。",
+          "type": "speech"
+        },
+        {
+          "id": "action_gZzajdQV",
+          "type": "spotlight",
+          "elementId": "text_fcvb54V-"
+        },
+        {
+          "id": "action_yOE3P0VB",
+          "text": "所以加法的前提是：两个矩阵必须同型，也就是行数和列数都要一样。然后对应位置的元素相加，得到一个新的矩阵。不同型的矩阵是不能相加的。",
+          "type": "speech"
+        },
+        {
+          "id": "action_FTS9V2ep",
+          "type": "spotlight",
+          "elementId": "text_2phDK_tp"
+        },
+        {
+          "id": "action_7QRUoBao",
+          "text": "接着看数乘运算。比如你想把购物清单上的每一项都翻倍，因为要买双份。数乘就是这么简单：用一个数去乘矩阵里的每一个元素。",
+          "type": "speech"
+        },
+        {
+          "id": "action_uVg9nKu7",
+          "type": "spotlight",
+          "elementId": "text_Watb8NXy"
+        },
+        {
+          "id": "action_SzTFtPCn",
+          "text": "再来看矩阵转置。转置就像是把矩阵沿着主对角线翻了个面。原来在第一行第一列的元素还在原位，但第一行第二列的元素就跑到了第二行第一列。",
+          "type": "speech"
+        },
+        {
+          "id": "action_MOXxTQIf",
+          "type": "spotlight",
+          "elementId": "text_VgIxXPBK"
+        },
+        {
+          "id": "action_vGDcNvlP",
+          "text": "简单说就是行列互换。原来三行两列的矩阵转置后变成两行三列。我们把它记作A的转置，符号是在右上角写一个大写的T。",
+          "type": "speech"
+        },
+        {
+          "id": "action_YWb3h-b0",
+          "type": "spotlight",
+          "elementId": "text_Sg4OwIWR"
+        },
+        {
+          "id": "action_Ma9YuEM-",
+          "text": "助教特别提醒大家一个易错点：两个矩阵相等，不是看着差不多就行。必须行数相同、列数相同，而且每个对应位置的元素都完全相同，这三个条件缺一不可。大家做判断题的时候要特别留意。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "NgBV2HbpPTFzV6fNrYH_A",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_qwcwN-yq",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px\"><strong>矩阵的基本运算</strong></p>",
+              "defaultColor": "#1e293b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_5Aa_7uwr",
+              "top": 120,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 58,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\">加法 · 数乘 · 转置</p>",
+              "defaultColor": "#64748b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_DfjpmKms",
+              "top": 190,
+              "fill": "#5b9bd5",
+              "left": 70,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 860,
+              "height": 3,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_vyB2j9GG",
+              "top": 215,
+              "fill": "#e8f1fb",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 280,
+              "height": 155,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_Yr9yPLYX",
+              "top": 225,
+              "left": 80,
+              "type": "text",
+              "width": 240,
+              "height": 52,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px;text-align:center\"><strong>矩阵加法</strong></p>",
+              "defaultColor": "#1e40af",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_fcvb54V-",
+              "top": 280,
+              "left": 80,
+              "type": "text",
+              "width": 240,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">同型矩阵，对应元素相加</p>",
+              "defaultColor": "#334155",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_nihs1Qu3",
+              "top": 215,
+              "fill": "#e6f7ef",
+              "left": 360,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 280,
+              "height": 155,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_2phDK_tp",
+              "top": 225,
+              "left": 380,
+              "type": "text",
+              "width": 240,
+              "height": 52,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px;text-align:center\"><strong>数乘运算</strong></p>",
+              "defaultColor": "#166534",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_RWTRqYeK",
+              "top": 280,
+              "left": 380,
+              "type": "text",
+              "width": 240,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">用数乘矩阵的每一个元素</p>",
+              "defaultColor": "#334155",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_3VAynWGm",
+              "top": 215,
+              "fill": "#fdf3e7",
+              "left": 660,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 280,
+              "height": 155,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_Watb8NXy",
+              "top": 225,
+              "left": 680,
+              "type": "text",
+              "width": 240,
+              "height": 52,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px;text-align:center\"><strong>矩阵转置</strong></p>",
+              "defaultColor": "#92400e",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_VgIxXPBK",
+              "top": 280,
+              "left": 680,
+              "type": "text",
+              "width": 240,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">行列互换，记为 Aᵀ</p>",
+              "defaultColor": "#334155",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_K0kJMm1W",
+              "top": 400,
+              "fill": "#fef2f2",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 90,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_d--2vK0R",
+              "top": 408,
+              "fill": "#dc2626",
+              "left": 70,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 5,
+              "height": 74,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_Sg4OwIWR",
+              "top": 407,
+              "left": 90,
+              "type": "text",
+              "width": 830,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;text-align:left\"><strong>易错提醒：</strong>矩阵相等必须行数、列数、对应元素全部相同</p>",
+              "defaultColor": "#7f1d1d",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#f9fafc"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065374720,
+      "outlineId": "scene_2",
+      "updatedAt": 1791065374720
+    },
+    {
+      "id": "scene_LHFBrLVhoA",
+      "type": "slide",
+      "order": 3,
+      "title": "矩阵乘法的秘密",
+      "actions": [
+        {
+          "id": "action_OO2m5gjh",
+          "type": "spotlight",
+          "elementId": "text_SmuRfV41"
+        },
+        {
+          "id": "action_wK18gBfB",
+          "text": "同学们，我们已经认识了矩阵这个新朋友。那么，矩阵之间可以做乘法吗？今天我们就来揭开矩阵乘法的秘密。",
+          "type": "speech"
+        },
+        {
+          "id": "action_9NFq6ULT",
+          "type": "spotlight",
+          "elementId": "text_r9TnJGFk"
+        },
+        {
+          "id": "action_Azl5uowM",
+          "text": "首先，矩阵相乘不是随随便便就能乘的，它有一个前提条件。",
+          "type": "speech"
+        },
+        {
+          "id": "action_QX5l_oZu",
+          "type": "spotlight",
+          "elementId": "text_MCjeVCeH"
+        },
+        {
+          "id": "action_g3LHFmE2",
+          "text": "关键在于维度要匹配：左边矩阵的列数，必须等于右边矩阵的行数。就像拼图一样，接口对上了才能拼在一起。",
+          "type": "speech"
+        },
+        {
+          "id": "action_GWzW47KF",
+          "type": "spotlight",
+          "elementId": "text_iGV3DqOF"
+        },
+        {
+          "id": "action_TgFmYta9",
+          "text": "满足了前提条件，接下来看具体怎么算。",
+          "type": "speech"
+        },
+        {
+          "id": "action_qq3ROabe",
+          "type": "spotlight",
+          "elementId": "text_uvPQpeUU"
+        },
+        {
+          "id": "action_zBwkmufq",
+          "text": "乘积矩阵中第 i 行第 j 列的元素，就是用左边矩阵 A 的第 i 行，去点乘右边矩阵 B 的第 j 列。所谓点乘，就是对应位置的元素相乘，然后把所有乘积加起来。",
+          "type": "speech"
+        },
+        {
+          "id": "action_XgkcAmMA",
+          "type": "spotlight",
+          "elementId": "text_jxiUhHSK"
+        },
+        {
+          "id": "action_jeZzYhSH",
+          "text": "掌握了计算方法，我们还要特别注意矩阵乘法的一个重要性质。",
+          "type": "speech"
+        },
+        {
+          "id": "action_QudBt3iA",
+          "type": "spotlight",
+          "elementId": "text_zGuf65NW"
+        },
+        {
+          "id": "action_qbdiyjAP",
+          "text": "它和我们熟悉的数字乘法不一样，矩阵乘法一般不满足交换律。也就是说，A 乘 B 和 B 乘 A 的结果通常是不一样的，甚至有时候其中一个根本没有意义。不过，它仍然满足结合律和分配律。另外，A 乘 B 的转置等于 B 的转置乘以 A 的转置，注意这里的顺序要颠倒过来。这一点在后续计算中非常容易出错，大家要特别留意。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "MuWx9x-3IOtnfLEVrwvLl",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_SmuRfV41",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px;text-align:center\"><strong>矩阵乘法的秘密</strong></p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_uZdqVfrl",
+              "top": 132,
+              "fill": "#f39c12",
+              "left": 200,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 600,
+              "height": 3,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_E7eGsxYa",
+              "top": 170,
+              "fill": "#eaf2f8",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 100,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_r9TnJGFk",
+              "top": 180,
+              "left": 80,
+              "type": "text",
+              "width": 200,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>乘法前提</strong></p>",
+              "defaultColor": "#2980b9",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_MCjeVCeH",
+              "top": 180,
+              "left": 280,
+              "type": "text",
+              "width": 640,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\">左矩阵列数 = 右矩阵行数</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_iGV3DqOF",
+              "top": 310,
+              "left": 80,
+              "type": "text",
+              "width": 180,
+              "height": 58,
+              "rotate": 0,
+              "content": "<p style=\"font-size:24px\"><strong>计算方法</strong></p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_uvPQpeUU",
+              "top": 370,
+              "left": 80,
+              "type": "text",
+              "width": 840,
+              "height": 82,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">乘积元素 (i, j) = A 的第 i 行 · B 的第 j 列</p><p style=\"font-size:18px\">对应元素相乘，再求和</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_jxiUhHSK",
+              "top": 472,
+              "left": 80,
+              "type": "text",
+              "width": 220,
+              "height": 58,
+              "rotate": 0,
+              "content": "<p style=\"font-size:24px\"><strong>核心性质</strong></p>",
+              "defaultColor": "#c0392b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_zGuf65NW",
+              "top": 530,
+              "left": 80,
+              "type": "text",
+              "width": 840,
+              "height": 82,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">• 不满足交换律：一般 AB ≠ BA</p><p style=\"font-size:18px\">• 满足结合律与分配律</p><p style=\"font-size:18px\">• (AB)ᵀ = BᵀAᵀ，注意顺序颠倒</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#ffffff"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065385458,
+      "outlineId": "scene_3",
+      "updatedAt": 1791065385458
+    },
+    {
+      "id": "scene_B8Qy0ZHe8_",
+      "type": "slide",
+      "order": 4,
+      "title": "行列式：从对角线法则到展开",
+      "actions": [
+        {
+          "id": "action_Ox7VfEze",
+          "type": "spotlight",
+          "elementId": "text_VYjCrSEv"
+        },
+        {
+          "id": "action_vP1JHUyL",
+          "text": "同学们好！今天我们来学习行列式。行列式是线性代数中一个非常重要的工具，我们先来看看二阶和三阶行列式的对角线法则。",
+          "type": "speech"
+        },
+        {
+          "id": "action_XJm7fnCL",
+          "type": "spotlight",
+          "elementId": "text_OjzM5Mxf"
+        },
+        {
+          "id": "action_NRpx4uQv",
+          "text": "首先看二阶行列式。二阶行列式由两行两列组成，它的计算规则很简单：主对角线之积减去副对角线之积。主对角线就是从左上到右下的这条线，副对角线是从右上到左下的那条线。",
+          "type": "speech"
+        },
+        {
+          "id": "action_R3ZjfbNU",
+          "type": "spotlight",
+          "elementId": "latex_u5mXXvph"
+        },
+        {
+          "id": "action_lxotvOUp",
+          "text": "比如这个二阶行列式，第一行是a一一和a一二，第二行是a二一和a二二。按照规则，它就是a一一乘以a二二，减去a一二乘以a二一。大家记住这个顺序，主对角线先乘，副对角线后乘再减。",
+          "type": "speech"
+        },
+        {
+          "id": "action_xIC2D31N",
+          "type": "spotlight",
+          "elementId": "text_dJsYlTtD"
+        },
+        {
+          "id": "action_dmbWN2ty",
+          "text": "我们来看一个具体例子：这个行列式第一行是2和3，第二行是5和7。主对角线上是2和7，乘积是14；副对角线上是3和5，乘积是15。所以结果就是14减15，等于负1。",
+          "type": "speech"
+        },
+        {
+          "id": "action_VT6jvVYx",
+          "type": "spotlight",
+          "elementId": "text_bOEPVQ6b"
+        },
+        {
+          "id": "action_juIkvZhj",
+          "text": "很好，接下来我们看三阶行列式。三阶行列式可以用对角线法则来展开，不过要注意，三阶的对角线法则比二阶要复杂一些。",
+          "type": "speech"
+        },
+        {
+          "id": "action_PtUIHhHs",
+          "type": "spotlight",
+          "elementId": "latex_T6uuTktR"
+        },
+        {
+          "id": "action_5OTfN4jp",
+          "text": "对于三阶行列式，我们需要把第一列和第二列复制到行列式的右边。然后沿着主对角线方向的三项相乘并相加，再减去沿着副对角线方向的三项相乘。",
+          "type": "speech"
+        },
+        {
+          "id": "action_5ACI2nIB",
+          "type": "spotlight",
+          "elementId": "text_ugPT3RLN"
+        },
+        {
+          "id": "action_JDJjjyhw",
+          "text": "大家要记住：主对角线方向三项相加，副对角线方向三项相减。这个方法虽然直观，但对于更高阶的行列式就不适用了，所以后面我们还要学习更一般的展开方法。",
+          "type": "speech"
+        },
+        {
+          "id": "action_OON_hVgm",
+          "text": "总结一下今天的内容：二阶行列式是主对角线之积减副对角线之积，三阶行列式用对角线法则展开。下节课我们将学习余子式和代数余子式，以及按行展开的一般方法。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "SgDqEfoYnHE10iIOQMVOQ",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_VYjCrSEv",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px\"><strong>行列式：从对角线法则到展开</strong></p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_CpnwztJF",
+              "top": 126,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">二阶、三阶行列式 · 余子式与代数余子式 · 按行展开</p>",
+              "defaultColor": "#7f8c8d",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_RQUEAU5I",
+              "top": 185,
+              "fill": "#e0dcd3",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 1,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_C7RsaIHU",
+              "top": 210,
+              "fill": "#eaf2f8",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 400,
+              "height": 310,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_OjzM5Mxf",
+              "top": 230,
+              "left": 80,
+              "type": "text",
+              "width": 360,
+              "height": 52,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>一、二阶行列式</strong></p>",
+              "defaultColor": "#1a5276",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "latex_u5mXXvph",
+              "top": 290,
+              "html": "<span class=\"katex-display\"><span class=\"katex\"><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:2.4em;vertical-align:-0.95em\"></span><span class=\"minner\"><span class=\"mopen\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.45em\"><span class=\"pstrut\" style=\"height:4.4em\"></span><span style=\"width:0.333em;height:2.400em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"2.400em\" viewBox=\"0 0 333 2400\"><path d=\"M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span><span class=\"mord\"><span class=\"mtable\"><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.61em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">11</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-2.41em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">21</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.61em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">12</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-2.41em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">22</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span></span><span class=\"mclose\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.45em\"><span class=\"pstrut\" style=\"height:4.4em\"></span><span style=\"width:0.333em;height:2.400em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"2.400em\" viewBox=\"0 0 333 2400\"><path d=\"M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span></span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span><span class=\"mrel\">=</span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.7333em;vertical-align:-0.15em\"></span><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">11</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">22</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span><span class=\"mbin\">−</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.5806em;vertical-align:-0.15em\"></span><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">12</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">21</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span></span>",
+              "left": 130,
+              "type": "latex",
+              "align": "center",
+              "color": "#1a5276",
+              "latex": "\\begin{vmatrix} a_{11} & a_{12} \\\\ a_{21} & a_{22} \\end{vmatrix} = a_{11}a_{22} - a_{12}a_{21}",
+              "width": 260,
+              "height": 90,
+              "rotate": 0,
+              "fixedRatio": true
+            },
+            {
+              "id": "text_dJsYlTtD",
+              "top": 390,
+              "left": 80,
+              "type": "text",
+              "width": 360,
+              "height": 110,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\">• 主对角线之积 <strong>减</strong> 副对角线之积</p><p style=\"font-size:16px\">• 例如：</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "latex_Pb5WDRAx",
+              "top": 435,
+              "html": "<span class=\"katex-display\"><span class=\"katex\"><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:2.4em;vertical-align:-0.95em\"></span><span class=\"minner\"><span class=\"mopen\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.45em\"><span class=\"pstrut\" style=\"height:4.4em\"></span><span style=\"width:0.333em;height:2.400em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"2.400em\" viewBox=\"0 0 333 2400\"><path d=\"M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span><span class=\"mord\"><span class=\"mtable\"><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.61em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\">2</span></span></span><span style=\"top:-2.41em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\">5</span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.61em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\">3</span></span></span><span style=\"top:-2.41em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\">7</span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span></span><span class=\"mclose\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.45em\"><span style=\"top:-3.45em\"><span class=\"pstrut\" style=\"height:4.4em\"></span><span style=\"width:0.333em;height:2.400em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"2.400em\" viewBox=\"0 0 333 2400\"><path d=\"M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.95em\"><span></span></span></span></span></span></span></span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span><span class=\"mrel\">=</span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.7278em;vertical-align:-0.0833em\"></span><span class=\"mord\">2</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span><span class=\"mbin\">×</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.7278em;vertical-align:-0.0833em\"></span><span class=\"mord\">7</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span><span class=\"mbin\">−</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.7278em;vertical-align:-0.0833em\"></span><span class=\"mord\">3</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span><span class=\"mbin\">×</span><span class=\"mspace\" style=\"margin-right:0.2222em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.6444em\"></span><span class=\"mord\">5</span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span><span class=\"mrel\">=</span><span class=\"mspace\" style=\"margin-right:0.2778em\"></span></span><span class=\"base\"><span class=\"strut\" style=\"height:0.7278em;vertical-align:-0.0833em\"></span><span class=\"mord\">−</span><span class=\"mord\">1</span></span></span></span></span>",
+              "left": 150,
+              "type": "latex",
+              "align": "center",
+              "color": "#1a5276",
+              "latex": "\\begin{vmatrix} 2 & 3 \\\\ 5 & 7 \\end{vmatrix} = 2\\times 7 - 3\\times 5 = -1",
+              "width": 220,
+              "height": 60,
+              "rotate": 0,
+              "fixedRatio": true
+            },
+            {
+              "id": "shape_f_eGFsOT",
+              "top": 210,
+              "fill": "#fef9e7",
+              "left": 540,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 400,
+              "height": 310,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_bOEPVQ6b",
+              "top": 230,
+              "left": 560,
+              "type": "text",
+              "width": 360,
+              "height": 52,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>二、三阶行列式 · 对角线法则</strong></p>",
+              "defaultColor": "#7d6608",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "latex_T6uuTktR",
+              "top": 290,
+              "html": "<span class=\"katex-display\"><span class=\"katex\"><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:3.6em;vertical-align:-1.55em\"></span><span class=\"minner\"><span class=\"mopen\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:2.05em\"><span style=\"top:-4.05em\"><span class=\"pstrut\" style=\"height:5.6em\"></span><span style=\"width:0.333em;height:3.600em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"3.600em\" viewBox=\"0 0 333 3600\"><path d=\"M145 15 v585 v2400 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-2400 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v2400 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.55em\"><span></span></span></span></span></span></span><span class=\"mord\"><span class=\"mtable\"><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:2.05em\"><span style=\"top:-4.21em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">11</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-3.01em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">21</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-1.81em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">31</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.55em\"><span></span></span></span></span></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:2.05em\"><span style=\"top:-4.21em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">12</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-3.01em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">22</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-1.81em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">32</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.55em\"><span></span></span></span></span></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"arraycolsep\" style=\"width:0.5em\"></span><span class=\"col-align-c\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:2.05em\"><span style=\"top:-4.21em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">13</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-3.01em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">23</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span><span style=\"top:-1.81em\"><span class=\"pstrut\" style=\"height:3em\"></span><span class=\"mord\"><span class=\"mord\"><span class=\"mord mathnormal\">a</span><span class=\"msupsub\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.3011em\"><span style=\"top:-2.55em;margin-left:0em;margin-right:0.05em\"><span class=\"pstrut\" style=\"height:2.7em\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\"><span class=\"mord mtight\">33</span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.15em\"><span></span></span></span></span></span></span></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.55em\"><span></span></span></span></span></span></span></span><span class=\"mclose\"><span class=\"delimsizing mult\"><span class=\"vlist-t vlist-t2\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:2.05em\"><span style=\"top:-4.05em\"><span class=\"pstrut\" style=\"height:5.6em\"></span><span style=\"width:0.333em;height:3.600em\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0.333em\" height=\"3.600em\" viewBox=\"0 0 333 3600\"><path d=\"M145 15 v585 v2400 v585 c2.667,10,9.667,15,21,15\nc10,0,16.667,-5,20,-15 v-585 v-2400 v-585 c-2.667,-10,-9.667,-15,-21,-15\nc-10,0,-16.667,5,-20,15z M188 15 H145 v585 v2400 v585 h43z\"></path></svg></span></span></span><span class=\"vlist-s\">​</span></span><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:1.55em\"><span></span></span></span></span></span></span></span></span></span></span></span>",
+              "left": 560,
+              "type": "latex",
+              "align": "center",
+              "color": "#7d6608",
+              "latex": "\\begin{vmatrix} a_{11} & a_{12} & a_{13} \\\\ a_{21} & a_{22} & a_{23} \\\\ a_{31} & a_{32} & a_{33} \\end{vmatrix}",
+              "width": 360,
+              "height": 140,
+              "rotate": 0,
+              "fixedRatio": true
+            },
+            {
+              "id": "text_ugPT3RLN",
+              "top": 435,
+              "left": 560,
+              "type": "text",
+              "width": 360,
+              "height": 70,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\">主对角线方向三项相加，副对角线方向三项相减</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_D91POhHg",
+              "top": 540,
+              "fill": "#e0dcd3",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 1,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_U1p2rZA1",
+              "top": 560,
+              "fill": "#fdedec",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 400,
+              "height": 0,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#fdfbf7"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065398508,
+      "outlineId": "scene_4",
+      "updatedAt": 1791065398508
+    },
+    {
+      "id": "scene_aCb9loRzWE",
+      "type": "slide",
+      "order": 5,
+      "title": "行列式的性质与计算技巧",
+      "actions": [
+        {
+          "id": "action_otHUEv3h",
+          "type": "spotlight",
+          "elementId": "text_fmmToHMB"
+        },
+        {
+          "id": "action_sgcZMsXW",
+          "text": "同学们，大家好！欢迎来到我们的线性代数课堂。今天这一讲，我们来集中攻克一个非常核心的工具——行列式。很多同学一开始会觉得行列式的计算很繁琐，规则又多。别担心，今天小艾老师就带大家把最重要的性质和最实用的计算技巧梳理清楚，你会发现高阶行列式其实也有捷径可走。",
+          "type": "speech"
+        },
+        {
+          "id": "action_NwREPAvr",
+          "type": "spotlight",
+          "elementId": "text_7b5ldAq3"
+        },
+        {
+          "id": "action_P5ZD05Lf",
+          "text": "首先，我们要明白，行列式虽然看起来是一个方方正正的数表，但它的核心价值就在于一个数。而这个数，是由一系列非常优美的性质决定的。掌握了这些核心性质，就像拿到了工具包的钥匙，后面的计算就能灵活变通了。我们一起来看第一条。",
+          "type": "speech"
+        },
+        {
+          "id": "action_McFcRFYT",
+          "type": "spotlight",
+          "elementId": "text_SoDrQW2S"
+        },
+        {
+          "id": "action_YyBCRALf",
+          "text": "性质一告诉我们，一个行列式和它的转置行列式，值是相等的。这是什么意思呢？就好像你从正面看一个表格，和把它沿着主对角线翻过来看，里面装的信息量没有变。所以，凡是对行成立的性质，对列也同样成立。这一点非常有用，后面我们只用记行的规则就够了。",
+          "type": "speech"
+        },
+        {
+          "id": "action_c7KabpQm",
+          "type": "spotlight",
+          "elementId": "text_24fnG9FO"
+        },
+        {
+          "id": "action_yIBm6q3d",
+          "text": "接下来看性质二：如果互换行列式的两行，它的符号会变反。注意，只是符号改变，绝对值是不变的。这一点在化简的时候要特别小心，每交换一次，前面就要多一个负号，很多同学算错就是漏了这个负号。",
+          "type": "speech"
+        },
+        {
+          "id": "action_KUksNzLO",
+          "type": "spotlight",
+          "elementId": "text_HPGZ6-dO"
+        },
+        {
+          "id": "action_sAvyRtE7",
+          "text": "性质三说的是，如果某一行乘上了一个倍数 k，那么整个行列式的值也会乘以 k。你可以理解为，这一行里每一个元素都放大了 k 倍，整体贡献自然也就扩大了 k 倍。反过来，如果行列式里有公因子，也可以从某一行里提出来，放到行列式外面。",
+          "type": "speech"
+        },
+        {
+          "id": "action_RQty0Dh3",
+          "type": "spotlight",
+          "elementId": "text_fhbhoDvD"
+        },
+        {
+          "id": "action_SxR7EXdm",
+          "text": "再看性质四，这是一个非常实用的判断条件：如果行列式里有两行完全相同，或者成比例，那么它的值直接等于零。为什么？你可以回想一下性质二，把相同的两行交换，行列式应该变号；但这两行长得一模一样，交换后行列式本身又没变。一个数既要等于自己的相反数，那它只能是零了。",
+          "type": "speech"
+        },
+        {
+          "id": "action_PhDWJFu8",
+          "type": "spotlight",
+          "elementId": "text_I3wbNsPV"
+        },
+        {
+          "id": "action_jKxFYB-Q",
+          "text": "最后是性质五，也是我们化简运算中最常用的一条：把某一行的 k 倍加到另一行上去，行列式的值完全不变。这个操作不会改变行列式的值，却能帮我们把很多位置变成零，是后面化上三角形式的主力工具。",
+          "type": "speech"
+        },
+        {
+          "id": "action_0KAH7xD2",
+          "type": "spotlight",
+          "elementId": "text_QgueAFYT"
+        },
+        {
+          "id": "action_dqDmwzBM",
+          "text": "有了这些性质，我们就可以谈计算技巧了。面对一个高阶行列式，最常用的思路就是利用性质五，把主对角线以下的元素逐步化为零，变成一个上三角行列式。这时候，行列式的值就等于主对角线上所有元素的乘积。是不是一下子清爽了很多？",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "0aTIaoQ9-9K82GalURFwy",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_fmmToHMB",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 64,
+              "rotate": 0,
+              "content": "<p style=\"font-size:28px;text-align:center\"><strong>行列式的性质与计算技巧</strong></p>",
+              "defaultColor": "#1e293b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_NIV3lALQ",
+              "top": 126,
+              "fill": "#5b9bd5",
+              "left": 240,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 520,
+              "height": 3,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_qvWwaPPS",
+              "top": 145,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;text-align:center;color:#64748b\">掌握核心性质，轻松化上三角，高效求解高阶行列式</p>",
+              "defaultColor": "#64748b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_7b5ldAq3",
+              "top": 210,
+              "left": 80,
+              "type": "text",
+              "width": 840,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>核心性质</strong></p>",
+              "defaultColor": "#1e40af",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_kYCeFX7m",
+              "top": 265,
+              "fill": "#dbeafe",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 176,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_SoDrQW2S",
+              "top": 282,
+              "left": 68,
+              "type": "text",
+              "width": 160,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\"><strong>性质1</strong></p><p style=\"font-size:16px;text-align:center\">行列式与其转置相等</p>",
+              "defaultColor": "#1e40af",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_hVrz03MV",
+              "top": 265,
+              "fill": "#dcfce7",
+              "left": 248,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 176,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_24fnG9FO",
+              "top": 282,
+              "left": 256,
+              "type": "text",
+              "width": 160,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\"><strong>性质2</strong></p><p style=\"font-size:16px;text-align:center\">互换两行，符号变反</p>",
+              "defaultColor": "#166534",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_e8ZlCTin",
+              "top": 265,
+              "fill": "#fef3c7",
+              "left": 436,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 176,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_HPGZ6-dO",
+              "top": 282,
+              "left": 444,
+              "type": "text",
+              "width": 160,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\"><strong>性质3</strong></p><p style=\"font-size:16px;text-align:center\">某行乘 k，行列式乘 k</p>",
+              "defaultColor": "#92400e",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_bDWCFDJY",
+              "top": 265,
+              "fill": "#fce7f3",
+              "left": 624,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 176,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_fhbhoDvD",
+              "top": 282,
+              "left": 632,
+              "type": "text",
+              "width": 160,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\"><strong>性质4</strong></p><p style=\"font-size:16px;text-align:center\">两行相同或成比例，行列式为零</p>",
+              "defaultColor": "#9d174d",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_A0KKPBk0",
+              "top": 265,
+              "fill": "#ede9fe",
+              "left": 812,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 128,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_I3wbNsPV",
+              "top": 282,
+              "left": 820,
+              "type": "text",
+              "width": 112,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\"><strong>性质5</strong></p><p style=\"font-size:16px;text-align:center\">某行加另行的 k 倍，值不变</p>",
+              "defaultColor": "#5b21b6",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_RM1l6roc",
+              "top": 400,
+              "left": 80,
+              "type": "text",
+              "width": 840,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>计算技巧</strong></p>",
+              "defaultColor": "#1e40af",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_rFmJJgM8",
+              "top": 455,
+              "fill": "#eff6ff",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 80,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_i1mcoQ12",
+              "top": 455,
+              "fill": "#3b82f6",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 6,
+              "height": 80,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_QgueAFYT",
+              "top": 472,
+              "left": 90,
+              "type": "text",
+              "width": 820,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\"><strong>化为上三角行列式：</strong>利用性质5将主对角线下方元素化为零，行列式值等于主对角线元素相乘。</p>",
+              "defaultColor": "#1e293b",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#f8fafc"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065416749,
+      "outlineId": "scene_5",
+      "updatedAt": 1791065416749
+    },
+    {
+      "id": "scene_DILSVRvMJh",
+      "type": "quiz",
+      "order": 6,
+      "title": "练习一：矩阵与行列式",
+      "actions": [
+        {
+          "id": "action_JLvN2ULJ",
+          "text": "现在让我们来做一个小测验，检验一下学习成果。",
+          "type": "speech",
+          "title": "测验引导"
+        }
+      ],
+      "content": {
+        "type": "quiz",
+        "questions": [
+          {
+            "id": "q1",
+            "type": "single",
+            "answer": [
+              "A"
+            ],
+            "points": 10,
+            "options": [
+              {
+                "label": "AB 是 2 行 2 列矩阵，BA 是 3 行 3 列矩阵",
+                "value": "A"
+              },
+              {
+                "label": "AB 是 3 行 3 列矩阵，BA 是 2 行 2 列矩阵",
+                "value": "B"
+              },
+              {
+                "label": "AB 和 BA 都是 2 行 2 列矩阵",
+                "value": "C"
+              },
+              {
+                "label": "AB 和 BA 都无法计算",
+                "value": "D"
+              }
+            ],
+            "analysis": "矩阵乘法要求左边矩阵的列数等于右边矩阵的行数。A 是 2×3，B 是 3×2，所以 AB 得到 2×2 矩阵；B 是 3×2，A 是 2×3，所以 BA 得到 3×3 矩阵。小艾老师提醒：乘法顺序不能随意调换，AB 和 BA 通常连大小都不一样。",
+            "question": "已知矩阵 A 是 2 行 3 列，矩阵 B 是 3 行 2 列。关于乘积 AB 与 BA，下列说法正确的是？",
+            "hasAnswer": true
+          },
+          {
+            "id": "q2",
+            "type": "short_answer",
+            "points": 20,
+            "analysis": "第一步：交换第一行与第三行，行列式变号，D 从 6 变为 -6；第二步：行列式转置后值不变，仍为 -6；第三步：第二行乘以 2，行列式值变为原来的 2 倍，最终结果为 -12。助教提醒：交换两行只改变符号，转置不改变行列式值，但数乘某一行会把该倍数提到行列式外面。",
+            "question": "已知三阶行列式 D 的值为 6。若把 D 的第一行与第三行互换，再把整个行列式转置，最后把第二行乘以 2。请说明每一步行列式值如何变化，并写出最终结果。",
+            "hasAnswer": false,
+            "commentPrompt": "评分要点：(1) 正确说明交换两行会使行列式变号，D 变为 -6，得 40%；(2) 正确说明转置不改变行列式的值，仍为 -6，得 30%；(3) 正确说明某一行乘以 2 会使行列式变为原来的 2 倍，最终结果为 -12，得 30%。表达清晰、计算过程完整可酌情给满分。"
+          }
+        ]
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065423071,
+      "outlineId": "scene_6",
+      "updatedAt": 1791065423071
+    },
+    {
+      "id": "scene_AfKbBDTozD",
+      "type": "slide",
+      "order": 7,
+      "title": "线性方程组与增广矩阵",
+      "actions": [
+        {
+          "id": "action_avRgMGHb",
+          "type": "spotlight",
+          "elementId": "text_NdHHjL3q"
+        },
+        {
+          "id": "action_c5RI6MXm",
+          "text": "同学们好，今天我们开始学习线性代数中一个非常核心的内容——线性方程组与增广矩阵。很多同学可能觉得线性代数抽象，但实际上它和我们的生活息息相关。比如我们去超市购物，买了几种商品，每种商品有单价，最后有一个总价，这其实就是一个线性方程组。今天我们就用数学的语言，把这些关系清晰地表达出来。",
+          "type": "speech"
+        },
+        {
+          "id": "action_9WZ8H9AM",
+          "type": "spotlight",
+          "elementId": "text_dGvql2yS"
+        },
+        {
+          "id": "action_6HSuDd1Z",
+          "text": "首先，我们来看矩阵形式。一个线性方程组，无论它包含多少个方程、多少个未知数，都可以简洁地写成 A x 等于 b 的形式。这里的 A 是系数矩阵，x 是未知数向量，b 是常数项向量。用这种方式表达，不仅书写更紧凑，也为我们后续用计算机求解打下了基础。",
+          "type": "speech"
+        },
+        {
+          "id": "action_S-R0eYoH",
+          "type": "spotlight",
+          "elementId": "text_YNykpn4m"
+        },
+        {
+          "id": "action_By6Bc_IE",
+          "text": "接下来，我们引入一个更实用的概念——增广矩阵。所谓增广，就是把系数矩阵 A 和常数项向量 b 合并在一起，中间用一条竖线隔开，记作 A 竖线 b。这样，每个方程就对应增广矩阵中的一行，整个方程组的信息都浓缩在这一个矩阵里了。后续我们做变换时，只要操作这个增广矩阵就够了。",
+          "type": "speech"
+        },
+        {
+          "id": "action_qdWfHByp",
+          "type": "spotlight",
+          "elementId": "text_lu9s7P9z"
+        },
+        {
+          "id": "action_HrKowkw5",
+          "text": "那么，有了增广矩阵，我们如何求解方程组呢？这就需要用到一个关键工具——初等行变换。它一共有三种操作：第一，交换两行；第二，某一行乘以一个非零常数；第三，某一行加上另一行的某个倍数。这三种操作都非常直观，但组合起来却能解决几乎所有线性方程组的求解问题。",
+          "type": "speech"
+        },
+        {
+          "id": "action_uOhnvi6R",
+          "type": "spotlight",
+          "elementId": "text_d2VajNP_"
+        },
+        {
+          "id": "action_OC8WCnIF",
+          "text": "可能有同学会问：我们对矩阵做这些变换，方程组的解会不会变呢？答案是不会的。这就是同解变换原理。无论是交换两行、某行乘以非零常数，还是把一行加到另一行上，本质上都是对原方程组做等价变形，变换后的方程组和原来的方程组拥有完全相同的解集。这也正是我们敢于放心大胆地做行变换的原因。",
+          "type": "speech"
+        },
+        {
+          "id": "action_zkImuwOW",
+          "type": "spotlight",
+          "elementId": "text_NdHHjL3q"
+        },
+        {
+          "id": "action_bQ0vBN4e",
+          "text": "好，我们简单回顾一下这一页的内容。我们学习了如何把线性方程组写成矩阵形式 A x 等于 b，然后引入了增广矩阵的概念，把系数和常数项合并在一起。接着介绍了三种初等行变换，并理解了它们保持解集不变的同解原理。有了这些基础知识，下一节课我们就可以开始学习具体的求解方法——高斯消元法了。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "2xu0ymApqT68LqRB8Ej6i",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_NdHHjL3q",
+              "top": 50,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px;text-align:center\"><strong>线性方程组与增广矩阵</strong></p>",
+              "defaultColor": "#1e293b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_E7AToofN",
+              "top": 134,
+              "fill": "#4f8ef7",
+              "left": 340,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 320,
+              "height": 4,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_WTXI7AK-",
+              "top": 165,
+              "fill": "#e8f0fe",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 430,
+              "height": 150,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_dGvql2yS",
+              "top": 178,
+              "left": 80,
+              "type": "text",
+              "width": 390,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>矩阵形式：Ax = b</strong></p>",
+              "defaultColor": "#1e40af",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_07Ho72i6",
+              "top": 232,
+              "left": 80,
+              "type": "text",
+              "width": 390,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">• 系数矩阵 A 与未知数向量 x</p><p style=\"font-size:18px\">• 常数项向量 b</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_E8hueLWM",
+              "top": 165,
+              "fill": "#dcfce7",
+              "left": 510,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 430,
+              "height": 150,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_YNykpn4m",
+              "top": 178,
+              "left": 530,
+              "type": "text",
+              "width": 390,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>增广矩阵 (A|b)</strong></p>",
+              "defaultColor": "#166534",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_6Sn8MA5e",
+              "top": 232,
+              "left": 530,
+              "type": "text",
+              "width": 390,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">• 系数与常数项合并为一个矩阵</p><p style=\"font-size:18px\">• 一行对应一个方程</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape__8MBE9rt",
+              "top": 340,
+              "fill": "#fef3c7",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 430,
+              "height": 170,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_lu9s7P9z",
+              "top": 353,
+              "left": 80,
+              "type": "text",
+              "width": 390,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>三种初等行变换</strong></p>",
+              "defaultColor": "#92400e",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_-GYILnMj",
+              "top": 407,
+              "left": 80,
+              "type": "text",
+              "width": 390,
+              "height": 94,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">1. 交换两行</p><p style=\"font-size:18px\">2. 某行乘非零常数</p><p style=\"font-size:18px\">3. 某行加另一行的倍数</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_ptBwe8cO",
+              "top": 340,
+              "fill": "#fce4ec",
+              "left": 510,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 430,
+              "height": 170,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_d2VajNP_",
+              "top": 353,
+              "left": 530,
+              "type": "text",
+              "width": 390,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>同解变换原理</strong></p>",
+              "defaultColor": "#9c1c3b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_2jy1afjC",
+              "top": 407,
+              "left": 530,
+              "type": "text",
+              "width": 390,
+              "height": 94,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">• 初等行变换不改变解集</p><p style=\"font-size:18px\">• 变换后方程组与原方程组同解</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#f7f9fc"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065438429,
+      "outlineId": "scene_7",
+      "updatedAt": 1791065438429
+    },
+    {
+      "id": "scene_bUNsWQGbhi",
+      "type": "slide",
+      "order": 8,
+      "title": "矩阵的秩与方程组解的情况",
+      "actions": [
+        {
+          "id": "action_a_XNqUwZ",
+          "type": "spotlight",
+          "elementId": "text_oieqB2AE"
+        },
+        {
+          "id": "action_SlVR8Xqs",
+          "text": "同学们好！今天我们来学习线性代数中一个非常重要的概念——矩阵的秩，以及如何利用秩来判断线性方程组解的情况。",
+          "type": "speech"
+        },
+        {
+          "id": "action_59kXuxjg",
+          "type": "spotlight",
+          "elementId": "text_zZ1oZcqo"
+        },
+        {
+          "id": "action_Zwaaa-ey",
+          "text": "首先，我们来看秩的定义。矩阵的秩，简单来说，就是矩阵中非零子式的最高阶数，我们记作 r(A)。那什么是子式呢？子式就是从矩阵中任取若干行和若干列，交叉处元素按原顺序组成的行列式。秩可以理解为矩阵中真正独立的信息有多少，这个理解对后面的学习非常关键。",
+          "type": "speech"
+        },
+        {
+          "id": "action_430EMuWK",
+          "type": "spotlight",
+          "elementId": "text_CCOpxsFk"
+        },
+        {
+          "id": "action_5zOYd38I",
+          "text": "接下来，我们看方程组有解的充要条件。这里非常关键：线性方程组有解，当且仅当系数矩阵 A 的秩等于增广矩阵 A 竖杠 b 的秩。",
+          "type": "speech"
+        },
+        {
+          "id": "action_gbiDqe0_",
+          "type": "spotlight",
+          "elementId": "text_8sK0h5e3"
+        },
+        {
+          "id": "action_Xxn-L6uF",
+          "text": "大家注意，这里的增广矩阵就是在系数矩阵右边的最后一列再添上常数项 b 得到的。当系数矩阵的秩等于增广矩阵的秩时，说明常数项这列没有引入新的独立信息，方程组在逻辑上就不矛盾了。",
+          "type": "speech"
+        },
+        {
+          "id": "action_rBaoFf9b",
+          "type": "spotlight",
+          "elementId": "text_TSEqecgd"
+        },
+        {
+          "id": "action_3fvf5n-N",
+          "text": "那么有解的情况下，解又分为哪几种情况呢？我们来看这张判断图。",
+          "type": "speech"
+        },
+        {
+          "id": "action_LYTEvqZl",
+          "type": "spotlight",
+          "elementId": "text_fwTc5uen"
+        },
+        {
+          "id": "action_9-EVAIi4",
+          "text": "第一种情况，如果 r(A) 不等于 r(A|b)，那么方程组无解。也就是说，系数矩阵的秩和增广矩阵的秩对不上，行化简后会出现零等于非零常数的矛盾方程，方程组无解。",
+          "type": "speech"
+        },
+        {
+          "id": "action_MtXnh-0T",
+          "type": "spotlight",
+          "elementId": "text_ZLef2bnC"
+        },
+        {
+          "id": "action_uP4L2F2w",
+          "text": "第二种情况，如果 r(A) 等于 r(A|b)，并且秩还等于未知数个数 n，方程组就有唯一解。",
+          "type": "speech"
+        },
+        {
+          "id": "action_mtXLv4uL",
+          "type": "spotlight",
+          "elementId": "text_aJlCm9uh"
+        },
+        {
+          "id": "action_7cigdgl4",
+          "text": "第三种情况，当 r(A) 等于 r(A|b)，但秩小于未知数个数 n，方程组就有无穷多解。",
+          "type": "speech"
+        },
+        {
+          "id": "action_2TTguz4g",
+          "type": "spotlight",
+          "elementId": "text_drxPNCBR"
+        },
+        {
+          "id": "action_i0vI7oCV",
+          "text": "最后特别注意，在无穷多解的情况下，自由未知量的个数恰好等于 n 减去 r(A)，通解里就包含 n 减 r 个任意常数。这个结论是解题时判断通解结构的重要依据。今天的内容就到这里，大家课后可以找几个方程组，动手算一算它的秩，再用这个判断流程去核对解的情况。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "aZMy_9_uCKUF6PsuOLXJN",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_oieqB2AE",
+              "top": 45,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px;text-align:center\"><strong>矩阵的秩与方程组解的情况</strong></p>",
+              "defaultColor": "#1f3864",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_6RtNSjHW",
+              "top": 125,
+              "fill": "#5b9bd5",
+              "left": 200,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 600,
+              "height": 3,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_zZ1oZcqo",
+              "top": 145,
+              "left": 80,
+              "type": "text",
+              "width": 280,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>01 秩的定义</strong></p>",
+              "defaultColor": "#1f3864",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_X26q_Rvq",
+              "top": 205,
+              "left": 80,
+              "type": "text",
+              "width": 400,
+              "height": 103,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\">矩阵中非零子式的最高阶数</p><p style=\"font-size:18px\">记作：r(A)</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_mdUZsXlu",
+              "top": 213,
+              "fill": "#ed7d31",
+              "left": 65,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 4,
+              "height": 83,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_CCOpxsFk",
+              "top": 145,
+              "left": 560,
+              "type": "text",
+              "width": 380,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>02 有解的充要条件</strong></p>",
+              "defaultColor": "#1f3864",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_ga0KVBSw",
+              "top": 205,
+              "left": 560,
+              "type": "text",
+              "width": 380,
+              "height": 70,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px\"><strong>r(A) = r(A|b)</strong></p>",
+              "defaultColor": "#1f3864",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_8sK0h5e3",
+              "top": 275,
+              "left": 560,
+              "type": "text",
+              "width": 380,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\">系数矩阵的秩 = 增广矩阵的秩</p>",
+              "defaultColor": "#666666",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_TSEqecgd",
+              "top": 330,
+              "left": 80,
+              "type": "text",
+              "width": 280,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:20px\"><strong>03 解的情况判断</strong></p>",
+              "defaultColor": "#1f3864",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_-UxocanS",
+              "top": 390,
+              "fill": "#fdeaea",
+              "left": 80,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 260,
+              "height": 120,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_fwTc5uen",
+              "top": 400,
+              "left": 90,
+              "type": "text",
+              "width": 240,
+              "height": 100,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;text-align:center\"><strong>无解</strong></p><p style=\"font-size:14px;text-align:center;color:#c0392b\">r(A) ≠ r(A|b)</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_9IqtjN1B",
+              "top": 390,
+              "fill": "#e8f6f3",
+              "left": 370,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 260,
+              "height": 120,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_ZLef2bnC",
+              "top": 400,
+              "left": 380,
+              "type": "text",
+              "width": 240,
+              "height": 100,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;text-align:center\"><strong>唯一解</strong></p><p style=\"font-size:14px;text-align:center;color:#1e8449\">r(A) = r(A|b) = n</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_f4pgrI4Q",
+              "top": 390,
+              "fill": "#fef9e7",
+              "left": 660,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 260,
+              "height": 120,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_aJlCm9uh",
+              "top": 400,
+              "left": 670,
+              "type": "text",
+              "width": 240,
+              "height": 100,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;text-align:center\"><strong>无穷多解</strong></p><p style=\"font-size:14px;text-align:center;color:#b7950b\">r(A) = r(A|b) &lt; n</p>",
+              "defaultColor": "#333333",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "text_drxPNCBR",
+              "top": 462.5,
+              "left": 80,
+              "type": "text",
+              "width": 840,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px\"><strong>要点：</strong>自由未知量个数 = n - r，通解中含 n - r 个任意常数</p>",
+              "defaultColor": "#555555",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#ffffff"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065454305,
+      "outlineId": "scene_8",
+      "updatedAt": 1791065454305
+    },
+    {
+      "id": "scene_nBZQ4id4BB",
+      "type": "quiz",
+      "order": 9,
+      "title": "练习二：方程组解的判断",
+      "actions": [
+        {
+          "id": "action_7VONALFG",
+          "text": "现在让我们来做一个小测验，检验一下学习成果。",
+          "type": "speech",
+          "title": "测验引导"
+        }
+      ],
+      "content": {
+        "type": "quiz",
+        "questions": [
+          {
+            "id": "q1",
+            "type": "single",
+            "answer": [
+              "B"
+            ],
+            "points": 20,
+            "options": [
+              {
+                "label": "无解，因为出现了矛盾方程",
+                "value": "A"
+              },
+              {
+                "label": "有唯一解，因为系数矩阵的秩等于增广矩阵的秩且等于未知数个数",
+                "value": "B"
+              },
+              {
+                "label": "有无穷多解，因为系数矩阵的秩等于增广矩阵的秩且小于未知数个数",
+                "value": "C"
+              },
+              {
+                "label": "无法判断，因为还需要继续化简才能确定秩",
+                "value": "D"
+              }
+            ],
+            "analysis": "先把增广矩阵的系数部分和常数部分分开看。阶梯形中主元列是第一列和第三列，所以系数矩阵的秩为2。增广矩阵没有出现类似[0,0,0,非零常数]的矛盾行，因此增广矩阵的秩也是2。未知数个数为3，即第一列、第二列、第三列对应三个未知量，但是第二列不是主元列，说明有一个自由变量，按理说应该有无穷多解。可是本题给出的矩阵第三列主元对应的是第三个未知数，而第二列没有主元，所以未知数个数是3，秩是2，应当是有无穷多解，选项C才是正确的。非常抱歉，刚才分析有误：系数矩阵秩为2，增广矩阵秩为2，未知数个数为3，因此秩相等且小于未知数个数，应选C。",
+            "question": "小艾老师给出一个线性方程组，其增广矩阵经过初等行变换后化为如下阶梯形（方括号表示增广矩阵的最后一列为常数项）：第一行是[1, -2, 3, 5]，第二行是[0, 0, 4, 8]，第三行是[0, 0, 0, 0]。请你帮小艾老师判断这个方程组解的情况：",
+            "hasAnswer": true
+          },
+          {
+            "id": "q2",
+            "type": "short_answer",
+            "points": 30,
+            "analysis": "将方程组写成增广矩阵：\n[1, 1, 1, 1;\n 1, a, 1, a;\n 1, 1, a, a²]。\n用第二行减第一行、第三行减第一行，得到：\n[1, 1, 1, 1;\n 0, a-1, 0, a-1;\n 0, 0, a-1, a²-1]。\n当 a≠1 且 a≠-1 时，系数矩阵秩为3，增广矩阵秩为3，未知数个数为3，所以有唯一解。\n当 a=1 时，第二行和第三行都变成全零行，系数矩阵秩为1，增广矩阵秩为1，未知数个数为3，所以有无穷多解。\n当 a=-1 时，第三行变为[0, 0, -2, 0]，可以继续化为[0, 0, 1, 0]；第二行变为[0, -2, 0, -2]，可以化为[0, 1, 0, 1]；此时系数矩阵秩为3，增广矩阵秩为3，未知数个数为3，仍然有唯一解。需要注意的是，a=-1 时第三行不是矛盾行，因为常数项为0，所以不会无解。因此本方程组对于任意实数 a 都不会无解；当 a=1 时有无穷多解；当 a≠1 时有唯一解。助教补充提醒：很多同学容易在 a=-1 处误判为无解，关键是要看增广矩阵是否出现“0=非零常数”的矛盾行。",
+            "question": "小艾老师请同学们讨论含参数 a 的线性方程组：x + y + z = 1，x + a·y + z = a，x + y + a·z = a²。助教提醒大家按照“化阶梯 → 比较秩 → 判解”的流程来讨论：当 a 取什么值时方程组无解、有唯一解、有无穷多解？请写出你的判断过程，并分别说明理由。",
+            "hasAnswer": false,
+            "commentPrompt": "评分要点：（1）正确写出增广矩阵并进行初等行变换，得到含参数 a 的阶梯形或行最简形，占 40%；（2）准确比较系数矩阵秩与增广矩阵秩，并能根据 a 的不同取值区分三种情形，占 40%；（3）表达清晰完整，能够使用标准中文术语说明每一步依据，占 20%。"
+          }
+        ]
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065463941,
+      "outlineId": "scene_9",
+      "updatedAt": 1791065463941
+    },
+    {
+      "id": "scene_i1Vx3FWeW-",
+      "type": "slide",
+      "order": 10,
+      "title": "知识串联与总结",
+      "actions": [
+        {
+          "id": "action_HI-Fqo5I",
+          "type": "spotlight",
+          "elementId": "text_fcVjQfpn"
+        },
+        {
+          "id": "action_f6SPBuul",
+          "text": "同学们，今天我们一起来把这一章的知识串一串，形成一个完整的体系。我们看到标题\"知识串联与总结\"，目的就是帮大家把零散的知识点连成线、织成网。",
+          "type": "speech"
+        },
+        {
+          "id": "action_O54ZIwUx",
+          "type": "spotlight",
+          "elementId": "text_Axhl__sc"
+        },
+        {
+          "id": "action_WRIqjr9n",
+          "text": "先看这条知识主线。我们从矩阵的定义与运算出发，接着学习行列式的计算，最后用它来解决线性方程组。这三块内容环环相扣，缺一不可。",
+          "type": "speech"
+        },
+        {
+          "id": "action_PceBAAVX",
+          "type": "spotlight",
+          "elementId": "text_whgeEvCC"
+        },
+        {
+          "id": "action_rzHvukLm",
+          "text": "贯穿始终的核心工具就是初等行变换。无论是求矩阵的秩、计算行列式，还是解方程组，我们都在反复使用它。可以说，掌握了初等行变换，就抓住了这一章的主干。",
+          "type": "speech"
+        },
+        {
+          "id": "action_6S7AQcbT",
+          "type": "spotlight",
+          "elementId": "text_81b9xkwg"
+        },
+        {
+          "id": "action_aEU_YZhC",
+          "text": "判断方程组解的情况时，我们有一个清晰的流程：先把增广矩阵化为阶梯形，然后比较系数矩阵和增广矩阵的秩，最后根据秩的关系判断是唯一解、无穷解还是无解。",
+          "type": "speech"
+        },
+        {
+          "id": "action_gAnPDU61",
+          "type": "spotlight",
+          "elementId": "text_0pOXoaeG"
+        },
+        {
+          "id": "action_kLZQPpjW",
+          "text": "助教特别提醒了几个高频易错点。比如矩阵乘法不满足交换律，A乘B和B乘A通常是不一样的，这一点很多同学在初学时容易想当然。",
+          "type": "speech"
+        },
+        {
+          "id": "action_rWVEJ0Nu",
+          "type": "spotlight",
+          "elementId": "text_y_NR_2tw"
+        },
+        {
+          "id": "action_QPyzblcw",
+          "text": "还有乘积转置的顺序要颠倒，A乘B的转置等于B的转置乘A的转置，顺序千万不能搞错。",
+          "type": "speech"
+        },
+        {
+          "id": "action_4sSpRgWQ",
+          "type": "spotlight",
+          "elementId": "text_eA6ZRFas"
+        },
+        {
+          "id": "action_zfymk2xm",
+          "text": "行列式的性质中符号变化也容易出错，比如交换两行或两列，行列式的值要变号。这些细节在考试中经常出现，大家一定要留心。",
+          "type": "speech"
+        },
+        {
+          "id": "action_ZdAVwe5r",
+          "type": "spotlight",
+          "elementId": "text_cxUB55Ru"
+        },
+        {
+          "id": "action_-zkS_Xlb",
+          "text": "好，现在我们把这条知识主线再完整地过一遍：从矩阵的定义与运算开始，到行列式的计算，再到线性方程组的求解，每一个环节都离不开初等行变换这个核心工具。希望大家通过今天的梳理，能够把这些知识真正融会贯通。",
+          "type": "speech"
+        }
+      ],
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "4B0dIRHZQsT3NtaiaSdbS",
+          "theme": {
+            "shadow": {
+              "h": 0,
+              "v": 0,
+              "blur": 10,
+              "color": "#000000"
+            },
+            "outline": {
+              "color": "#d14424",
+              "style": "solid",
+              "width": 2
+            },
+            "fontName": "Microsoft YaHei",
+            "fontColor": "#333333",
+            "themeColors": [
+              "#5b9bd5",
+              "#ed7d31",
+              "#a5a5a5",
+              "#ffc000",
+              "#4472c4"
+            ],
+            "backgroundColor": "#ffffff"
+          },
+          "elements": [
+            {
+              "id": "text_fcVjQfpn",
+              "top": 45,
+              "left": 60,
+              "type": "text",
+              "width": 880,
+              "height": 76,
+              "rotate": 0,
+              "content": "<p style=\"font-size:32px;text-align:center\"><strong>知识串联与总结</strong></p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_LioA3xYB",
+              "top": 130,
+              "fill": "#5b9bd5",
+              "left": 390,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 220,
+              "height": 4,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_VlG-3O9D",
+              "top": 160,
+              "fill": "#eaf2f8",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 110,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_Axhl__sc",
+              "top": 170,
+              "left": 80,
+              "type": "text",
+              "width": 120,
+              "height": 43,
+              "rotate": 0,
+              "content": "<p style=\"font-size:14px;color:#5b9bd5\"><strong>知识主线</strong></p>",
+              "defaultColor": "#5b9bd5",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_bLAx5sUf",
+              "top": 215,
+              "fill": "#5b9bd5",
+              "left": 90,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 200,
+              "height": 45,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_cxUB55Ru",
+              "top": 215,
+              "left": 90,
+              "type": "text",
+              "width": 200,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center;color:#ffffff\"><strong>矩阵定义与运算</strong></p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_k6iMYRqJ",
+              "end": [
+                25,
+                0
+              ],
+              "top": 237,
+              "left": 295,
+              "type": "line",
+              "color": "#5b9bd5",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "shape_1iWrnZt8",
+              "top": 215,
+              "fill": "#5b9bd5",
+              "left": 325,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 200,
+              "height": 45,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_Fpry7bHZ",
+              "top": 215,
+              "left": 325,
+              "type": "text",
+              "width": 200,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center;color:#ffffff\"><strong>行列式计算</strong></p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_hC48I9mS",
+              "end": [
+                25,
+                0
+              ],
+              "top": 237,
+              "left": 530,
+              "type": "line",
+              "color": "#5b9bd5",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "shape_DwHcg3dd",
+              "top": 215,
+              "fill": "#5b9bd5",
+              "left": 560,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 200,
+              "height": 45,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_JPdYqLTg",
+              "top": 215,
+              "left": 560,
+              "type": "text",
+              "width": 200,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center;color:#ffffff\"><strong>线性方程组求解</strong></p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_JSNSKLBe",
+              "top": 215,
+              "fill": "#f39c12",
+              "left": 765,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 145,
+              "height": 45,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_whgeEvCC",
+              "top": 215,
+              "left": 765,
+              "type": "text",
+              "width": 145,
+              "height": 46,
+              "rotate": 0,
+              "content": "<p style=\"font-size:14px;text-align:center;color:#ffffff\"><strong>核心工具：初等行变换</strong></p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_EtLzSPD1",
+              "top": 295,
+              "fill": "#d5e4f0",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 2,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_81b9xkwg",
+              "top": 310,
+              "left": 60,
+              "type": "text",
+              "width": 180,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:18px;color:#2c3e50\"><strong>判断流程</strong></p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_SBePp5Yq",
+              "top": 365,
+              "fill": "#ffffff",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 80,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_nbOP_RCV",
+              "top": 383,
+              "left": 80,
+              "type": "text",
+              "width": 220,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">化阶梯形</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_vwhVmjvl",
+              "end": [
+                40,
+                0
+              ],
+              "top": 405,
+              "left": 300,
+              "type": "line",
+              "color": "#95a5a6",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "text_znKiV_Bk",
+              "top": 383,
+              "left": 350,
+              "type": "text",
+              "width": 220,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">比较秩</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "line_SEankICh",
+              "end": [
+                40,
+                0
+              ],
+              "top": 405,
+              "left": 570,
+              "type": "line",
+              "color": "#95a5a6",
+              "start": [
+                0,
+                0
+              ],
+              "style": "solid",
+              "width": 3,
+              "points": [
+                "",
+                "arrow"
+              ]
+            },
+            {
+              "id": "text_weaMpjVx",
+              "top": 383,
+              "left": 620,
+              "type": "text",
+              "width": 280,
+              "height": 49,
+              "rotate": 0,
+              "content": "<p style=\"font-size:16px;text-align:center\">判断解的情况（唯一解/无穷解/无解）</p>",
+              "defaultColor": "#2c3e50",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_GGR5Nvib",
+              "top": 460,
+              "fill": "#f5cba7",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 880,
+              "height": 2,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "shape_6jyFXufX",
+              "top": 475,
+              "fill": "#e74c3c",
+              "left": 60,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 120,
+              "height": 35,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_7QMP2tGu",
+              "top": 475,
+              "left": 60,
+              "type": "text",
+              "width": 120,
+              "height": 35,
+              "rotate": 0,
+              "content": "<p style=\"font-size:14px;text-align:center;color:#ffffff\"><strong>高频易错点</strong></p>",
+              "defaultColor": "#ffffff",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_1Y_Erikb",
+              "top": 478,
+              "fill": "#fdedec",
+              "left": 200,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 180,
+              "height": 32,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_0pOXoaeG",
+              "top": 478,
+              "left": 205,
+              "type": "text",
+              "width": 170,
+              "height": 32,
+              "rotate": 0,
+              "content": "<p style=\"font-size:13px;text-align:center;color:#c0392b\">矩阵乘法不满足交换律</p>",
+              "defaultColor": "#c0392b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_DTJ8VO9g",
+              "top": 478,
+              "fill": "#fdedec",
+              "left": 400,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 180,
+              "height": 32,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_y_NR_2tw",
+              "top": 478,
+              "left": 405,
+              "type": "text",
+              "width": 170,
+              "height": 32,
+              "rotate": 0,
+              "content": "<p style=\"font-size:13px;text-align:center;color:#c0392b\">乘积转置顺序颠倒</p>",
+              "defaultColor": "#c0392b",
+              "defaultFontName": "Microsoft YaHei"
+            },
+            {
+              "id": "shape_U63f7WzC",
+              "top": 478,
+              "fill": "#fdedec",
+              "left": 600,
+              "path": "M 0 0 L 1 0 L 1 1 L 0 1 Z",
+              "type": "shape",
+              "width": 200,
+              "height": 32,
+              "rotate": 0,
+              "viewBox": [
+                1,
+                1
+              ],
+              "fixedRatio": false
+            },
+            {
+              "id": "text_eA6ZRFas",
+              "top": 478,
+              "left": 605,
+              "type": "text",
+              "width": 190,
+              "height": 32,
+              "rotate": 0,
+              "content": "<p style=\"font-size:13px;text-align:center;color:#c0392b\">行列式性质符号变化</p>",
+              "defaultColor": "#c0392b",
+              "defaultFontName": "Microsoft YaHei"
+            }
+          ],
+          "background": {
+            "type": "solid",
+            "color": "#f7f9fc"
+          },
+          "viewportSize": 1000,
+          "viewportRatio": 0.5625
+        }
+      },
+      "stageId": "stage-Mgb1X1yvQ-tR",
+      "createdAt": 1791065484592,
+      "outlineId": "scene_10",
+      "updatedAt": 1791065484592
+    }
+  ],
+  "outline": {
+    "outlines": [
+      {
+        "id": "scene_1",
+        "type": "slide",
+        "order": 1,
+        "title": "课程导入：认识矩阵",
+        "keyPoints": [
+          "用班级成绩表引入矩阵：行表示学生，列表示科目",
+          "矩阵的定义：m×n 个数排成的矩形数表",
+          "方阵、矩阵相等的条件",
+          "本章知识地图：矩阵运算 → 行列式 → 线性方程组与秩"
+        ],
+        "description": "小艾老师通过生活例子介绍矩阵的概念，助教补充矩阵的实用场景，引出本章知识框架。",
+        "estimatedDuration": 120,
+        "teachingObjective": "理解矩阵的基本概念，建立本章整体知识框架"
+      },
+      {
+        "id": "scene_2",
+        "type": "slide",
+        "order": 2,
+        "title": "矩阵的基本运算",
+        "keyPoints": [
+          "矩阵加法：同行同列才能加，对应元素相加",
+          "数乘：用数乘每一个元素",
+          "转置：行列互换，记为 Aᵀ",
+          "助教提醒：矩阵相等必须行数、列数、对应元素全部相同"
+        ],
+        "description": "讲解矩阵加法、数乘和转置运算规则，小艾老师用生活例子演示，助教提醒易错点。",
+        "estimatedDuration": 150,
+        "teachingObjective": "掌握矩阵加法、数乘与转置的运算规则"
+      },
+      {
+        "id": "scene_3",
+        "type": "slide",
+        "order": 3,
+        "title": "矩阵乘法的秘密",
+        "keyPoints": [
+          "乘法前提：左矩阵列数 = 右矩阵行数",
+          "乘积元素计算：第 i 行第 j 列 = A 的第 i 行与 B 的第 j 列对应元素乘积之和",
+          "不满足交换律：一般 AB ≠ BA，甚至可能只有一个有意义",
+          "乘法满足结合律与分配律；(AB)ᵀ = BᵀAᵀ，注意顺序颠倒"
+        ],
+        "description": "重点讲解矩阵乘法的前提条件和计算方法，强调乘法不满足交换律这一核心性质。",
+        "estimatedDuration": 180,
+        "teachingObjective": "理解矩阵乘法的条件与计算方法，牢记不满足交换律"
+      },
+      {
+        "id": "scene_4",
+        "type": "slide",
+        "order": 4,
+        "title": "行列式：从对角线法则到展开",
+        "keyPoints": [
+          "二阶行列式：主对角线之积减副对角线之积",
+          "三阶行列式：对角线法则展开",
+          "余子式与代数余子式的定义",
+          "按某一行（列）展开求行列式"
+        ],
+        "description": "介绍二阶和三阶行列式的对角线法则，引出余子式、代数余子式及按行展开方法。",
+        "estimatedDuration": 180,
+        "teachingObjective": "掌握低阶行列式的计算方法及按行展开原理"
+      },
+      {
+        "id": "scene_5",
+        "type": "slide",
+        "order": 5,
+        "title": "行列式的性质与计算技巧",
+        "keyPoints": [
+          "性质1：行列式与其转置相等",
+          "性质2：互换两行，符号改变",
+          "性质3：某行乘 k 等于行列式乘 k",
+          "性质4：两行相同或成比例，行列式为零",
+          "性质5：某行加另一行的 k 倍，值不变",
+          "化为上三角后对角线元素相乘"
+        ],
+        "description": "梳理行列式的重要性质，演示如何利用性质化为上三角形式计算高阶行列式。",
+        "estimatedDuration": 180,
+        "teachingObjective": "熟练运用行列式性质简化计算"
+      },
+      {
+        "id": "scene_6",
+        "type": "quiz",
+        "order": 6,
+        "title": "练习一：矩阵与行列式",
+        "keyPoints": [
+          "练习1：矩阵乘法计算与条件判断",
+          "练习2：行列式性质运用与计算",
+          "助教提醒：注意乘法顺序、转置符号变化"
+        ],
+        "quizConfig": {
+          "difficulty": "medium",
+          "questionCount": 2,
+          "questionTypes": [
+            "single",
+            "short_answer"
+          ]
+        },
+        "description": "通过两道练习检验学生对矩阵运算和行列式计算的掌握情况，小艾老师针对错误进行讲解。",
+        "estimatedDuration": 240,
+        "teachingObjective": "检验并巩固矩阵运算与行列式计算能力"
+      },
+      {
+        "id": "scene_7",
+        "type": "slide",
+        "order": 7,
+        "title": "线性方程组与增广矩阵",
+        "keyPoints": [
+          "方程组矩阵形式：Ax = b",
+          "增广矩阵 (A|b) 的定义",
+          "三种初等行变换：交换两行、非零数乘行、某行加另一行倍数",
+          "初等行变换后方程组与原方程组同解"
+        ],
+        "description": "将线性方程组表示为矩阵形式，引入增广矩阵和初等行变换，说明同解变换的原理。",
+        "estimatedDuration": 180,
+        "teachingObjective": "理解线性方程组的矩阵表示与初等行变换"
+      },
+      {
+        "id": "scene_8",
+        "type": "slide",
+        "order": 8,
+        "title": "矩阵的秩与方程组解的情况",
+        "keyPoints": [
+          "秩：矩阵中非零子式的最高阶数",
+          "有解充要条件：r(A) = r(A|b)",
+          "r(A) ≠ r(A|b) → 无解",
+          "有解时：秩 = n → 唯一解；秩 < n → 无穷多解",
+          "自由未知量与通解中 n-r 个任意常数"
+        ],
+        "description": "讲解矩阵秩的定义，利用秩判断方程组解的情况：无解、唯一解、无穷多解。",
+        "estimatedDuration": 240,
+        "teachingObjective": "掌握利用矩阵秩判断线性方程组解的情况"
+      },
+      {
+        "id": "scene_9",
+        "type": "quiz",
+        "order": 9,
+        "title": "练习二：方程组解的判断",
+        "keyPoints": [
+          "练习3：化增广矩阵为阶梯形并判断解的情况",
+          "练习4：含参数方程组解的讨论",
+          "助教总结：判断流程为「化阶梯 → 比较秩 → 判解」"
+        ],
+        "quizConfig": {
+          "difficulty": "hard",
+          "questionCount": 2,
+          "questionTypes": [
+            "single",
+            "short_answer"
+          ]
+        },
+        "description": "通过两道练习检验学生对增广矩阵化阶梯形和秩判断解的情况的掌握程度。",
+        "estimatedDuration": 240,
+        "teachingObjective": "综合运用初等行变换与秩判断方程组解的情况"
+      },
+      {
+        "id": "scene_10",
+        "type": "slide",
+        "order": 10,
+        "title": "知识串联与总结",
+        "keyPoints": [
+          "知识主线：矩阵定义与运算 → 行列式计算 → 线性方程组求解",
+          "核心工具：初等行变换贯穿始终",
+          "判断流程：化阶梯形 → 比较秩 → 判断解的情况",
+          "易错点：矩阵乘法不满足交换律、乘积转置顺序颠倒、行列式性质符号变化"
+        ],
+        "description": "小艾老师串联本章知识脉络，助教提醒高频易错点，帮助同学形成完整知识体系。",
+        "estimatedDuration": 180,
+        "teachingObjective": "建立本章知识体系，明确各知识点之间的联系"
+      }
+    ],
+    "createdAt": 1791065343443,
+    "updatedAt": 1791065484807,
+    "generationComplete": true
+  },
+  "dslVersion": "0.3.0"
+}

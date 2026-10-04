@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { atomicText } from './syllora-files.ts'
+import { DOCMIND_ENDPOINT } from './docmind.ts'
 import { join, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { z } from 'zod'
@@ -64,7 +65,41 @@ export interface PluginInventoryPayload {
   readonly reason?: string
 }
 
+interface DocMindConfigYaml {
+  readonly endpoint?: string | null
+  readonly access_key_id_env?: string | null
+  readonly access_key_secret_env?: string | null
+}
+
+/**
+ * 云端 OpenMAIC 连接段（虚拟课堂／幻灯片共用）。
+ * 口令与模型 Key 走密封凭据引用；这里只描述结构与引用名，值在 credentials.json。
+ */
+interface CloudConfigYaml {
+  readonly base_url?: string
+  readonly access_code?: string
+  readonly access_code_env?: string | null
+  readonly provider?: string
+  readonly preset?: string
+  readonly model?: string
+  readonly api_key?: string
+  readonly api_key_env?: string | null
+}
+
+/** 云端连接在 settings 投影里的形态：只回是否已配置，绝不回口令与 Key。 */
+export interface CloudSettingsPayload {
+  readonly configured: boolean
+  readonly baseUrl: string
+  readonly hasAccessCode: boolean
+  readonly provider: string
+  readonly preset: string
+  readonly model: string
+  readonly hasModelKey: boolean
+}
+
 export interface SettingsPayload {
+  readonly docmind: { readonly configured: boolean; readonly endpoint: string }
+  readonly cloud: CloudSettingsPayload
   readonly version: number
   readonly activeProviderId: string
   readonly llm: {
@@ -123,12 +158,15 @@ interface ConfigYaml {
   ui?: { default_mode?: string }
   agent?: { preset?: string; system_prompt?: string; skill?: string }
   permissions?: { preset?: string }
+  docmind?: DocMindConfigYaml
+  cloud?: CloudConfigYaml
   plugins?: Record<string, unknown>
 }
 
 /** 两个预设的默认系统提示词；service 构造 AgentPreset 时直接取这里，避免两处漂移。 */
 export const AGENT_PRESET_PROMPTS: Record<string, string> = {
-  'syllora-learning': 'You are the Syllora learning agent. Guide the learner with evidence from the active course and preserve their agency.',
+  // 学习导师可以用自己的知识自由作答；课程资料是可选上下文，不是回答的约束。
+  'syllora-learning': 'You are the Syllora learning agent. Help the learner build understanding — use your own knowledge freely, treat the active course as optional context, and preserve their agency.',
   general: 'You are the Syllora general agent. Use the available tools deliberately and explain outcomes clearly.',
 }
 
@@ -349,6 +387,8 @@ export async function settingsPayload(workspaceRoot: string): Promise<SettingsPa
     },
     permissions: { preset: PERMISSION_PRESETS.some(item => item.id === config.permissions?.preset) ? config.permissions!.preset! : 'workspace-write', presets: PERMISSION_PRESETS },
     plugins: { inventory: pluginInventory(config) },
+    docmind: await docmindConfigPayload(workspaceRoot),
+    cloud: await cloudConfigPayload(workspaceRoot),
   }
 }
 
@@ -1031,4 +1071,163 @@ export async function importProviders(workspaceRoot: string, payload: unknown): 
     await writeConfig(workspaceRoot, { ...config, providers, provider_order: order })
     return { saved: await settingsPayload(workspaceRoot), imported, skipped }
   })
+}
+
+export const DOCMIND_ACCESS_KEY_ID_REF = 'DOCMIND_ACCESS_KEY_ID'
+export const DOCMIND_ACCESS_KEY_SECRET_REF = 'DOCMIND_ACCESS_KEY_SECRET'
+
+export interface ResolvedDocMindCredential {
+  accessKeyId: string
+  accessKeySecret: string
+  endpoint: string
+}
+
+/** 候选配置根：共享设置目录（设置页写入处）优先，课程根兜底。 */
+async function docmindRoots(workspaceRoot: string): Promise<string[]> {
+  const shared = sharedConfigRootOf()
+  if (shared !== null && resolve(shared) !== resolve(workspaceRoot)) return [shared, workspaceRoot]
+  return [workspaceRoot]
+}
+
+/** 单个密钥：环境变量 > 密封凭据。阿里云 SDK 的标准变量名作为兜底。 */
+async function docmindSecret(root: string, ref: string, fallbackEnv?: string): Promise<string | null> {
+  const env = process.env[ref] ?? (fallbackEnv === undefined ? undefined : process.env[fallbackEnv])
+  if (typeof env === 'string' && env.trim() !== '') return env.trim()
+  const value = (await readCredentials(root).catch(() => ({} as Record<string, string>)))[ref]
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/** 解析 DocMind 凭据（不抛错，未配置返回 null）。 */
+export async function resolveDocMindCredential(workspaceRoot: string): Promise<ResolvedDocMindCredential | null> {
+  for (const root of await docmindRoots(workspaceRoot)) {
+    const config = await readConfig(root)
+    const doc = config.docmind
+    const endpoint = doc?.endpoint?.trim() || DOCMIND_ENDPOINT
+    const idRef = doc?.access_key_id_env?.trim() || DOCMIND_ACCESS_KEY_ID_REF
+    const secretRef = doc?.access_key_secret_env?.trim() || DOCMIND_ACCESS_KEY_SECRET_REF
+    const accessKeyId = await docmindSecret(root, idRef, 'ALIBABA_CLOUD_ACCESS_KEY_ID')
+    const accessKeySecret = await docmindSecret(root, secretRef, 'ALIBABA_CLOUD_ACCESS_KEY_SECRET')
+    if (accessKeyId !== null && accessKeySecret !== null) return { accessKeyId, accessKeySecret, endpoint }
+  }
+  return null
+}
+
+/** settings payload 的 docmind 投影（只含是否已配置与端点，不含密钥）。 */
+export async function docmindConfigPayload(workspaceRoot: string): Promise<{ configured: boolean; endpoint: string }> {
+  const resolved = await resolveDocMindCredential(workspaceRoot)
+  return { configured: resolved !== null, endpoint: resolved?.endpoint ?? DOCMIND_ENDPOINT }
+}
+
+/**
+ * 保存 DocMind 访问密钥到密封凭据 + config.yaml 的 docmind 段（锁序 config → credential）。
+ * partial 语义：字段省略＝保留现值；非空字符串＝更新；显式空串＝删除。
+ * 只改 endpoint 不会清空 AccessKey，只改一项密钥不影响另一项。
+ */
+export async function setDocMindCredential(workspaceRoot: string, input: {
+  accessKeyId?: string
+  accessKeySecret?: string
+  endpoint?: string | null
+}): Promise<SettingsPayload> {
+  const id = input.accessKeyId === undefined ? undefined : input.accessKeyId.trim()
+  const secret = input.accessKeySecret === undefined ? undefined : input.accessKeySecret.trim()
+  const endpoint = input.endpoint === undefined ? undefined : (input.endpoint?.trim() || null)
+  return withConfigLock(workspaceRoot, async () => {
+    const config = await readConfig(workspaceRoot)
+    let hasId = false, hasSecret = false
+    await withCredentialLock(workspaceRoot, async () => {
+      const credentials = (await readCredentialsRaw(workspaceRoot)).data
+      if (id !== undefined) { if (id !== '') credentials[DOCMIND_ACCESS_KEY_ID_REF] = id; else delete credentials[DOCMIND_ACCESS_KEY_ID_REF] }
+      if (secret !== undefined) { if (secret !== '') credentials[DOCMIND_ACCESS_KEY_SECRET_REF] = secret; else delete credentials[DOCMIND_ACCESS_KEY_SECRET_REF] }
+      if (id !== undefined || secret !== undefined) await writeCredentials(workspaceRoot, credentials)
+      hasId = typeof credentials[DOCMIND_ACCESS_KEY_ID_REF] === 'string'
+      hasSecret = typeof credentials[DOCMIND_ACCESS_KEY_SECRET_REF] === 'string'
+    })
+    const previous = config.docmind ?? {}
+    const docmind: DocMindConfigYaml = {
+      ...previous,
+      ...(endpoint === undefined ? {} : { endpoint }),
+      access_key_id_env: hasId ? DOCMIND_ACCESS_KEY_ID_REF : null,
+      access_key_secret_env: hasSecret ? DOCMIND_ACCESS_KEY_SECRET_REF : null,
+    }
+    await writeConfig(workspaceRoot, { ...config, docmind })
+    return settingsPayload(workspaceRoot)
+  })
+}
+
+/** 云端访问口令与模型 Key 的密封凭据引用名（值只存在 credentials.json 的密文里）。 */
+export const CLOUD_ACCESS_CODE_REF = 'OPENMAIC_ACCESS_CODE'
+export const CLOUD_MODEL_API_KEY_REF = 'OPENMAIC_MODEL_API_KEY'
+
+/** settings payload 的 cloud 投影（只含地址与「是否已配置」，不含口令与 Key）。 */
+export async function cloudConfigPayload(workspaceRoot: string): Promise<CloudSettingsPayload> {
+  const config = await readConfig(workspaceRoot)
+  const previous = config.cloud ?? {}
+  const baseUrl = (previous.base_url ?? '').trim().replace(/\/+$/, '')
+  const literalCode = (previous.access_code ?? '').trim() !== ''
+  const codeRef = previous.access_code_env?.trim() || CLOUD_ACCESS_CODE_REF
+  const hasAccessCode = literalCode || await credentialConfigured(workspaceRoot, codeRef)
+  const literalKey = (previous.api_key ?? '').trim() !== ''
+  const keyRef = previous.api_key_env?.trim() || CLOUD_MODEL_API_KEY_REF
+  const hasModelKey = literalKey || await credentialConfigured(workspaceRoot, keyRef)
+  return {
+    configured: baseUrl !== '' && hasAccessCode,
+    baseUrl,
+    hasAccessCode,
+    provider: (previous.provider ?? '').trim(),
+    preset: (previous.preset ?? '').trim(),
+    model: (previous.model ?? '').trim(),
+    hasModelKey,
+  }
+}
+
+/**
+ * 保存云端连接配置（锁序 config → credential，与 DocMind 相同）。
+ * partial 语义：字段省略＝保留现值；非空字符串＝更新；显式空串＝删除。
+ * 口令与模型 Key 一律写入密封凭据，config.yaml 只留引用名；
+ * 手工写在 config.yaml 里的字面量会在下一次保存同类字段时被引用形式取代。
+ */
+export async function setCloudConfig(workspaceRoot: string, input: {
+  baseUrl?: string
+  accessCode?: string
+  provider?: string
+  preset?: string
+  model?: string
+  apiKey?: string
+}): Promise<CloudSettingsPayload> {
+  const baseUrl = input.baseUrl === undefined ? undefined : input.baseUrl.trim().replace(/\/+$/, '')
+  const accessCode = input.accessCode === undefined ? undefined : input.accessCode.trim()
+  const provider = input.provider === undefined ? undefined : input.provider.trim()
+  const preset = input.preset === undefined ? undefined : input.preset.trim()
+  const model = input.model === undefined ? undefined : input.model.trim()
+  const apiKey = input.apiKey === undefined ? undefined : input.apiKey.trim()
+  await withConfigLock(workspaceRoot, async () => {
+    let hasCode = false, hasKey = false
+    await withCredentialLock(workspaceRoot, async () => {
+      const credentials = (await readCredentialsRaw(workspaceRoot)).data
+      if (accessCode !== undefined) { if (accessCode !== '') credentials[CLOUD_ACCESS_CODE_REF] = accessCode; else delete credentials[CLOUD_ACCESS_CODE_REF] }
+      if (apiKey !== undefined) { if (apiKey !== '') credentials[CLOUD_MODEL_API_KEY_REF] = apiKey; else delete credentials[CLOUD_MODEL_API_KEY_REF] }
+      if (accessCode !== undefined || apiKey !== undefined) await writeCredentials(workspaceRoot, credentials)
+      hasCode = typeof credentials[CLOUD_ACCESS_CODE_REF] === 'string'
+      hasKey = typeof credentials[CLOUD_MODEL_API_KEY_REF] === 'string'
+    })
+    const config = await readConfig(workspaceRoot)
+    const previous = config.cloud ?? {}
+    // 逐键构造：base_url/模型信息用「新值 ?? 旧值」，口令与 Key 只保留一种载体——
+    // 已有密封凭据就写引用名（顺带清掉 config.yaml 里的字面量），否则保留原有字面量。
+    const next: Record<string, string> = {}
+    const finalBase = baseUrl ?? previous.base_url
+    if (finalBase !== undefined && finalBase !== '') next.base_url = finalBase
+    const finalProvider = provider ?? previous.provider
+    if (finalProvider !== undefined && finalProvider !== '') next.provider = finalProvider
+    const finalPreset = preset ?? previous.preset
+    if (finalPreset !== undefined && finalPreset !== '') next.preset = finalPreset
+    const finalModel = model ?? previous.model
+    if (finalModel !== undefined && finalModel !== '') next.model = finalModel
+    if (hasCode) next.access_code_env = CLOUD_ACCESS_CODE_REF
+    else if (accessCode === undefined && previous.access_code !== undefined) next.access_code = previous.access_code
+    if (hasKey) next.api_key_env = CLOUD_MODEL_API_KEY_REF
+    else if (apiKey === undefined && previous.api_key !== undefined) next.api_key = previous.api_key
+    await writeConfig(workspaceRoot, { ...config, cloud: next as CloudConfigYaml })
+  })
+  return cloudConfigPayload(workspaceRoot)
 }

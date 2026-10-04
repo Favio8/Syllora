@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, mkdtemp, readFile, rename, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { StructuredCallClient } from '@syllora/course-builder'
 import { SylloraProjects, migrateSharedSettings } from '../src/syllora-projects.ts'
@@ -8,7 +8,7 @@ import { SylloraService } from '../src/syllora.ts'
 import { selectContext, sha, structuredSources, within } from '../src/syllora-files.ts'
 import * as files from '../src/syllora-files.ts'
 import { evidence, type Course } from '../src/syllora-domain.ts'
-import { validateLecture } from '../src/syllora-initialize.ts'
+import { initializeFolder, repairLecture, validateLecture } from '../src/syllora-initialize.ts'
 import type { ResolvedChatConfig } from '../src/config.ts'
 
 /** ENOTEMPTY/EBUSY：取消类用例的清理会与仍在收尾的写入竞争，重试几次即可，不掩盖真正的清理失败。 */
@@ -24,23 +24,27 @@ async function removeCourseRoot(root:string){
 }
 const temp=resolve('..','tmp','course-folder-tests'),roots:string[]=[]
 afterEach(async()=>{for(const root of roots.splice(0)){if(!root.startsWith(temp))throw new Error('unsafe test cleanup');await removeCourseRoot(root)}})
-const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'http://localhost:9999/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}
+const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'http://localhost:9999/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}
 function lecture(sources:any[]) {
   return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'按资料整理的章节导读。',sourceIds:sources.map(s=>s.id)},concepts:sources.filter(s=>s.text.length>=4&&s.kind!=='heading').map((s,i)=>({name:`${s.section.split(' / ').at(-1).slice(0,45)} 概念 ${i+1}`,text:'概念解释来自所附资料。',sourceIds:[s.id],quote:s.text.slice(0,Math.min(40,s.text.length))})),examples:[],connections:[],analogies:[]}
 }
-async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1) {
+async function setup(change?:(sources:any[],call:number)=>Promise<unknown>|unknown,pdf?:NonNullable<ConstructorParameters<typeof SylloraProjects>[1]>['pdf'],maxConcurrency=1,observe?:(options:any)=>void) {
   await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder)
   let calls=0
-  const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
+  const client:StructuredCallClient={async *stream(options){const raw=JSON.stringify(options.messages);const message=(options.messages.at(-1) as any).content[0].text;const sources=JSON.parse(message.slice(message.indexOf('所选资料：\n')+'所选资料：\n'.length));calls++;observe?.(options);yield {type:'text-delta',text:JSON.stringify(change?await change(sources,calls):lecture(sources))};expect(raw).not.toContain('fixture-only')}}
   const app=join(root,'app'), projects=new SylloraProjects(app,{config:async()=>({...config,maxConcurrency}),client:()=>client,...(pdf?{pdf}:{})})
   await projects.handle('preferences',{consent:true})
   const course=await projects.handle('openCourse',{path:folder}) as {id:string}
   return {root,folder,app,projects,id:course.id,calls:()=>calls,client}
 }
-async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<400;i++){const state=await projects.handle('state',{}) as any;const job=state.jobs.find((j:any)=>j.id===jobId);if(job&&job.state!=='running')return {state,job};await new Promise(r=>setTimeout(r,10))}throw new Error('initialization did not settle')}
+async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<1500;i++){const state=await projects.handle('state',{}) as any;const job=state.jobs.find((j:any)=>j.id===jobId);if(job&&job.state!=='running')return {state,job};await new Promise(r=>setTimeout(r,10))}throw new Error('initialization did not settle')}
 async function initialize(s:Awaited<ReturnType<typeof setup>>,acceptPartial=false){const scan=await s.projects.handle('scan',{courseId:s.id}) as any;const files=scan.files.filter((f:any)=>f.status==='ready');const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:files.map((f:any)=>f.path),fingerprints:Object.fromEntries(files.map((f:any)=>[f.path,f.fingerprint])),acceptPartial}) as any;return settle(s.projects,job.jobId)}
 const DOC='# 第一章\n\n单位矩阵的主对角线元素为一，其余元素为零。\n\n# 第二章\n\n矩阵乘法需要检查左矩阵列数与右矩阵行数是否相等。\n'
+// Force several size-bounded batches in concurrency tests without restoring section-based batching.
+const PADDED=(title:string)=>`# ${title}\n\n${'依据内容表述完整，支持拆出观点并保持引用可核验。'.repeat(150)}\n`
+const sameNamedLecture=(sources:any[])=>{const value=lecture(sources);value.concepts.forEach(item=>{item.name='共同概念'});return value}
+const identities=(points:any[])=>points.map(point=>({id:point.id,originKey:point.originKey,sourceIds:point.sourceIds})).sort((a,b)=>a.sourceIds.join().localeCompare(b.sourceIds.join()))
 describe('course folder initialization',()=>{
   it('CR-14: retries loading projects after a damaged index is repaired without restarting',async()=>{
     const s=await setup(),filename=join(s.app,'.syllora','projects.json')
@@ -67,18 +71,19 @@ describe('course folder initialization',()=>{
     const s=await setup();const doc=Array.from({length:40},(_,i)=>`# 第${i+1}章\n\n主题${i+1}的定义。${'本段包含课程依据与完整解释。'.repeat(45)}\n`).join('\n');await writeFile(join(s.folder,'long.md'),doc)
     expect(doc.length).toBeGreaterThan(22000)
     const {state,job}=await initialize(s);expect(job.state).toBe('succeeded');expect(state.courses[0].points).toHaveLength(40)
-    const result=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(result.lectures).toHaveLength(40);expect(result.lectures.at(-1).chapter).toBe('第40章')
+    const result=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(result.lectures.length).toBeGreaterThan(1);expect(result.lectures.length).toBeLessThan(40);expect(result.lectures.at(-1).concepts.some((item:any)=>item.quote.includes('主题40'))).toBe(true)
     const manifest=JSON.parse(await readFile(join(s.folder,'.syllora','revisions',state.courses[0].revision,'manifest.json'),'utf8'));expect(manifest.coveredSourceCount).toBe(manifest.sourceCount)
     expect(await readFile(join(s.folder,'long.md'),'utf8')).toBe(doc)
     const ids=state.courses[0].points.map((point:any)=>point.id),calls=s.calls();
     const replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(calls);expect(replay.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids)
     await writeFile(join(s.folder,'long.md'),doc.replace('主题40的定义。','主题40的定义，新增尾章依据。'))
     const changed=await initialize(s);expect(changed.job.state).toBe('succeeded');expect(s.calls()-calls).toBe(1);expect(changed.state.courses[0].points.map((point:any)=>point.id)).toEqual(ids);expect(new Set(changed.state.courses[0].points.map((point:any)=>point.id)).size).toBe(40)
-    const latest=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(latest.lectures.at(-1).concepts[0].quote).toContain('新增尾章依据')
+    const latest=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(latest.lectures.at(-1).concepts.some((item:any)=>item.quote.includes('新增尾章依据'))).toBe(true)
   })
   it('counts all parsed characters including whitespace before sending any model request',async()=>{
-    const s=await setup();await writeFile(join(s.folder,'oversized.txt'),'正文依据。'+'\n'.repeat(100001))
-    const result=await initialize(s);expect(result.job.state).toBe('failed');expect(result.job.message).toContain('100,000');expect(s.calls()).toBe(0)
+    // 上限已放宽（统一 DocMind 后要能收整本教材）：这里超的是单份字符上限，仍必须任何模型请求前失败。
+    const s=await setup();await writeFile(join(s.folder,'oversized.txt'),'正文依据。'+'\n'.repeat(1_500_001))
+    const result=await initialize(s);expect(result.job.state).toBe('failed');expect(result.job.message).toContain('1,500,000');expect(s.calls()).toBe(0)
   })
   it('keeps a running task when reopening the same folder and preserves concurrent point edits',async()=>{
     let pause=false,entered!:()=>void,release!:()=>void;const start=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r)
@@ -99,16 +104,119 @@ describe('course folder initialization',()=>{
   })
   it('reuses checkpoints, preserves the previous publication on failure and retries only changed chapters',async()=>{
     let invalid=false
-    const s=await setup(sources=>{const result=lecture(sources);if(invalid&&result.chapter==='第二章')result.concepts[0]!.quote='不在资料中的错误依据';return result})
+    // 概念名按所引章节命名，而不是批内序号：失败后二分重试会改变片段在批内的位置，序号命名会让同一依据换名、被当成新知识点。
+    const s=await setup(sources=>{const result=lecture(sources);result.concepts.forEach(item=>{item.name=`${sources.find(source=>source.id===item.sourceIds[0]).section} 概念 1`});if(invalid&&sources.some(source=>source.section==='第二章'))result.concepts.forEach(item=>{item.quote='INVALID-ALL-CONCEPTS'});return result})
     await writeFile(join(s.folder,'lecture.md'),DOC);const first=await initialize(s);expect(first.job.state).toBe('succeeded');const initialCalls=s.calls()
     const latest=await initialize(s);expect(latest.job.state).toBe('succeeded');expect(s.calls()).toBe(initialCalls)
     await writeFile(join(s.folder,'lecture.md'),DOC.replace('是否相等','是否相等，以及维度条件'));invalid=true
     const failed=await initialize(s);expect(failed.job.state).toBe('failed');expect(failed.state.courses[0].revision).toBe(latest.state.courses[0].revision)
     expect(failed.job.progress.failures.join(' ')).toContain('第二章')
-    expect(failed.job.calls).toBeLessThanOrEqual(4)
+    expect(failed.job.calls).toBe(7)
     invalid=false;const count=s.calls();const recovered=await initialize(s);expect(recovered.job.state).toBe('succeeded');expect(s.calls()-count).toBe(1)
     expect(recovered.state.courses[0].materials[0].revisionNumber).toBe(2);expect(recovered.state.courses[0].materials[0].history.length).toBeGreaterThan(0)
     expect(recovered.state.courses[0].points.map((p:any)=>p.id)).toEqual(first.state.courses[0].points.map((p:any)=>p.id))
+  })
+  it('merges small sections within source and serialized-size bounds',async()=>{
+    const groups:any[][]=[]
+    const s=await setup(sources=>{groups.push(sources);return lecture(sources)})
+    await writeFile(join(s.folder,'many.md'),Array.from({length:65},(_,i)=>`# 第${i+1}节\n\n小节${i+1}包含准确且足够长的原文依据。\n`).join(''))
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(result.state.courses[0].points).toHaveLength(65)
+    expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(12)
+    for(const group of groups){expect(group.length).toBeLessThanOrEqual(20);expect(JSON.stringify(group).length).toBeLessThanOrEqual(8050)}
+  })
+  it('keeps same-named points distinct and stable when a merged batch swaps its first material',async()=>{
+    const s=await setup(sameNamedLecture)
+    await writeFile(join(s.folder,'a.md'),'# 甲章\n\n甲材料中准确的独立概念依据。\n')
+    await writeFile(join(s.folder,'b.md'),'# 乙章\n\n乙材料中准确的独立概念依据。\n')
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded');expect(first.state.courses[0].points).toHaveLength(2);expect(s.calls()).toBe(1)
+    const original=identities(first.state.courses[0].points)
+    const published=await s.projects.handle('lectures',{courseId:s.id}) as any;expect(published.lectures[0].materialIds).toHaveLength(2)
+    const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:['b.md','a.md']}) as any
+    const reversed=await settle(s.projects,job.jobId);expect(reversed.job.state).toBe('succeeded');expect(s.calls()).toBe(2)
+    expect(identities(reversed.state.courses[0].points)).toEqual(original)
+    expect(new Set(original.map(point=>point.originKey)).size).toBe(2)
+  })
+  it('keeps point IDs and keys stable when an unrelated material moves existing concepts across batch boundaries',async()=>{
+    const s=await setup(sameNamedLecture)
+    await writeFile(join(s.folder,'a.md'),'# 甲章\n\n甲材料中准确的独立概念依据。\n')
+    await writeFile(join(s.folder,'b.md'),'# 乙章\n\n乙材料中准确的独立概念依据。\n')
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded');const original=identities(first.state.courses[0].points)
+    await writeFile(join(s.folder,'prefix.md'),'# 前置资料\n\n'+'另一份资料的准确依据。'.repeat(550)+'\n')
+    const job=await s.projects.handle('initialize',{courseId:s.id,requestId:randomUUID(),paths:['a.md','prefix.md','b.md']}) as any
+    const changed=await settle(s.projects,job.jobId);expect(changed.job.state).toBe('succeeded')
+    const published=await s.projects.handle('lectures',{courseId:s.id}) as any
+    expect(published.lectures.length).toBeGreaterThan(1)
+    expect(published.lectures.find((item:any)=>item.sourceIds.includes(original[0]!.sourceIds[0]))).not.toBe(published.lectures.find((item:any)=>item.sourceIds.includes(original[1]!.sourceIds[0])))
+    expect(identities(changed.state.courses[0].points.filter((point:any)=>original.some(old=>old.sourceIds[0]===point.sourceIds[0])))).toEqual(original)
+  })
+  it.each(['legacy','old-key'])('reuses %s points one-to-one by evidence overlap after restart',async format=>{
+    const s=await setup(sources=>{const value=sameNamedLecture(sources);value.chapter='共同章节';return value})
+    await writeFile(join(s.folder,'legacy.md'),DOC)
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded');const expected=identities(first.state.courses[0].points)
+    const filename=join(s.folder,'.syllora','course.json'),stored=JSON.parse(await readFile(filename,'utf8'))
+    stored.courses[0].points.reverse();stored.courses[0].points.forEach((point:any,index:number)=>{if(format==='legacy')delete point.originKey;else point.originKey=sha('legacy-first-material-key')+(index?`#${index}`:'')})
+    await writeFile(filename,JSON.stringify(stored))
+    const restarted=new SylloraProjects(s.app,{config:async()=>config,client:()=>s.client}),replay=await initialize({...s,projects:restarted})
+    expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(1);expect(identities(replay.state.courses[0].points)).toEqual(expected)
+    expect(new Set(replay.state.courses[0].points.map((point:any)=>point.id)).size).toBe(2)
+  })
+  it('reserves every exact origin key before a stronger legacy overlap can consume it',async()=>{
+    const s=await setup(sources=>{const value=sameNamedLecture(sources);value.chapter='共同章节';return value})
+    await writeFile(join(s.folder,'legacy.md'),DOC)
+    const first=await initialize(s);expect(first.job.state).toBe('succeeded');const expected=identities(first.state.courses[0].points)
+    const filename=join(s.folder,'.syllora','course.json'),stored=JSON.parse(await readFile(filename,'utf8'))
+    const [legacy,exact]=stored.courses[0].points;delete legacy.originKey;legacy.sourceIds=[...exact.sourceIds];exact.sourceIds=[...expected.find(point=>point.id===legacy.id)!.sourceIds]
+    stored.courses[0].points=[exact,legacy];await writeFile(filename,JSON.stringify(stored))
+    const restarted=new SylloraProjects(s.app,{config:async()=>config,client:()=>s.client}),replay=await initialize({...s,projects:restarted})
+    expect(replay.job.state).toBe('succeeded');expect(identities(replay.state.courses[0].points)).toEqual(expected)
+  })
+  it('checkpoints valid split children and retries only the failed section without publishing partial lectures',async()=>{
+    let invalid=false;const groups:string[]=[]
+    const s=await setup(sources=>{groups.push([...new Set(sources.map(source=>source.section))].join('|'));const value=lecture(sources);if(invalid&&sources.some(source=>source.section==='第二章'))value.concepts.forEach(item=>{item.quote='INVALID-CHILD-QUOTE'});return value})
+    await writeFile(join(s.folder,'lecture.md'),DOC);const first=await initialize(s);expect(first.job.state).toBe('succeeded')
+    await writeFile(join(s.folder,'lecture.md'),DOC.replace('是否相等','是否相等，以及维度条件'));invalid=true;groups.length=0
+    const failed=await initialize(s);expect(failed.job.state).toBe('failed');expect(failed.state.courses[0].revision).toBe(first.state.courses[0].revision)
+    expect(groups).toEqual(['第一章|第二章','第一章|第二章','第一章|第二章','第一章','第二章','第二章','第二章']);expect(failed.job.progress.failures).toHaveLength(1)
+    const cacheDir=join(s.folder,'.syllora','.staging','cache'),cached=await Promise.all((await readdir(cacheDir)).filter(name=>name.endsWith('.json')).map(async name=>JSON.parse(await readFile(join(cacheDir,name),'utf8'))))
+    expect(cached.some(item=>item.chapter==='第一章'&&item.concepts?.length===1)).toBe(true);expect(cached.some(item=>item.version===1&&item.groups?.length===2)).toBe(true)
+    invalid=false;groups.length=0;const recovered=await initialize(s);expect(recovered.job.state).toBe('succeeded');expect(groups).toEqual(['第二章'])
+    const calls=s.calls(),replay=await initialize(s);expect(replay.job.state).toBe('succeeded');expect(s.calls()).toBe(calls)
+  })
+  it.each(['markdown','numbered'])('bisects complete sections with no isolated headings (%s)',async format=>{
+    const groups:any[][]=[]
+    const s=await setup(sources=>{groups.push(sources);const value=lecture(sources);if(new Set(sources.map(source=>source.section)).size>2)value.concepts.forEach(item=>{item.quote='INVALID-PARENT-QUOTE'});return value})
+    await writeFile(join(s.folder,'sections.md'),Array.from({length:4},(_,i)=>`${format==='markdown'?'# ':''}第${i+1}节 标题\n\n当前小节包含足够长的准确原文依据。\n`).join(''))
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(s.calls()).toBe(5);expect(result.state.courses[0].points).toHaveLength(4)
+    for(const group of groups)for(const heading of group.filter(source=>source.kind==='heading'))expect(group.some(source=>source.section===heading.section&&source.kind!=='heading')).toBe(true)
+  })
+  it('keeps citation identity when a valid child lecture cannot be merged into its parent schema',async()=>{
+    const s=await setup(),course=(await s.projects.handle('state',{}) as any).courses[0]
+    await writeFile(join(s.folder,'sections.md'),DOC)
+    let failParent=false,calls=0
+    const run=()=>initializeFolder({root:s.folder,course,paths:['sections.md'],expected:{},acceptPartial:false,jobId:randomUUID(),modelKey:'fixture-'+failParent,check:async()=>{},progress:async()=>{},call:async sources=>{calls++;const value=sameNamedLecture(sources);if(failParent&&new Set(sources.map(source=>source.section)).size>1)value.concepts.forEach(item=>{item.quote='INVALID-PARENT'});value.intro.text='x'.repeat(4000);return value}})
+    const merged=await run();course.points=merged.points;course.materials=merged.materials;failParent=true
+    const children=await run();expect(calls).toBe(6);expect(children.lectures).toHaveLength(2);expect(identities(children.points)).toEqual(identities(merged.points))
+  })
+  it('includes validation retry hints and preserves the 24000 token output budget',async()=>{
+    const prompts:string[]=[],budgets:number[]=[]
+    const s=await setup((sources,call)=>{const value=lecture(sources);if(call===1)value.concepts.forEach(item=>{item.quote='INVALID-RETRY-QUOTE'});return value},undefined,1,options=>{prompts.push(options.messages.at(-1).content[0].text);budgets.push(options.maxTokens)})
+    await writeFile(join(s.folder,'retry.md'),'# 重试章节\n\n当前章节包含足够长的准确原文依据。\n')
+    const result=await initialize(s);expect(result.job.state).toBe('succeeded');expect(budgets).toEqual([24000,24000]);expect(prompts[0]).not.toContain('上一轮输出未通过校验');expect(prompts[1]).toContain('上一轮输出未通过校验：讲义依据不是资料原文')
+  })
+  it('regenerates malformed and foreign-source lecture caches in temporary fixtures',async()=>{
+    const s=await setup();await writeFile(join(s.folder,'cache.md'),'# 缓存章节\n\n缓存中包含足够长的准确原文依据。\n');const first=await initialize(s);expect(first.job.state).toBe('succeeded')
+    const cacheDir=join(s.folder,'.syllora','.staging','cache'),cached=await Promise.all((await readdir(cacheDir)).filter(name=>name.endsWith('.json')).map(async name=>({path:join(cacheDir,name),value:JSON.parse(await readFile(join(cacheDir,name),'utf8'))})))
+    const {path,value}=cached.find(item=>Array.isArray(item.value.concepts))!
+    await writeFile(path,'{malformed');expect((await initialize(s)).job.state).toBe('succeeded');expect(s.calls()).toBe(2)
+    await writeFile(path,JSON.stringify({...value,intro:{...value.intro,sourceIds:['foreign-source']}}));expect((await initialize(s)).job.state).toBe('succeeded');expect(s.calls()).toBe(3)
+    expect((await initialize(s)).job.state).toBe('succeeded');expect(s.calls()).toBe(3)
+  })
+  it('reports concurrent content failures in source order despite reversed completion',async()=>{
+    const completions:string[]=[],attempts=new Map<string,number>()
+    const s=await setup(async sources=>{const name=sources[0].section;await new Promise(r=>setTimeout(r,name==='第二章'?30:2));const value=lecture(sources);if(name==='第二章'||name==='第四章'){value.concepts.forEach(item=>{item.quote='INVALID-ORDER-QUOTE'});const count=(attempts.get(name)??0)+1;attempts.set(name,count);if(count===3)completions.push(name)}return value},undefined,4)
+    const padded=(title:string)=>`# ${title}\n\n${'依据内容表述完整，支持拆出观点并保持引用可核验。'.repeat(240)}\n`
+    await writeFile(join(s.folder,'order.md'),padded('第一章')+padded('第二章')+padded('第三章')+padded('第四章'))
+    const result=await initialize(s);expect(result.job.state).toBe('failed');expect(completions).toEqual(['第四章','第二章']);expect(result.job.progress.failures).toHaveLength(2);expect(result.job.progress.failures[0]).toMatch(/^第二章（.*）：/);expect(result.job.progress.failures[1]).toMatch(/^第四章（.*）：/)
   })
   it('cancels initialization without publishing and does not write into another opened course',async()=>{
     let release!:()=>void, entered!:()=>void;const start=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r)
@@ -206,6 +314,7 @@ describe('structured sources and migration',()=>{
     const sources=structuredSources('m','v',[{text:'资料提供准确的概念定义。',anchor:'a'},{text:'另一片段说明适用条件。',anchor:'b'}]),value=lecture(sources)
     value.concepts[0]!.quote='编造的依据';expect(()=>validateLecture(value,sources)).toThrow('不是资料原文')
     const incomplete=lecture([sources[0]]);expect(()=>validateLecture(incomplete,sources)).toThrow('没有完整关联')
+    const repaired=repairLecture(incomplete,sources);expect(repaired.intro.sourceIds).toEqual([sources[0]!.id]);expect(()=>validateLecture(repaired,sources)).toThrow('没有完整关联')
   })
   it('keeps one document as one chapter even though every PDF page has its own anchor',()=>{
     // 页锚点必须只做定位：一旦它同时充当章节回退键，每一页都会变成独立批次，
@@ -287,7 +396,7 @@ describe('structured sources and migration',()=>{
     expect(new Set(sources.map(s=>s.section))).toEqual(new Set(['1.1 问题背景','3.2 符号说明']))
   })
   it('keeps a failed concurrent run consistent: failure recorded, nothing published, progress matches what finished',async()=>{
-    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const FOUR=PADDED('第一章')+PADDED('第二章')+PADDED('第三章')+PADDED('第四章')
     const s=await setup()
     await writeFile(join(s.folder,'lecture.md'),FOUR)
     // 冷缓存 + 并发 3 + 单章必败：现有回归只覆盖"全部成功"，一旦并发退化成串行也测不出来。
@@ -313,11 +422,12 @@ describe('structured sources and migration',()=>{
     // 进度只统计真正落盘的章节：并发 3 时另外两章会完成并写入缓存，第二章不计入。
     const rescanned=await files.scanFiles(s.folder,settled.state.courses[0].materials)
     expect(rescanned.every(f=>f.status==='ready')).toBe(true)
-    expect(settled.job.progress.done).toBeLessThan(4)
-    expect(settled.job.progress.total).toBe(4)
+    // 合批按体积而非按章：只断言「恰好失败的那一批没有计入进度」，不写死批数。
+    expect(settled.job.progress.total).toBeGreaterThan(1)
+    expect(settled.job.progress.done).toBe(settled.job.progress.total-1)
   })
   it('organizes chapters concurrently up to the configured limit and still publishes every chapter',async()=>{
-    const FOUR='# 第一章\n\n甲的完整正文依据。\n\n# 第二章\n\n乙的完整正文依据。\n\n# 第三章\n\n丙的完整正文依据。\n\n# 第四章\n\n丁的完整正文依据。\n'
+    const FOUR=PADDED('第一章')+PADDED('第二章')+PADDED('第三章')+PADDED('第四章')
     const s=await setup(undefined,undefined,3)
     await writeFile(join(s.folder,'lecture.md'),FOUR)
     let inFlight=0,peak=0,calls=0
@@ -340,9 +450,11 @@ describe('structured sources and migration',()=>{
     const settled=await settle(projects,job.jobId)
     expect(settled.job.state).toBe('succeeded')
     const state=await projects.handle('state',{}) as any
-    const chapters=state.courses[0].points.map((p:any)=>p.chapter)
+    expect(state.courses[0].points.length).toBeGreaterThanOrEqual(4)
+    const published=await projects.handle('lectures',{courseId:id}) as any
+    const chapters=published.lectures.flatMap((item:any)=>item.concepts.map((concept:any)=>concept.name.split(' 概念 ')[0]))
     expect(new Set(chapters)).toEqual(new Set(['第一章','第二章','第三章','第四章']))
-    expect(calls).toBe(4)
+    expect(calls).toBeGreaterThan(1)
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(3)
   })
@@ -394,13 +506,14 @@ describe('application-managed course directories',()=>{
     expect((await restarted.handle('scan',{courseId:first.id}) as any).files[0].path).toBe('sources/notes.md')
   })
   it('copies old course originals, lectures and history before updating the registry, leaving old files intact',async()=>{
-    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC);const published=await initialize(s)
+    const s=await setup();await writeFile(join(s.folder,'lecture.md'),DOC);const published=await initialize(s);const before=(await s.projects.handle('lectures',{courseId:s.id}) as any).lectures
     const managed=join(s.root,'executable','.syllora'),projects=new SylloraProjects(s.app,{managedCoursesRoot:managed}),state=await projects.handle('state',{}) as any
     const course=state.courses.find((c:any)=>c.id===s.id)
     expect(course).toMatchObject({id:s.id,folder:join(managed,s.id),revision:published.state.courses[0].revision})
     expect(await readFile(join(managed,s.id,'lecture.md'),'utf8')).toBe(DOC)
     expect(await readFile(join(s.folder,'lecture.md'),'utf8')).toBe(DOC)
-    expect((await projects.handle('lectures',{courseId:s.id}) as any).lectures).toHaveLength(2)
+    const copied=(await projects.handle('lectures',{courseId:s.id}) as any).lectures
+    expect(copied.length).toBeGreaterThan(0);expect(copied.map((item:any)=>item.id)).toEqual(before.map((item:any)=>item.id))
     expect(state.projects[0].error).toBeNull()
     const registry=JSON.parse(await readFile(join(s.app,'.syllora','projects.json'),'utf8'));expect(registry[0].path).toBe(join(managed,s.id))
     expect((await new SylloraProjects(s.app,{managedCoursesRoot:managed}).handle('state',{}) as any).courses[0].revision).toBe(course.revision)

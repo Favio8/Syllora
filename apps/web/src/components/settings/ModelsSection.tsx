@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { api, ApiError } from "@/src/lib/api";
+import { api, ApiError, type CloudSettings, type DocMindSettings } from "@/src/lib/api";
 import { useAppStore } from "@/src/store/useAppStore";
 import { useFocusTrap } from "@/src/hooks/useFocusTrap";
 import type {
@@ -410,7 +410,6 @@ function ProviderEditorCard({
               autoComplete={fieldAutoComplete}
               {...autofillGuardProps}
             />
-            <span className="text-[11px] text-text-faint">小写字母开头，用于生成凭据引用（如 ACME_API_KEY）</span>
           </label>
           <label className="flex flex-col gap-1.5 text-xs text-text-secondary">
             显示名称
@@ -434,7 +433,6 @@ function ProviderEditorCard({
       <details className="mt-3 rounded-lg border border-border-line bg-bg-panel" open={creating}>
         <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-text-secondary">
           自定义设置
-          <span className="ml-2 font-normal text-text-faint">协议 · Base URL · 默认模型 · 模型列表</span>
         </summary>
         <div className="flex flex-col gap-3 px-3 pb-3 pt-1">
           <label className="flex flex-col gap-1.5 text-xs text-text-secondary">
@@ -448,11 +446,6 @@ function ProviderEditorCard({
               <option value="openai">OpenAI 兼容（{"{base}"}/chat/completions）</option>
               <option value="anthropic">Anthropic 兼容（{"{base}"}/v1/messages）</option>
             </select>
-            <span className="text-[11px] text-text-faint">
-              {protocol === "anthropic"
-                ? "按 Anthropic Messages 协议请求，鉴权头用 x-api-key；Base URL 可填 API 根地址或 /v1 地址。"
-                : "按 OpenAI 兼容协议请求，鉴权头用 Authorization: Bearer。"}
-            </span>
           </label>
           <label className="flex flex-col gap-1.5 text-xs text-text-secondary">
             Base URL（必填）
@@ -771,6 +764,99 @@ function ProviderEditorCard({
 export default function ModelsSection({ initial }: ModelsSectionProps) {
   const flashStatusBanner = useAppStore((s) => s.flashStatusBanner);
   const [payload, setPayload] = useState<SettingsPayload | null>(initial);
+  // DocMind 文档解析（上传资料的解析引擎）：密钥与端点走 settings.docmind.*，
+  // 读回只有 configured/endpoint，密钥从不回填到页面。
+  const [docmind, setDocmind] = useState<DocMindSettings | null>(null);
+  const [docmindKeyId, setDocmindKeyId] = useState("");
+  const [docmindKeySecret, setDocmindKeySecret] = useState("");
+  const [docmindEndpoint, setDocmindEndpoint] = useState("");
+  const [docmindBusy, setDocmindBusy] = useState(false);
+  const [docmindError, setDocmindError] = useState<string | null>(null);
+  const [docmindSaved, setDocmindSaved] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    // DocMind 探测失败不影响模型配置面板本身（未配置时上传走本地回退）。
+    void Promise.resolve().then(() => api.docmindSettings()).then(
+      (result) => { if (alive) setDocmind(result); },
+      () => { if (alive) setDocmind({ configured: false, endpoint: "docmind-api.cn-hangzhou.aliyuncs.com" }); },
+    );
+    return () => { alive = false };
+  }, []);
+  /** partial 语义：输入框留空＝不改该项；端点留空且原本未设置时不提交。 */
+  const handleDocMindSave = async () => {
+    const id = docmindKeyId.trim(), secret = docmindKeySecret.trim(), endpoint = docmindEndpoint.trim();
+    if (id === "" && secret === "" && endpoint === "") { setDocmindError("请至少填写一项后再保存。"); return; }
+    setDocmindBusy(true); setDocmindError(null); setDocmindSaved(false);
+    try {
+      const result = await api.saveDocMind({
+        ...(id !== "" ? { accessKeyId: id } : {}),
+        ...(secret !== "" ? { accessKeySecret: secret } : {}),
+        ...(endpoint !== "" ? { endpoint } : {}),
+      });
+      // 宿主 save 响应统一为 {configured, endpoint}（回读真实解析结果）。
+      const next = (result as unknown as DocMindSettings);
+      setDocmind({ configured: Boolean(next.configured), endpoint: typeof next.endpoint === "string" ? next.endpoint : "docmind-api.cn-hangzhou.aliyuncs.com" });
+      setDocmindKeyId(""); setDocmindKeySecret(""); setDocmindEndpoint("");
+      setDocmindSaved(true);
+      flashStatusBanner(next.configured ? "DocMind 设置已保存" : "已保存，但仍缺少 AccessKey ID 或 Secret");
+    } catch (cause) {
+      setDocmindError(`DocMind 保存失败：${errorMessage(cause)}`);
+    } finally {
+      setDocmindBusy(false);
+    }
+  };
+  // 云端 OpenMAIC 连接（虚拟课堂 / 幻灯片共用）：地址与访问口令走 settings.cloud.*，
+  // 口令加密保存、接口不回显；这里只保留「是否已配置」与地址。
+  const [cloud, setCloud] = useState<CloudSettings | null>(null);
+  const [cloudBaseUrl, setCloudBaseUrl] = useState("");
+  const [cloudAccessCode, setCloudAccessCode] = useState("");
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [cloudSaved, setCloudSaved] = useState(false);
+  const [cloudProbe, setCloudProbe] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    // 云端连接探测失败不影响模型配置面板本身。
+    void Promise.resolve().then(() => api.cloudSettings()).then(
+      (result) => { if (alive) setCloud(result); },
+      () => { if (alive) setCloud({ configured: false, baseUrl: "", hasAccessCode: false, provider: "", preset: "", model: "", hasModelKey: false }); },
+    );
+    return () => { alive = false };
+  }, []);
+  /** partial 语义：输入框留空＝不改该项；「清除连接」走显式空串。 */
+  const handleCloudSave = async (clear = false) => {
+    const baseUrl = cloudBaseUrl.trim(), accessCode = cloudAccessCode.trim();
+    if (!clear && baseUrl === "" && accessCode === "") { setCloudError("请至少填写服务地址或访问口令后再保存。"); return; }
+    setCloudBusy(true); setCloudError(null); setCloudSaved(false); setCloudProbe(null);
+    try {
+      const next = await api.saveCloud(clear ? { baseUrl: "", accessCode: "" } : {
+        ...(baseUrl !== "" ? { baseUrl } : {}),
+        ...(accessCode !== "" ? { accessCode } : {}),
+      });
+      setCloud(next);
+      setCloudBaseUrl(""); setCloudAccessCode("");
+      setCloudSaved(true);
+      flashStatusBanner(clear ? "已清除云端课堂连接" : next.configured ? "云端课堂连接已保存" : "已保存，但仍缺少服务地址或访问口令");
+    } catch (cause) {
+      setCloudError(`云端连接保存失败：${errorMessage(cause)}`);
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+  /** 能力探测：设置页也要能在生成前看到「云端支持什么」。 */
+  const handleCloudProbe = async () => {
+    setCloudBusy(true); setCloudError(null); setCloudProbe(null);
+    try {
+      const result = await api.classroomCapabilities();
+      if (!result.configured) { setCloudProbe("云端连接尚未配置完整（需要服务地址与访问口令）。"); return; }
+      const on = Object.entries(result.capabilities).filter(([, value]) => value === true).map(([key]) => key);
+      setCloudProbe(`已连接 ${result.baseUrl}：资料最多 ${result.materials.maxCount} 份、单份 ≤ ${Math.round(result.materials.maxDocumentBytes / 1024 / 1024)} MB；${on.length > 0 ? `云端额外能力 ${on.join(" / ")}` : "云端未开放联网检索 / 图片 / 视频 / 语音能力"}`);
+    } catch (cause) {
+      setCloudError(`连接检测失败：${errorMessage(cause)}`);
+    } finally {
+      setCloudBusy(false);
+    }
+  };
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[] | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -1090,11 +1176,11 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
           <h3 className="text-base font-medium text-text-primary">
             {manageOpen ? "供应商管理" : "模型配置"}
           </h3>
-          <p className="mt-1 text-sm leading-6 text-text-faint">
-            {manageOpen
-              ? "已配置的模型 API 都在这里：可激活、编辑或删除；激活后新对话与课程构建将使用它。"
-              : "配置会立即用于新的对话和课程构建任务。API Key 以写入方式保存，不显示明文。"}
-          </p>
+          {manageOpen && (
+            <p className="mt-1 text-sm leading-6 text-text-faint">
+              已配置的模型 API 都在这里：可激活、编辑或删除；激活后新对话与课程构建将使用它。
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -1127,15 +1213,15 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
               type="button"
               onClick={() => void handleExport()}
               disabled={transferBusy || providers.length === 0}
-              className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+              className="button small"
             >
-              导出配置（不含密钥）
+              导出配置
             </button>
             <button
               type="button"
               onClick={() => importInputRef.current?.click()}
               disabled={transferBusy}
-              className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+              className="button small"
             >
               导入配置
             </button>
@@ -1371,6 +1457,124 @@ export default function ModelsSection({ initial }: ModelsSectionProps) {
         </div>
       ) : null}
 
+      {!manageOpen ? (
+        <div className="docmind-card mt-4 rounded-xl border border-border-line bg-bg-card p-3">
+          <div className="flex items-center gap-2.5">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${docmind?.configured ? "bg-accent-pass" : "bg-accent-fail"}`} aria-hidden="true" />
+            <span className="min-w-0 text-sm font-medium text-text-primary">DocMind 文档解析</span>
+            <span className="rounded border border-border-line px-1.5 py-0.5 text-[11px] text-text-muted">{docmind === null ? "读取中" : docmind.configured ? "已配置" : "未配置"}</span>
+            <div className="ml-auto">
+              <button
+                aria-label="保存 DocMind 设置"
+                type="button"
+                disabled={docmindBusy}
+                onClick={() => void handleDocMindSave()}
+                className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+              >
+                {docmindBusy ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </div>
+          <p className="mt-1.5 text-xs text-text-faint">上传的资料统一由阿里云文档智能（DocMind）解析（PDF/Word/PPT/Excel/HTML/纯文本都会上传到云端解析；未配置时本地回退并在资料上标注）。留空的项保持原值不变；端点留空使用默认地址{docmind?.endpoint ? `（当前 ${docmind.endpoint}）` : ""}。密钥加密保存在本机，不会回显。</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <input
+              aria-label="DocMind AccessKey ID"
+              value={docmindKeyId}
+              onChange={(e) => setDocmindKeyId(e.target.value)}
+              placeholder={docmind?.configured ? "AccessKey ID（已保存，留空不改）" : "AccessKey ID"}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+            />
+            <input
+              aria-label="DocMind AccessKey Secret"
+              type="password"
+              value={docmindKeySecret}
+              onChange={(e) => setDocmindKeySecret(e.target.value)}
+              placeholder={docmind?.configured ? "AccessKey Secret（已保存，留空不改）" : "AccessKey Secret"}
+              autoComplete="new-password"
+              className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+            />
+            <input
+              aria-label="DocMind 端点"
+              value={docmindEndpoint}
+              onChange={(e) => setDocmindEndpoint(e.target.value)}
+              placeholder="端点（默认 docmind-api.cn-hangzhou.aliyuncs.com）"
+              spellCheck={false}
+              className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus sm:col-span-2"
+            />
+          </div>
+          {docmindError && <p className="mt-1.5 text-xs text-accent-fail" role="alert">{docmindError}</p>}
+          {docmindSaved && <p className="mt-1.5 text-xs text-accent-pass" role="status">已保存</p>}
+        </div>
+      ) : null}
+      {!manageOpen ? (
+        <div className="docmind-card mt-4 rounded-xl border border-border-line bg-bg-card p-3">
+          <div className="flex items-center gap-2.5">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${cloud?.configured ? "bg-accent-pass" : "bg-accent-fail"}`} aria-hidden="true" />
+            <span className="min-w-0 text-sm font-medium text-text-primary">虚拟课堂（云端 OpenMAIC）</span>
+            <span className="rounded border border-border-line px-1.5 py-0.5 text-[11px] text-text-muted">{cloud === null ? "读取中" : cloud.configured ? "已配置" : "未配置"}</span>
+            <div className="ml-auto flex gap-2">
+              <button
+                aria-label="检测云端连接"
+                type="button"
+                disabled={cloudBusy}
+                onClick={() => void handleCloudProbe()}
+                className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+              >
+                检测连接
+              </button>
+              <button
+                aria-label="保存云端连接"
+                type="button"
+                disabled={cloudBusy}
+                onClick={() => void handleCloudSave()}
+                className="rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+              >
+                {cloudBusy ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </div>
+          <p className="mt-1.5 text-xs text-text-faint">
+            虚拟课堂与「幻灯片讲义」都在云端 OpenMAIC 生成，本地只负责播放与导出。
+            <strong>开启即意味着所选资料会上传到下面配置的服务器</strong>；口令加密保存在本机、不会回显。
+            留空的项保持原值不变{cloud?.baseUrl ? `（当前 ${cloud.baseUrl}）` : ""}。
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <input
+              aria-label="云端服务地址"
+              value={cloudBaseUrl}
+              onChange={(e) => setCloudBaseUrl(e.target.value)}
+              placeholder={cloud?.baseUrl ? "服务地址（已保存，留空不改）" : "服务地址，如 https://studyandchat.top"}
+              spellCheck={false}
+              className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+            />
+            <input
+              aria-label="云端访问口令"
+              type="password"
+              value={cloudAccessCode}
+              onChange={(e) => setCloudAccessCode(e.target.value)}
+              placeholder={cloud?.hasAccessCode ? "访问口令（已保存，留空不改）" : "站点访问口令"}
+              autoComplete="new-password"
+              spellCheck={false}
+              className="h-9 rounded-lg border border-border-line bg-bg-root px-3 text-[13px] text-text-primary outline-none focus:border-accent-focus"
+            />
+          </div>
+          {cloudProbe && <p className="mt-1.5 text-xs text-text-muted" role="status">{cloudProbe}</p>}
+          {cloudError && <p className="mt-1.5 text-xs text-accent-fail" role="alert">{cloudError}</p>}
+          {cloudSaved && <p className="mt-1.5 text-xs text-accent-pass" role="status">已保存</p>}
+          {cloud?.configured ? (
+            <button
+              type="button"
+              disabled={cloudBusy}
+              onClick={() => void handleCloudSave(true)}
+              className="mt-2 rounded-lg border border-border-line px-3 py-1.5 text-xs text-text-muted hover:bg-bg-card disabled:opacity-40"
+            >
+              清除云端连接
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {conflict ? (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4"

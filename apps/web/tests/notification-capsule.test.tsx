@@ -1,20 +1,20 @@
 /**
- * PRD 需求五：右下角通知胶囊。
- *  - 进行中常驻、可展开面板、可取消；
- *  - 成功后自动消失；失败保留到手动关闭（已读/未读区分）；
- *  - 切课后不残留其他课程的进行中任务（工作台只喂当前快照，面板按课程标注）；
- *  - 刷新后后端仍有 running job 时胶囊恢复（组件只依赖轮询快照，无会话态）；
- *  - 键盘可达 + aria-live 播报。
+ * PRD 需求五（UI 重构后）：通知入口改为左栏常驻图标，点击进入整页「任务」视图。
+ *  - 入口常驻；状态文字通过 aria-label / 悬停气泡给出（整理中 x/y、N 个任务失败、任务）；
+ *  - 刷新后后端仍有 running job 时状态恢复（组件只依赖轮询快照，无会话态）；
+ *  - 键盘可达 + aria-live 播报；
+ *  - 任务页：进行中置顶、按课程标注、可取消、失败明细与「查看失败页」，已完成不自动消失。
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import NotificationCapsule, { resetDismissedNotifications } from '../src/components/chat/NotificationCapsule'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import NotificationCapsule from '../src/components/chat/NotificationCapsule'
+import TasksPage from '../src/components/chat/TasksPage'
 import type { SylloraState } from '../src/types/syllora'
 
 type Job = SylloraState['jobs'][number]
-/** 本地 job 类型尚未声明 etaMs/concurrency：与组件里一样按可选字段收窄。 */
-type JobProgress = NonNullable<Job['progress']> & { etaMs?: number; concurrency?: number }
+/** 本地 job 类型尚未声明 etaMs：与组件里一样按可选字段收窄。 */
+type JobProgress = NonNullable<Job['progress']> & { etaMs?: number }
 
 function job(patch: Partial<Job> & { id: string; courseId: string; state: string; progress?: JobProgress }): Job {
   return {
@@ -29,95 +29,92 @@ function job(patch: Partial<Job> & { id: string; courseId: string; state: string
 
 const names: Record<string, string> = { c1: '甲课', c2: '乙课' }
 const courseName = (id: string) => names[id] ?? id
-
-afterEach(() => {
-  vi.useRealTimers()
-  // 组件把「已读」存在模块内存里（按设计只活在本会话）：用例之间显式清空，
-  // 不用 vi.resetModules()——那会重建整张模块图，影响同进程的其他测试文件。
-  resetDismissedNotifications()
+const running = (id = 'j1', courseId = 'c1') => job({
+  id, courseId, state: 'running', createdAt: 2,
+  progress: { stage: 'organizing', done: 2, total: 5, failures: [], etaMs: 30_000 } as JobProgress,
 })
 
-describe('需求五：通知胶囊', () => {
-  it('stays visible while a job runs and never shows the old mid-column bar', () => {
-    render(<NotificationCapsule jobs={[job({ id: 'j1', courseId: 'c1', state: 'running', message: '整理章节 3/60', progress: { stage: 'organizing', done: 3, total: 60, failures: [] } })]} courseName={courseName} onCancel={vi.fn()} />)
-    const capsule = screen.getByRole('button', { name: /整理中|任务/ })
-    expect(capsule).toHaveAttribute('aria-expanded', 'false')
+describe('需求五：左栏任务入口', () => {
+  it('stays visible with no jobs and labels itself as the task entry', () => {
+    render(<NotificationCapsule jobs={[]} onOpen={() => {}} />)
+    expect(screen.getByRole('button', { name: '任务' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('')
   })
 
-  it('opens the panel with progress, ETA and a working cancel button', () => {
+  it('summarises running progress and announces it', () => {
+    render(<NotificationCapsule jobs={[running()]} onOpen={() => {}} />)
+    const button = screen.getByRole('button', { name: '整理中 2/5' })
+    expect(button.className).toContain('is-running')
+    expect(screen.getByRole('status').textContent).toBe('整理中 2/5')
+  })
+
+  it('counts several running jobs and failures', () => {
+    const { rerender } = render(<NotificationCapsule jobs={[running('a'), running('b', 'c2')]} onOpen={() => {}} />)
+    expect(screen.getByRole('button', { name: '2 个任务进行中 2/5' })).toBeTruthy()
+    rerender(<NotificationCapsule jobs={[job({ id: 'f', courseId: 'c1', state: 'failed' })]} onOpen={() => {}} />)
+    expect(screen.getByRole('button', { name: '1 个任务失败' }).className).toContain('is-failed')
+  })
+
+  it('shows the tooltip on focus and opens the task page on click', () => {
+    const onOpen = vi.fn()
+    render(<NotificationCapsule jobs={[running()]} active onOpen={onOpen} />)
+    const button = screen.getByRole('button', { name: '整理中 2/5' })
+    expect(button.getAttribute('aria-current')).toBe('page')
+    fireEvent.focus(button)
+    expect(within(document.body).getByRole('tooltip').textContent).toBe('整理中 2/5')
+    fireEvent.click(button)
+    expect(onOpen).toHaveBeenCalledOnce()
+    expect(within(document.body).queryByRole('tooltip')).toBeNull()
+  })
+
+  it('reappears as running after a refresh when the backend still reports the job', () => {
+    const { unmount } = render(<NotificationCapsule jobs={[running()]} onOpen={() => {}} />)
+    unmount()
+    render(<NotificationCapsule jobs={[running()]} onOpen={() => {}} />)
+    expect(screen.getByRole('button', { name: '整理中 2/5' })).toBeTruthy()
+  })
+})
+
+describe('需求五：任务页', () => {
+  it('lists running jobs first, labelled by course, with progress, ETA and a working cancel button', () => {
     const onCancel = vi.fn()
-    render(<NotificationCapsule jobs={[job({ id: 'j1', courseId: 'c1', state: 'running', message: '整理章节 3/60', progress: { stage: 'organizing', done: 3, total: 60, failures: [], etaMs: 90_000, concurrency: 3 } })]} courseName={courseName} onCancel={onCancel} />)
-    fireEvent.click(screen.getByRole('button', { name: /整理中/ }))
-    const panel = screen.getByRole('dialog', { name: '通知面板' })
-    expect(panel).toBeInTheDocument()
-    expect(panel).toHaveTextContent('甲课')
-    expect(panel).toHaveTextContent('整理 3/60')
-    expect(panel).toHaveTextContent(/预计剩余约 90 秒/)
+    render(<TasksPage
+      jobs={[job({ id: 'done', courseId: 'c2', state: 'succeeded', createdAt: 9, elapsedMs: 4_000 }), running()]}
+      courseName={courseName}
+      onCancel={onCancel}
+    />)
+    const cards = document.querySelectorAll('.task-card')
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0] as HTMLElement).getByText('甲课')).toBeTruthy()
+    expect(cards[0].textContent).toContain('整理 2/5')
+    expect(cards[0].textContent).toContain('预计剩余约 30 秒')
+    expect(within(cards[1] as HTMLElement).getByText('乙课')).toBeTruthy()
+    expect(cards[1].textContent).toContain('已完成')
+    expect(cards[1].textContent).toContain('耗时 4 秒')
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(onCancel).toHaveBeenCalledWith('j1')
   })
 
-  it('labels the course so two same-named tasks do not merge', () => {
-    render(<NotificationCapsule jobs={[
-      job({ id: 'j1', courseId: 'c1', state: 'running', message: '整理中' }),
-      job({ id: 'j2', courseId: 'c2', state: 'running', message: '整理中' }),
-    ]} courseName={courseName} onCancel={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /2 个任务进行中/ }))
-    const panel = screen.getByRole('dialog', { name: '通知面板' })
-    expect(panel).toHaveTextContent('甲课')
-    expect(panel).toHaveTextContent('乙课')
+  it('keeps failures with their detail, error code and failure-page entry', () => {
+    const onOpenFailures = vi.fn()
+    render(<TasksPage
+      jobs={[job({
+        id: 'f', courseId: 'c1', state: 'failed', errorCode: 'MODEL_QUOTA',
+        progress: { stage: 'organizing', done: 1, total: 3, failures: ['第 3 页：无法识别文字'] } as JobProgress,
+      })]}
+      courseName={courseName}
+      onCancel={() => {}}
+      onOpenFailures={onOpenFailures}
+    />)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('1 个任务需要处理')
+    expect(screen.getByText('第 3 页：无法识别文字')).toBeTruthy()
+    expect(document.querySelector('.task-meta')?.textContent).toContain('错误代码 MODEL_QUOTA')
+    fireEvent.click(screen.getByRole('button', { name: '查看失败页' }))
+    expect(onOpenFailures).toHaveBeenCalledWith('c1')
   })
 
-  it('keeps failures until dismissed and shows the failure detail', () => {
-    render(<NotificationCapsule jobs={[job({ id: 'j9', courseId: 'c1', state: 'failed', message: '章节整理失败', errorCode: 'RATE_LIMITED', progress: { stage: 'organizing', done: 4, total: 10, failures: ['第 5 章：供应商限流'] } })]} courseName={courseName} onCancel={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /1 个任务失败/ }))
-    const panel = screen.getByRole('dialog', { name: '通知面板' })
-    expect(panel).toHaveTextContent('章节整理失败')
-    expect(panel).toHaveTextContent('错误代码 RATE_LIMITED')
-    expect(panel).toHaveTextContent('第 5 章：供应商限流')
-    // 失败条目没有「取消」，有「关闭」。
-    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
-    // 关闭后胶囊消失（该条不再提示）。
-    expect(screen.queryByRole('button', { name: /任务失败/ })).toBeNull()
-  })
-
-  it('auto-hides a success after a few seconds', () => {
-    vi.useFakeTimers()
-    render(<NotificationCapsule jobs={[job({ id: 'jd', courseId: 'c1', state: 'succeeded', message: '初始化完成' })]} courseName={courseName} onCancel={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /任务已完成/ })).toBeInTheDocument()
-    // 停留计时到点后自动移出（假时钟下直接推进，不用 waitFor 以免等真实时钟）。
-    act(() => { vi.advanceTimersByTime(7000) })
-    expect(screen.queryByRole('button', { name: /任务已完成/ })).toBeNull()
-  })
-
-  it('reappears when the backend still reports a running job after a refresh', () => {
-    // 组件本身无会话态：拿到 running 快照就显示，等价于刷新后的恢复。
-    const { unmount } = render(<NotificationCapsule jobs={[]} courseName={courseName} onCancel={vi.fn()} />)
-    expect(screen.queryByRole('button')).toBeNull()
-    unmount()
-    render(<NotificationCapsule jobs={[job({ id: 'jr', courseId: 'c1', state: 'running', message: '整理章节 1/60', progress: { stage: 'organizing', done: 1, total: 60, failures: [] } })]} courseName={courseName} onCancel={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /整理中/ })).toBeInTheDocument()
-  })
-
-  it('is keyboard reachable and announces status changes', () => {
-    render(<NotificationCapsule jobs={[job({ id: 'jk', courseId: 'c1', state: 'running', message: '整理中', progress: { stage: 'organizing', done: 1, total: 5, failures: [] } })]} courseName={courseName} onCancel={vi.fn()} />)
-    // aria-live 播报当前状态。
-    expect(screen.getByRole('status')).toHaveTextContent(/整理中/)
-    const capsule = screen.getByRole('button', { name: /整理中/ })
-    capsule.focus()
-    expect(capsule).toHaveFocus()
-    fireEvent.click(capsule)
-    expect(screen.getByRole('dialog', { name: '通知面板' })).toBeInTheDocument()
-    // Esc 收起并把焦点交还胶囊。
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: '通知面板' })).toBeNull()
-    expect(capsule).toHaveFocus()
-  })
-
-  it('需求：覆盖度提示已删除——没有任务时胶囊不出现', () => {
-    const { container } = render(<NotificationCapsule jobs={[]} courseName={courseName} onCancel={vi.fn()} />)
-    expect(container.querySelector('[data-notification-dock]')).toBeNull()
-    expect(screen.queryByRole('button', { name: /覆盖提示|候选片段/ })).toBeNull()
+  it('shows an empty state without jobs', () => {
+    render(<TasksPage jobs={[]} courseName={courseName} onCancel={() => {}} />)
+    expect(screen.getByText('没有任务')).toBeTruthy()
   })
 })

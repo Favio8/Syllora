@@ -72,7 +72,7 @@ describe('B2 / B3 切课恢复', () => {
     await waitFor(() => expect(screen.getByLabelText('向课程资料提问')).toHaveValue('离线输入 a'))
   })
 
-  it('切课清空上一门课的练习面板与来源弹层', async () => {
+  it('切课清空上一门课的练习视图与来源弹层', async () => {
     const courseA = fixture('a')
     courseA.plan = buildPlan(courseA, { scope: ['p'], dailyMinutes: 40, days: 7, restDays: [] }, Date.now(), () => 'task')
     courseA.plan.tasks[0]!.status = 'in_progress'
@@ -84,17 +84,20 @@ describe('B2 / B3 切课恢复', () => {
     fireEvent.click(document.querySelectorAll('.rail-course')[0]!)
     await screen.findByText('课程 a', { exact: true })
 
-    // 打开练习面板（进行中的任务）与来源弹层。
+    // 练习已是独立整页（进入后 view==='practice'）：切课回到工作台，且不残留练习视图。
     fireEvent.click(screen.getByRole('button', { name: '练习' }))
     await waitFor(() => expect(document.querySelector('.sy-task-study')).not.toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: '来源 1' }))
-    expect(await screen.findByRole('dialog', { name: '资料来源' })).toBeInTheDocument()
-
     fireEvent.click(document.querySelectorAll('.rail-course')[1]!)
     await screen.findByText('课程 b', { exact: true })
-    // 上一门课的临时 UI 不跨课程残留（练习面板随 activeTask/practiceOpen 清空，
-    // 来源弹层随 sourceId 清空）。
     await waitFor(() => expect(document.querySelector('.sy-task-study')).toBeNull())
+
+    // 来源弹层在对话区触发：切回课程 a 打开，切换到课程 b 后应随 sourceId 清空。
+    fireEvent.click(document.querySelectorAll('.rail-course')[0]!)
+    await screen.findByText('课程 a', { exact: true })
+    fireEvent.click(await screen.findByRole('button', { name: '来源 1' }))
+    expect(await screen.findByRole('dialog', { name: '资料来源' })).toBeInTheDocument()
+    fireEvent.click(document.querySelectorAll('.rail-course')[1]!)
+    await screen.findByText('课程 b', { exact: true })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '资料来源' })).toBeNull())
   })
 

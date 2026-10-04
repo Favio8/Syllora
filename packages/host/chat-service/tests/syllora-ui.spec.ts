@@ -7,7 +7,7 @@ import type { ResolvedChatConfig } from '../src/config.ts'
 import type { StructuredCallClient } from '@syllora/course-builder'
 const roots:string[]=[]
 afterEach(async()=>{for(const root of roots.splice(0))await rm(root,{recursive:true,force:true})})
-const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'http://localhost:9999/v1',apiKey:'test-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick'}
+const config:ResolvedChatConfig={providerId:'fixture',model:'fixture',baseUrl:'http://localhost:9999/v1',apiKey:'test-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick'}
 async function setup() {
   const temp=resolve('../tmp/ui-backend-integration-2026-10-02/unit');await mkdir(temp,{recursive:true});const root=await mkdtemp(join(temp,'case-'));roots.push(root)
   const folder=join(root,'course');await mkdir(folder);await writeFile(join(folder,'notes.md'),'# 单位矩阵\n\n单位矩阵的主对角线元素为一，其余元素为零。\n\n矩阵乘法需要左矩阵列数与右矩阵行数相等。')
@@ -30,3 +30,18 @@ describe('production UI backend contracts',()=>{
   it('rejects forged selections and stale revisions before calling the model',async()=>{const s=await setup(),{reading}=await context(s),before=s.calls();await expect(s.projects.handle('generate',{courseId:s.id,requestId:randomUUID(),kind:'answer',reading:{...reading,selection:'凭空编造'}})).rejects.toMatchObject({code:'INVALID_SELECTION'});await expect(s.projects.handle('generate',{courseId:s.id,requestId:randomUUID(),kind:'answer',reading:{...reading,revision:randomUUID()}})).rejects.toMatchObject({code:'VERSION_CONFLICT'});expect(s.calls()).toBe(before)})
   it('allows reading without a consent toggle but cancels a late result on source deletion',async()=>{const s=await setup(),{reading}=await context(s);await s.projects.handle('preferences',{consent:false});expect((await s.projects.handle('state',{}) as any).settings.consent).toBe(true);let release!:()=>void;s.pause(new Promise(resolve=>{release=resolve}));const result=await s.projects.handle('generate',{courseId:s.id,requestId:randomUUID(),kind:'answer',reading}) as any;const deletion=s.projects.handle('deleteMaterial',{courseId:s.id,materialId:reading.materialId,confirmed:true});release();await deletion;const state=await s.projects.handle('state',{}) as any;expect(state.jobs.find((job:any)=>job.id===result.jobId).state).not.toBe('running');expect(state.courses[0].messages.filter((m:any)=>m.role==='assistant')).toHaveLength(0);expect(state.activity).toHaveLength(0);expect(await readFile(join(s.folder,'notes.md'),'utf8')).toContain('单位矩阵')})
 })
+
+
+describe('planning configuration persistence',()=>{
+  it('persists selections and estimates independently of confirmed plans, rejecting stale pages',async()=>{
+    const s=await setup();const original=(await s.projects.handle('state',{}) as any).courses[0];const pointId=original.points[0].id;
+    expect(await s.projects.handle('planningDraft',{courseId:s.id,baseVersion:0,scope:[pointId],estimates:{[pointId]:35}})).toMatchObject({revision:1});
+    const restart=new SylloraProjects(s.app);const restored=(await restart.handle('state',{}) as any).courses[0];
+    expect(restored.planningDraft).toEqual({revision:1,scope:[pointId],estimates:{[pointId]:35}});
+    expect(restored.scope).toEqual(original.scope);expect(restored.plan).toEqual(original.plan);
+    await expect(s.projects.handle('planningDraft',{courseId:s.id,baseVersion:0,scope:[],estimates:{}})).rejects.toMatchObject({code:'VERSION_CONFLICT'});
+    await expect(s.projects.handle('planningDraft',{courseId:s.id,baseVersion:1,scope:[randomUUID()],estimates:{}})).rejects.toThrow();
+    await s.projects.handle('planningDraft',{courseId:s.id,baseVersion:1,scope:[],estimates:{}});
+    expect((await s.projects.handle('state',{}) as any).courses[0].planningDraft.scope).toEqual([]);
+  });
+});

@@ -1,0 +1,560 @@
+[
+  {
+    "id": "f93f7ef0-03cc-4997-a68a-313a7f3ebbff",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电路模型",
+    "sourceIds": [
+      "da0a2323502e9289f1286413fec21fbdd43ea9f9aae501bb1e769a8c4fda6c08"
+    ],
+    "originKey": "point-v2:1858c676ce948ddb73235c4fbbd302eb5f1ed7f8d19302b32051f47832f4ff0a"
+  },
+  {
+    "id": "c2d66211-16bc-49e1-bc22-e5bbcd132e01",
+    "chapter": "第1章 电路的基本规律",
+    "name": "理想电路元件属性",
+    "sourceIds": [
+      "da0a2323502e9289f1286413fec21fbdd43ea9f9aae501bb1e769a8c4fda6c08"
+    ],
+    "originKey": "point-v2:f140b00505eaf4fdeb8a6224f313867f50822d89e3f99053a3c2c4173e14bbee"
+  },
+  {
+    "id": "147f1ba5-0533-48df-9cb2-e4c1b810e889",
+    "chapter": "第1章 电路的基本规律",
+    "name": "实际电路三要素",
+    "sourceIds": [
+      "da0a2323502e9289f1286413fec21fbdd43ea9f9aae501bb1e769a8c4fda6c08"
+    ],
+    "originKey": "point-v2:05e82170892858f7c5dc20e1d71f04e8e18b89fc889fb42c9a5739e763879c9e"
+  },
+  {
+    "id": "d660b477-8bce-43b1-9fce-1a18aac2654e",
+    "chapter": "第1章 电路的基本规律",
+    "name": "集总参数电路",
+    "sourceIds": [
+      "9bd2f26144d0953950262e85e2f2063875a3c6d742f3d77ed7e2124273265ba9"
+    ],
+    "originKey": "point-v2:f72c3ce078d16e7cb1d623b3daebad96357c3c4b21791536b63d4f8dde181295"
+  },
+  {
+    "id": "9ea5fbde-d39a-4755-9625-693fe1f385e4",
+    "chapter": "第1章 电路的基本规律",
+    "name": "线性与时不变电路",
+    "sourceIds": [
+      "9bd2f26144d0953950262e85e2f2063875a3c6d742f3d77ed7e2124273265ba9"
+    ],
+    "originKey": "point-v2:a15b6128ceb99c267b561d2e1c3b6d8efbf902df7ccaaadf93c16090aa4a5549"
+  },
+  {
+    "id": "a19d68bc-d0fb-4bda-8f1b-dec490544766",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电阻电路与动态电路",
+    "sourceIds": [
+      "9bd2f26144d0953950262e85e2f2063875a3c6d742f3d77ed7e2124273265ba9"
+    ],
+    "originKey": "point-v2:446cf118156ab40a9a31c3c1b9a6a24e3b99d5288606b606102810c554a847b1"
+  },
+  {
+    "id": "c5c6a1b3-4a96-418b-9cb7-3a5a9abdc742",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电路变量",
+    "sourceIds": [
+      "6f425c8588ea96632218c25485bebd7ea075ab604ef44817e01e26a96883a215"
+    ],
+    "originKey": "point-v2:cec1d633ec11a2d274871459276da5b122470bd8f6ea6e9e3127a495199fe01c"
+  },
+  {
+    "id": "14ae12d7-cbbd-429c-ab0c-9a053b4a7c07",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电流与电流强度",
+    "sourceIds": [
+      "792cb541771450272a24245a1ca858462f86b751193a69efe05c3faec98ba9da"
+    ],
+    "originKey": "point-v2:5efeb307879767978de61603984ba8940ed7e401dbc0a675b99044c6883900ce"
+  },
+  {
+    "id": "8002f00f-6c50-493a-b5bd-a9baf9d49785",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电流的参考方向",
+    "sourceIds": [
+      "792cb541771450272a24245a1ca858462f86b751193a69efe05c3faec98ba9da"
+    ],
+    "originKey": "point-v2:ce4f52f68f45bf629b3ad7e3d8ab5c8eea1aeb44ca5cf1c6b495c7bd9386e176"
+  },
+  {
+    "id": "e86bf845-cea9-4399-bfd5-b246236139dd",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电压与参考极性",
+    "sourceIds": [
+      "fca43e2cdbf2ae38a60fae610817f4bdef5a2db12b1afb2927dd8998667e828f"
+    ],
+    "originKey": "point-v2:ba9428a9694400178d3f15d61587fc8032dfca4d09f5e9be18490007b2f31468"
+  },
+  {
+    "id": "6a226a19-d64b-41f9-b6b2-08691c669224",
+    "chapter": "第1章 电路的基本规律",
+    "name": "关联参考方向",
+    "sourceIds": [
+      "fca43e2cdbf2ae38a60fae610817f4bdef5a2db12b1afb2927dd8998667e828f"
+    ],
+    "originKey": "point-v2:6cf62cafe03fb247cc87b0da6aea795db9bc4c578fb6e80a1da94c7f3c4c49eb"
+  },
+  {
+    "id": "faed56e6-25b7-4b05-bf09-88bea649b58a",
+    "chapter": "第1章 电路的基本规律",
+    "name": "电位与电压的区别",
+    "sourceIds": [
+      "fca43e2cdbf2ae38a60fae610817f4bdef5a2db12b1afb2927dd8998667e828f"
+    ],
+    "originKey": "point-v2:7e20b477af47b94733d2297e36979e2e304974048077fe2da9c557b687ff56f1"
+  },
+  {
+    "id": "99f8520b-87f9-4992-86cc-4adbf3226920",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "关联与非关联参考方向下的功率",
+    "sourceIds": [
+      "34465b5ab2b43f00a4e8d89ddf8f3f53ba8c92135678443d4dca72f62ee80da1"
+    ],
+    "originKey": "point-v2:6aba1a8cb97e5605e77c22184b9fbed255925dc885fe7ee69f74abe2d09a97a4"
+  },
+  {
+    "id": "9c21c2bd-a4d7-4711-af1b-64915abb5ac9",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "功率正负与负载、电源的判别",
+    "sourceIds": [
+      "34465b5ab2b43f00a4e8d89ddf8f3f53ba8c92135678443d4dca72f62ee80da1"
+    ],
+    "originKey": "point-v2:7f3a36b3cfc1bf9ddc16e88a84500cca1a0a25b33c1e1ed3fc7e84131f9714e6"
+  },
+  {
+    "id": "c35503d4-2e75-4610-9306-005b6de23d03",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "耗能（无源）元件",
+    "sourceIds": [
+      "34465b5ab2b43f00a4e8d89ddf8f3f53ba8c92135678443d4dca72f62ee80da1"
+    ],
+    "originKey": "point-v2:964657116f3c8eaf039359061f0e0d0d45ce8b11dbf24c70a9c1c35eb3577487"
+  },
+  {
+    "id": "343c421f-8883-4dad-bff4-ced80ef16a68",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "额定值与电能计量",
+    "sourceIds": [
+      "34465b5ab2b43f00a4e8d89ddf8f3f53ba8c92135678443d4dca72f62ee80da1"
+    ],
+    "originKey": "point-v2:a257a496521149281433fb3ea4e736f885e8803886089b817065c653c8e7bedf"
+  },
+  {
+    "id": "cce5f34b-95b6-45c2-bc0d-4897bac1e877",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "电路的三大基本定律",
+    "sourceIds": [
+      "94eda99ef0f4667bf9018e42053f9a69989980ad6a11cffe8af29f1d374f52b8"
+    ],
+    "originKey": "point-v2:e93319c4c5f6140cf575686d67e85973b62296be5fc70c30f4630ec5904dae09"
+  },
+  {
+    "id": "1bfa8e95-55e2-499f-8ee7-4acb468dc005",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "电路的两类约束",
+    "sourceIds": [
+      "3f105078a9e4319760562db8d9e5264c783ce0d2047911ef554f85399e6886f1"
+    ],
+    "originKey": "point-v2:de68bfd228004421a6e1c772e7909b881e8c9ab2304782b263f897f6ec311403"
+  },
+  {
+    "id": "db6e4cb0-5bf1-4a37-929c-be8fbe3db7c6",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "支路、节点、回路与网孔",
+    "sourceIds": [
+      "81f715994b4074d2d6782de43d103b6d3fad73e1584790c60ec7072f68926dd8"
+    ],
+    "originKey": "point-v2:0bbdd37fec17b97d95d9577b7f37420bf8561fd81822cd510651c894c5f15455"
+  },
+  {
+    "id": "3272fda2-5404-4ca4-9df5-ffad5623afe3",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "基尔霍夫电流定律（KCL）",
+    "sourceIds": [
+      "f9dee18841c27b136a6a87a025adbdd2692608ec20b44d21d9dbd233b3902c0f"
+    ],
+    "originKey": "point-v2:2e593f84247dce307d98d2381fdfe68111dd85da538f3ac37a023821d7860e87"
+  },
+  {
+    "id": "90b0c03c-29c8-428f-8518-67e739e022d7",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "广义节点与封闭面",
+    "sourceIds": [
+      "f9dee18841c27b136a6a87a025adbdd2692608ec20b44d21d9dbd233b3902c0f"
+    ],
+    "originKey": "point-v2:0aa7a0ecc8f66017a3217c9d145a5d6a8820e4661585740a7f971d361394ac99"
+  },
+  {
+    "id": "cedf2869-8ddc-486c-8b74-d867cc62e208",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "基尔霍夫电压定律（KVL）",
+    "sourceIds": [
+      "7022bb58e748124ee431ebc0e44fb8704d8dea307997998e796f18493104b5b7"
+    ],
+    "originKey": "point-v2:73d8789f370868d7d1ace69b3badda938eca75d7f9ec4bbb10f02477eff79ec7"
+  },
+  {
+    "id": "6ff037dc-f6de-4f65-84cf-94ff10b61365",
+    "chapter": "功率、能量与基尔霍夫定律",
+    "name": "两点间电压与路径无关",
+    "sourceIds": [
+      "7022bb58e748124ee431ebc0e44fb8704d8dea307997998e796f18493104b5b7"
+    ],
+    "originKey": "point-v2:1529306d615db119420396df159e0a8a1c5ec0755c152a2b5b32460a792140b9"
+  },
+  {
+    "id": "4a4dc6d8-90c8-4812-beb4-543bbc3683bc",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "电阻元件（VCR）",
+    "sourceIds": [
+      "49bb3f0b25687384e52b413fad967eaff11bb61c6e1fbfa8f89e761df257c8e8"
+    ],
+    "originKey": "point-v2:27e744dd35356883380a46fb34eeefc101c66f7dc9ff733e504c6b27ab7f0150"
+  },
+  {
+    "id": "d8e3a657-5da4-4431-a2c9-08465ba54ab6",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "欧姆定律与参考方向",
+    "sourceIds": [
+      "49bb3f0b25687384e52b413fad967eaff11bb61c6e1fbfa8f89e761df257c8e8"
+    ],
+    "originKey": "point-v2:ee5b58d0a021f2260628ed39572a6c7513ded60ecdfa61ed4501242d9b51f325"
+  },
+  {
+    "id": "95fad524-bf4d-4b49-a485-54d515d7aac7",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "电导",
+    "sourceIds": [
+      "49bb3f0b25687384e52b413fad967eaff11bb61c6e1fbfa8f89e761df257c8e8"
+    ],
+    "originKey": "point-v2:0e422bdad811f6541dc9f36360e9768b275f90389460bee0c7f071d19fc2c0e0"
+  },
+  {
+    "id": "f49c1b70-9595-4110-835f-0fd2451fec92",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "开路与短路",
+    "sourceIds": [
+      "49bb3f0b25687384e52b413fad967eaff11bb61c6e1fbfa8f89e761df257c8e8"
+    ],
+    "originKey": "point-v2:8697beb330fdbc7edef0634d019c7f6ee694feb2c7fd71c846ee8bee0778cfce"
+  },
+  {
+    "id": "d45121c8-d816-4e3e-8316-97e3c01a1416",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "电阻吸收的功率",
+    "sourceIds": [
+      "830993454c235e0af172f343eab4a190d9f589aa9d8c6d6c6a7c71c94962c321"
+    ],
+    "originKey": "point-v2:f208f8e3db9e4447d20a9de272e256bd5175c46321f3b69143ab6a28befa1231"
+  },
+  {
+    "id": "f49f3d05-5eb0-4245-9051-85cfe8bce2b4",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "负电阻",
+    "sourceIds": [
+      "830993454c235e0af172f343eab4a190d9f589aa9d8c6d6c6a7c71c94962c321"
+    ],
+    "originKey": "point-v2:b6a7ebb5568dd7b282b21bbb31b542147da0f47ff081093818d4defd46208ca2"
+  },
+  {
+    "id": "ec3fe1c8-87d6-47c8-93fc-8e21fd631b26",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "端口",
+    "sourceIds": [
+      "451899c125cc980f326cc573a42a3eb38ac733a86081d4a4043c622169106787"
+    ],
+    "originKey": "point-v2:d1574fc64e8de7e192650bd15165901e5740ec97088d4ce8570d741d7cd6b2a7"
+  },
+  {
+    "id": "079804df-850b-492b-84cc-caa1a2bf747e",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "多端电阻",
+    "sourceIds": [
+      "451899c125cc980f326cc573a42a3eb38ac733a86081d4a4043c622169106787"
+    ],
+    "originKey": "point-v2:eb52a6bdb64ae8429c91c6953d83bd8388a0ef1b5d868800d7a5c19f0c79bb69"
+  },
+  {
+    "id": "d90fdd95-da75-4bb6-8fb8-3290d899d6ea",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "电流热效应与额定值",
+    "sourceIds": [
+      "fead7c0a89872f105dbf7d0689b8d70d8f8ed4826d8edc6d615a586cd8b961f4"
+    ],
+    "originKey": "point-v2:e43f772ffd07c0c44f1e982c4fd1b9cf7af356cef459da88b02582be6b8a84d2"
+  },
+  {
+    "id": "a23b3f33-c53a-40a9-a196-55217eb4d145",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "电源与元件分类",
+    "sourceIds": [
+      "228004365018291593a59d6d378dc1bc04815e9acb100f2c0a795eb3b2e49bac"
+    ],
+    "originKey": "point-v2:2dfc0869457038be9b64bac16a5ee511f691a236a52e8d6501afad22ae7dfd82"
+  },
+  {
+    "id": "72f1807d-29f0-410c-af73-47110a0b0e5a",
+    "chapter": "电路基本规律：电阻、功率与电源",
+    "name": "受控源",
+    "sourceIds": [
+      "228004365018291593a59d6d378dc1bc04815e9acb100f2c0a795eb3b2e49bac"
+    ],
+    "originKey": "point-v2:b7a7efb0ce45faa255502cdd56dce054cfdd4d1f0922a3c01df34b9948ee6bfb"
+  },
+  {
+    "id": "5be639f2-0f4f-4ce1-bc86-d3acfc2295fd",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "理想电压源",
+    "sourceIds": [
+      "f7a715c0ab4175c05f8b6ec4be633cdcb4153fd851466168e6cb0aa720a2407e"
+    ],
+    "originKey": "point-v2:98ae453bf41e371acff9744826ef52784961e1690332e7b8bbca19050e567850"
+  },
+  {
+    "id": "a560abc0-a882-4b34-8e9a-075cf6e6664c",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "理想电流源",
+    "sourceIds": [
+      "99bdc4b61ea3e437259fd481b0f15bd597b052d4cae9836811c9da92d1b6d7a7"
+    ],
+    "originKey": "point-v2:a365d6d57520dacedb6a2997b87f8f26d44b5b6f2610e12b6d0e031e8e83c18b"
+  },
+  {
+    "id": "e546bf73-f768-4b82-b5a8-04291efc6669",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "参考点与电位",
+    "sourceIds": [
+      "9e541542b2fdbe85b34158b752e4a2f576a7e0da4c59cb0b8b7528d46d9e47e5"
+    ],
+    "originKey": "point-v2:a24b33fa6e3dcfe7eb46377e1e09691289eaa2419fffcd64f834cc981b487a3c"
+  },
+  {
+    "id": "2946ebb9-43c7-4e9e-b2a8-fd8e8ada8f7b",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "受控源",
+    "sourceIds": [
+      "ece4b7c0fdaec9f82247216a56bd8b8f7c2aefe12ec3daf440d0816fee75fb69"
+    ],
+    "originKey": "point-v2:04f5e9973334c6b504fd8138a46f972fc54b5381700d78a756b133fedf48b129"
+  },
+  {
+    "id": "6dabfd10-4799-493a-908e-21d8784ce763",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "电路等效（VCR 判据）",
+    "sourceIds": [
+      "308c4ae50e3c1d42de3bacf52fbd953ade7e45c3d4c0c1168cb5698abdae5aba"
+    ],
+    "originKey": "point-v2:347d20e28c0106e8e9e109e89e58cc59b8d17ec34f4b7bb66ee2cc61be36bbcb"
+  },
+  {
+    "id": "2c5e3fbc-2c8f-4a34-8ea8-cc12e5b089d4",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "电阻的串联与并联",
+    "sourceIds": [
+      "729621f8449f1955ae342c156b65f4455217d189c5e98f10639e7e66a10e708a"
+    ],
+    "originKey": "point-v2:a85ec31d848ed6c12f8ff33b34cf02957986f9dbfeae2a9710bc7e6553248b81"
+  },
+  {
+    "id": "5e69a53d-9718-4774-9f90-35e3c2a248f7",
+    "chapter": "第1章：电源、参考点与电路等效",
+    "name": "独立源的功率发出与吸收",
+    "sourceIds": [
+      "99bdc4b61ea3e437259fd481b0f15bd597b052d4cae9836811c9da92d1b6d7a7"
+    ],
+    "originKey": "point-v2:30c5e3b48ce0b7595f83dd0b1322ec15aae74f6768b4e4d32f460f676b2ad18e"
+  },
+  {
+    "id": "ee488533-6197-4464-9e3a-f1c32376c8e0",
+    "chapter": "电路等效变换与运放基础",
+    "name": "△形与Y形等效变换",
+    "sourceIds": [
+      "7afed3620eca314e8d1c9e064d65e87c5374ad1d1f4bab4b4c0a69b89cc2ab92"
+    ],
+    "originKey": "point-v2:50d37b267ece6242b62b95e08a05aa58f04069d3bc8f58bd6b7439c035bc63ae"
+  },
+  {
+    "id": "5e4a77b0-0fa6-4f58-917c-64e6a725a61f",
+    "chapter": "电路等效变换与运放基础",
+    "name": "△-Y变换公式",
+    "sourceIds": [
+      "7afed3620eca314e8d1c9e064d65e87c5374ad1d1f4bab4b4c0a69b89cc2ab92"
+    ],
+    "originKey": "point-v2:e0508d26a1f886bccf649efe6e3db472be571e424833fdc420aeb59dacb9f77b"
+  },
+  {
+    "id": "ba6980c1-b3da-45d5-85d5-c0fe3f354454",
+    "chapter": "电路等效变换与运放基础",
+    "name": "等效电阻与外施电源法",
+    "sourceIds": [
+      "9a686426403bd0b4668f7a246cf025d21b902e8d56b7f7b2558e4224cc647e72"
+    ],
+    "originKey": "point-v2:4a1907a0a6a0f5673b1ebc12b7081f22a7f381f41bf2fb999084be514820f7dd"
+  },
+  {
+    "id": "3582bb04-704e-4adf-9761-645f628f75e5",
+    "chapter": "电路等效变换与运放基础",
+    "name": "含受控源电路的等效电阻",
+    "sourceIds": [
+      "9a686426403bd0b4668f7a246cf025d21b902e8d56b7f7b2558e4224cc647e72"
+    ],
+    "originKey": "point-v2:70df173e384c805121471dcf6dbc5c3ce2961f0263751ac5018c614ca3312d10"
+  },
+  {
+    "id": "9d0bb47e-c45a-4570-bf25-767b4a290ca2",
+    "chapter": "电路等效变换与运放基础",
+    "name": "独立源的串并联等效",
+    "sourceIds": [
+      "cb5ea4f6ddb2431e327eaf9adead1b2e36829e198b007ba27feb3b627aafdd26"
+    ],
+    "originKey": "point-v2:cc45894fde80248a134d25a2a5bff5fe351ec49adc2d1ae2d23bb1190b29ecab"
+  },
+  {
+    "id": "5069e7ee-e722-4c3e-ba66-67419963f057",
+    "chapter": "电路等效变换与运放基础",
+    "name": "电源与外接元件的对外等效",
+    "sourceIds": [
+      "cb5ea4f6ddb2431e327eaf9adead1b2e36829e198b007ba27feb3b627aafdd26"
+    ],
+    "originKey": "point-v2:6a32ed096e27678ab13d57ba22d9a999e69c2cc82abd788cf0238a7bdbf7fde2"
+  },
+  {
+    "id": "c8a16a51-70bb-4bf4-a567-917a8e149cf8",
+    "chapter": "电路等效变换与运放基础",
+    "name": "实际电源的两种电路模型",
+    "sourceIds": [
+      "6c1aa66ed58f4f34557001c7b1997c9a46f65765e35e2001f11da6af0f5f96a1"
+    ],
+    "originKey": "point-v2:9189af299d91b6a29aa60ef56083775cc5498c46531accc5837273889bef77f0"
+  },
+  {
+    "id": "dc812bea-5fc8-4361-8714-cb517b16e059",
+    "chapter": "电路等效变换与运放基础",
+    "name": "电压源模型与电流源模型的互换",
+    "sourceIds": [
+      "6c1aa66ed58f4f34557001c7b1997c9a46f65765e35e2001f11da6af0f5f96a1"
+    ],
+    "originKey": "point-v2:f470200dba11d598139a503de7f67d9d607957dfca4e685239d9ccc782ad2945"
+  },
+  {
+    "id": "d8ad5c6c-21a0-4c46-b47d-8959a2b21c41",
+    "chapter": "电路等效变换与运放基础",
+    "name": "无伴电源与电源的等效转移",
+    "sourceIds": [
+      "85930f194196531d0f421a5eef76c96e234c3e20369561b73b547c3067ecba30"
+    ],
+    "originKey": "point-v2:b65af7e04a7a109870f3462ede4e269bbce4704402bdb11210c21c619758f968"
+  },
+  {
+    "id": "33c60be7-af4c-413c-90dc-629f6e3d7dfa",
+    "chapter": "电路等效变换与运放基础",
+    "name": "理想运算放大器模型",
+    "sourceIds": [
+      "f950de7ccee2ba3154b87858c03cc37fe4fbeee74a08cab722690530d40ec6e9"
+    ],
+    "originKey": "point-v2:89e5b84ca77fe1f01e83fa6909ace8427cf09eb075d05969933ebcb57ede1ae7"
+  },
+  {
+    "id": "0a66a598-25fe-498b-8344-f1c65e691e8d",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "反相输入",
+    "sourceIds": [
+      "44495c4c0b3e9d83ebe171abc6fa33b2c15eeec0010da0e8c98fd7ae9107f978"
+    ],
+    "originKey": "point-v2:3a2db5ede8c57e32029b3ba2bb9133d76d5f72ebc2b7a500488367fa751841d9"
+  },
+  {
+    "id": "b120b7dd-1a0e-43c9-977d-0f6d3d4384ba",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "同相输入",
+    "sourceIds": [
+      "44495c4c0b3e9d83ebe171abc6fa33b2c15eeec0010da0e8c98fd7ae9107f978"
+    ],
+    "originKey": "point-v2:2e38d3ec2318bf7c5d40f87902559d42ec5079d785ddb5d75b601f317038d3a2"
+  },
+  {
+    "id": "8ca2435f-8e6c-4443-a7fb-0acab730ced1",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "差分输入",
+    "sourceIds": [
+      "44495c4c0b3e9d83ebe171abc6fa33b2c15eeec0010da0e8c98fd7ae9107f978"
+    ],
+    "originKey": "point-v2:abac1e415d42138099865c7fdef100cd87f669328fcbfa01df1e9f27431f1520"
+  },
+  {
+    "id": "f6ea9625-c460-4877-94ab-a1cb5239368a",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "虚短路与虚断路",
+    "sourceIds": [
+      "4f71ec8392aeff3a983ef58dbaf6113c7548fe6c0bfc495c2444d4327d335b8c"
+    ],
+    "originKey": "point-v2:43ba4e37d125ce226f7c44bb53947b78132e2bb0edeb7b3a3c118f6785df53b1"
+  },
+  {
+    "id": "f296514b-07c4-4c56-9e34-cc3e477281a2",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "虚地",
+    "sourceIds": [
+      "5ecc781a5fe105ab38483ef9fef6fcd9bf9984c78ad2e7970bb361ce17e6187f"
+    ],
+    "originKey": "point-v2:59b8ef6740dc50053e89d7d72718c2ea21a1226d3316045a21b911cee32415c9"
+  },
+  {
+    "id": "689cea8e-7d0f-442e-a847-f64804880901",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "反相输入比例运算",
+    "sourceIds": [
+      "5ecc781a5fe105ab38483ef9fef6fcd9bf9984c78ad2e7970bb361ce17e6187f"
+    ],
+    "originKey": "point-v2:77bc3cac474d86935c9ad585bec30914a3101882f33359a3f78071bf4362d247"
+  },
+  {
+    "id": "64553117-f92f-42d4-9981-4840f9f9e11e",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "反相加法运算",
+    "sourceIds": [
+      "5ecc781a5fe105ab38483ef9fef6fcd9bf9984c78ad2e7970bb361ce17e6187f"
+    ],
+    "originKey": "point-v2:9d60daa0d1080eb85f9fbaf085defa3ae2fb7a5148c83719027d323583659013"
+  },
+  {
+    "id": "9bf20af6-a8d2-44a2-89e5-8b413c5d2dd4",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "电路模型与理想化",
+    "sourceIds": [
+      "4f71ec8392aeff3a983ef58dbaf6113c7548fe6c0bfc495c2444d4327d335b8c"
+    ],
+    "originKey": "point-v2:e4d65a6faf51670aa1aee4cf9f23ddfffe31a730c46b20f5d33abeffa59265a7"
+  },
+  {
+    "id": "271741b3-baa5-4e7a-81a8-43c728fe17ba",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "参考方向与功率正负",
+    "sourceIds": [
+      "4f71ec8392aeff3a983ef58dbaf6113c7548fe6c0bfc495c2444d4327d335b8c"
+    ],
+    "originKey": "point-v2:cfce7672273dc7721ccfd9a55ae39f5b85b35fb83db0d832072ba53f4956c5d3"
+  },
+  {
+    "id": "749f3a56-0f64-4b8e-804e-6bda2bdc41df",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "KCL 与 KVL",
+    "sourceIds": [
+      "4f71ec8392aeff3a983ef58dbaf6113c7548fe6c0bfc495c2444d4327d335b8c"
+    ],
+    "originKey": "point-v2:9da65f3e125722452859c813805cf8970d83f131d11ee2b71caee19250f3538c"
+  },
+  {
+    "id": "da49aaed-e26b-47bd-8f3a-31535c2c5600",
+    "chapter": "运放输入方式、典型运算与本章小结",
+    "name": "等效与电源互换",
+    "sourceIds": [
+      "4f71ec8392aeff3a983ef58dbaf6113c7548fe6c0bfc495c2444d4327d335b8c"
+    ],
+    "originKey": "point-v2:f4ef842b8c73b8e1038d10e113d56c2e95cca7989d8ae40929e8d8855b71d76d"
+  }
+]

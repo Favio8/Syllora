@@ -9,7 +9,7 @@ import { SylloraService } from '../src/syllora.ts'
 import type { StructuredCallClient } from '@syllora/course-builder'
 const roots:string[]=[]
 afterEach(async()=>{vi.restoreAllMocks();await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})))})
-const config={providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,defaultMode:'quick' as const}
+const config={providerId:'fixture',model:'fixture',baseUrl:'http://127.0.0.1:9/v1',apiKey:'fixture-only',apiKeyEnv:null,temperature:0,maxConcurrency:1,digest:false,defaultMode:'quick' as const}
 function lecture(sources:any[]){return {chapter:sources[0].section.split(' / ').at(-1).slice(0,60),intro:{text:'合成章节导读',sourceIds:sources.map(source=>source.id)},concepts:sources.filter(source=>source.kind!=='heading'&&source.text.length>=4).map((source,i)=>({name:`合成概念 ${i}`,text:'合成解释',sourceIds:[source.id],quote:source.text.slice(0,40)})),examples:[],connections:[],analogies:[]}}
 async function settle(projects:SylloraProjects,jobId:string){for(let i=0;i<300;i++){const state=await projects.handle('state',{}) as any,job=state.jobs.find((job:any)=>job.id===jobId);if(job&&job.state!=='running')return {state,job};await new Promise(resolve=>setTimeout(resolve,10))}throw new Error('fixture Job did not settle')}
 async function seeded(configProvider:()=>Promise<typeof config>=async()=>config) {

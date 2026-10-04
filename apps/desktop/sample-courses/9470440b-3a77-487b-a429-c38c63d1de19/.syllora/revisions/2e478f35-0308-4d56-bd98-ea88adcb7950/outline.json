@@ -1,0 +1,29 @@
+[
+  {
+    "id": "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+    "chapter": "1.1 矩阵及其运算",
+    "name": "矩阵乘法",
+    "sourceIds": [
+      "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+    ],
+    "originKey": "89255bdb0bb1ac120e217b52a89126fc0d853962cf33e76567d8e47bc3d0580e"
+  },
+  {
+    "id": "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+    "chapter": "1.2 行列式",
+    "name": "行列式的性质",
+    "sourceIds": [
+      "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488"
+    ],
+    "originKey": "707dfc1692b07694c9e641025f6f8f8a580fcf77596d237f6004d9c130d91795"
+  },
+  {
+    "id": "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd",
+    "chapter": "1.3 线性方程组与矩阵的秩",
+    "name": "线性方程组解的判定",
+    "sourceIds": [
+      "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79"
+    ],
+    "originKey": "fae113346a262c4f096b3cffd21f55a19baa9e66871b96b49d3204a05640cce3"
+  }
+]

@@ -39,7 +39,7 @@ export default function AgentPermissionPicker({ disabled = false, onSaved }: { d
     value={preset}
     disabled={disabled || busy || presets.length === 0}
     placeholder="权限：加载中…"
-    options={presets.map(item => ({ value: item.id, label: `权限：${item.name}`, description: item.description }))}
+    options={presets.map(item => ({ value: item.id, label: `权限：${item.name}` }))}
     onChange={value => void choose(value)}
   />;
 }

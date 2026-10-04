@@ -1,0 +1,520 @@
+/*
+ * UI 开发覆盖样式（本项目新增，不属于主应用）。
+ * 所有对主应用样式的调整集中在这里，避免改动上游逐字节一致的 CSS 文件。
+ * 在 globals.css 之后加载，因此同等优先级下后者生效。
+ */
+
+/* 资料库页：工具栏右侧「添加资料」+「所有课程」下拉成组，按钮在下拉左边 */
+.catalog-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/*
+ * 对话输入框底部工具栏左组（上传资料 / 练习 / Agent 管理 / 权限）：
+ * 无边框、透明底色的文本按钮。右组（模型选择、发送键）不在此范围。
+ * 选择器在上游规则（.integrated-shell .composer-toolbar …）前缀上再加 .composer-tools，
+ * 以更高的特异性稳定覆盖，不依赖加载顺序。深色模式上游没有对它们单独上色，所以无需另写。
+ */
+.integrated-shell .composer-toolbar .composer-tools button.button,
+.integrated-shell .composer-toolbar .composer-tools .dropdown-trigger {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 悬停：只变文字色（原来是文字+边框转蓝），保持「文本按钮」的轻量感，不出现底色块 */
+.integrated-shell .composer-toolbar .composer-tools button.button:hover:not(:disabled),
+.integrated-shell .composer-toolbar .composer-tools .dropdown-trigger:hover,
+.integrated-shell .composer-toolbar .composer-tools .dropdown-trigger.is-open {
+  background: transparent;
+  border: 0;
+  color: var(--blue);
+}
+
+/* 计划管理页「目标日期」：由整行宽的输入改为窄按钮式日期框，点击直接弹日历 */
+.integrated-shell .sy-plan-input .sy-plan-deadline {
+  grid-column: auto;
+  max-width: 190px;
+}
+.integrated-shell .sy-plan-input .sy-plan-deadline input[type="date"] {
+  cursor: pointer;
+  caret-color: transparent;
+}
+
+/*
+ * 计划管理页「生成计划草案」：原为整行宽 + space-between（文字靠左、箭头靠右）。
+ * 改为固定窄宽度并居中，文字与箭头作为一组居中；整体放在容器中间。
+ */
+.integrated-shell .sy-plan-submit {
+  width: 180px;
+  max-width: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* 计划管理页「待确认草案」：与上方「生成计划草案」按钮拉开间距（后续内容随文档流下移） */
+.integrated-shell .sy-manage-body h2.sy-draft-heading { margin-top: 28px; }
+
+/*
+ * 通知入口（左栏）：常驻，外观与导航项（.rail-button）完全同款——纯图标 44×44、
+ * 9px 圆角、灰色图标、悬停浅底变蓝。胶囊内的文字与未读徽标默认隐藏，具体文字
+ * （整理中 x/y、失败数、没有进行中的任务等）由组件以侧栏同款 .rail-tooltip 在
+ * 悬停/聚焦时浮出。这里清掉胶囊原「药丸」外观（边框/内边距/阴影/通栏圆角），
+ * 几何与悬停底色交给 rail-button 类（含未来对它的任何主题调整）。
+ * 点击进入整页「任务」视图（TasksPage），不再弹出浮层。当前在任务页时 .active 选中态
+ * 沿用 .rail-button.active（浅蓝底 + 左侧蓝条）。
+ */
+.sidebar .notification-dock {
+  position: static;
+  align-items: center;
+  margin: 9px 0 0;
+}
+.sidebar .notification-capsule {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #929bab;
+  box-shadow: none;
+}
+.sidebar .notification-capsule:hover { box-shadow: none; }
+.sidebar .notification-capsule .notification-capsule-icon { color: inherit; }
+.sidebar .notification-capsule.is-running .notification-capsule-icon { color: var(--blue); }
+.sidebar .notification-capsule.is-failed .notification-capsule-icon { color: #a12727; }
+.sidebar .notification-capsule-text,
+.sidebar .notification-capsule-badge { display: none; }
+
+/* 任务页（TasksPage）：整页任务列表，卡片外观与资料库页保持一致的设计令牌 */
+/*
+ * 右侧学习面板三个标签页（今日 / 学习 / 资料）的按钮统一规格。
+ * 上游三处各写一套：今日页按钮 40px 高、14px 字；学习页（.sy-outline-actions>button）
+ * 与资料页（.sy-row>button）37px 高、12px 字，字号与间距都不一致。
+ * 这里统一为：整行等宽、40px 高、12px 字、1px 描边、7px 圆角、白底；
+ * 纵向间距统一 10px；文字统一靠左，行尾的箭头图标靠右；主按钮（.button.small.primary，
+ * 如「更新课程讲义」）保持蓝底白字。
+ * 选择器带 .sy-right .panel-body-section 前缀，特异性高于上游规则，不依赖加载顺序。
+ */
+.sy-right .panel-body-section .sy-row,
+.sy-right .panel-body-section .sy-outline-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.sy-right .panel-body-section .sy-row > button,
+.sy-right .panel-body-section .sy-outline-actions > button,
+.sy-right .panel-body-section > button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 9px 14px;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+.sy-right .panel-body-section .sy-row > button > svg:last-child,
+.sy-right .panel-body-section .sy-outline-actions > button > svg:last-child,
+.sy-right .panel-body-section > button > svg:last-child {
+  margin-left: auto;
+}
+.sy-right .panel-body-section > button + button { margin-top: 10px; }
+.sy-right .panel-body-section .sy-row > button:hover:not(:disabled),
+.sy-right .panel-body-section .sy-outline-actions > button:hover:not(:disabled),
+.sy-right .panel-body-section > button:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.sy-right .panel-body-section .sy-row > button.button.primary,
+.sy-right .panel-body-section .sy-outline-actions > button.button.primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+.sy-right .panel-body-section .sy-row > button.button.primary:hover:not(:disabled) {
+  color: #fff;
+}
+/*
+ * 非文件夹课程的「上传资料」（.sy-upload，来自 syllora.css）：上游是虚线大框 + 竖排 + 蓝字，
+ * 其中 color 带 !important，所以这里也要用 !important 才压得过。其余属性（边框、内边距、外边距、
+ * 间距、对齐）已被上面的统一规格覆盖，这里只补上游没被覆盖到的排布方向与文字色。
+ */
+.sy-right .panel-body-section .sy-row > button.sy-upload {
+  flex-direction: row;
+  color: var(--ink) !important;
+}
+.sy-right .panel-body-section .sy-row > button.sy-upload:hover:not(:disabled) {
+  color: var(--blue) !important;
+}
+/* 深色主题：亮蓝底配深蓝字（白字对比度仅 2.2，不达标），与上游其它深色主按钮一致 */
+:root[data-theme="dark"] .sy-right .panel-body-section .sy-row > button.button.primary,
+:root[data-theme="dark"] .sy-right .panel-body-section .sy-outline-actions > button.button.primary,
+:root[data-theme="dark"] .sy-right .panel-body-section .sy-row > button.button.primary:hover:not(:disabled) {
+  color: #15233c;
+}
+
+.tasks-page .tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 880px;
+  margin-top: 28px;
+}
+.task-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+.task-card.running { border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+.task-card.failed { border-color: #e0b4ae; }
+.task-card-icon { display: inline-flex; margin-top: 2px; color: var(--blue); }
+.task-card.failed .task-card-icon { color: #a12727; }
+.task-card.succeeded .task-card-icon { color: var(--green); }
+.task-card.cancelled .task-card-icon { color: var(--muted); }
+.task-card-head { display: flex; align-items: center; gap: 10px; }
+.task-card-head strong { font-size: 14px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.task-state { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); }
+.task-state.failed { background: #a1272714; color: #a12727; }
+.task-state.succeeded { background: color-mix(in srgb, var(--green) 12%, transparent); color: var(--green); }
+.task-state.cancelled { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.task-card-main p { margin: 6px 0 0; font-size: 12px; line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
+.task-progress { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.task-progress-track { flex: 1; max-width: 320px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--blue) 12%, transparent); overflow: hidden; }
+.task-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width .3s; }
+.task-progress small, .task-meta { font-size: 11px; color: var(--muted); }
+.task-meta { display: block; margin-top: 8px; }
+.task-card-actions { display: flex; gap: 8px; }
+
+/*
+ * 左侧图标栏常驻：窄窗口（≤760px）下不再折叠成「汉堡按钮 + 抽屉」。
+ * 上游 integrated.css 在该断点用 .integrated-shell 前缀（最高 0,3,0）把网格收成单列，
+ * 把 .sidebar.icon-rail 以 translateX(-100%) 移出屏幕；workbench.css 还有一条
+ * .sidebar { display: none } 直接隐藏整个栏。这里用三类前缀（0,3,0 起，后代 0,4,0）
+ * + !important 全面压过（含 display 复位为桌面端的 flex），不依赖加载顺序。
+ */
+@media (max-width: 760px) {
+  .integrated-shell.sy-app.app-shell {
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+  }
+  .integrated-shell.sy-app.app-shell aside.sidebar.icon-rail {
+    display: flex !important;
+    position: static !important;
+    transform: none !important;
+    z-index: 20 !important;
+    width: 76px !important;
+    height: auto !important;
+    left: auto !important;
+    top: auto !important;
+    grid-column: 1 !important;
+    grid-row: 1 / -1 !important;
+    box-shadow: none !important;
+  }
+  .integrated-shell.sy-app.app-shell > .sy-top,
+  .integrated-shell.sy-app.app-shell > .topbar {
+    grid-column: 2 / -1 !important;
+    grid-row: 1 !important;
+  }
+  .integrated-shell.sy-app.app-shell > .sy-main,
+  .integrated-shell.sy-app.app-shell > .view-stage {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+  }
+  .integrated-shell.sy-app.app-shell .mobile-only,
+  .integrated-shell.sy-app.app-shell .mobile-backdrop {
+    display: none !important;
+  }
+}
+
+/*
+ * 设置弹窗里的主按钮（如「导出诊断日志」）：与同行的次要按钮同高（.button.small = 12px / 8px 12px 内边距），
+ * 靠蓝底白字区分主次。上游深色规则 :root[data-theme=dark] .integrated-shell :is(.settings-secondary-scroll button)
+ * 会把所有按钮压成次要色，所以深色下需要再写一条更高特异性的规则，配色与上游其它深色主按钮一致。
+ */
+.settings-secondary-scroll .sy-row > button.button.primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+:root[data-theme="dark"] .integrated-shell .settings-secondary-scroll .sy-row > button.button.primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #15233c;
+}
+:root[data-theme="dark"] .integrated-shell .settings-secondary-scroll .sy-row > button.button.primary:hover:not(:disabled) {
+  background: var(--blue-deep);
+  color: #15233c;
+}
+
+/*
+ * 复习页「x 个知识点待巩固」：概览条由静态条改为按钮，点击打开居中的弹窗（复用 Modal，wide），
+ * 具体待巩固的知识点卡片放在弹窗里（原页面里的 3 列卡片网格移除）。
+ */
+.review-overview-button {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.review-overview-button:hover { border-color: var(--blue); }
+.review-overview-button > svg:last-child { margin-left: auto; flex-shrink: 0; color: var(--muted); }
+
+/*
+ * 弹窗里的知识点列表：标题栏固定、列表在弹窗内滚动；列数随宽度自适应（580px 宽的弹窗里两列，
+ * 窄屏一列）。卡片内边距与标题/按钮上边距比页面里的 3 列网格收紧一些。
+ */
+.modal .review-modal-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  max-height: 62dvh;
+  overflow-y: auto;
+}
+.modal .review-modal-list .review-detail-card { padding: 18px; }
+.modal .review-modal-list .review-detail-card h2 { margin-top: 14px; font-size: 15px; }
+.modal .review-modal-list .review-detail-card .button { margin-top: 16px; }
+
+/*
+ * 主页「你的学习足迹」：标题改为整行下拉按钮，点击后才展开统计、热力图与趋势（默认收起）。
+ * 折叠行外观与复习页的 .review-board-toggle 同款（描边圆角行 + 右侧箭头、展开时箭头旋转 180°），
+ * 颜色全部走设计令牌（--line / --white / --ink / --muted / --sidebar），深色主题自动适配。
+ * 展开区复用上游 reviewReveal 动画（integrated.css），减少动效偏好由全局规则关闭。
+ */
+.learning-statistics .stats-disclosure-heading { margin: 0; font-size: inherit; }
+.learning-statistics .stats-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.learning-statistics .stats-disclosure:hover { background: var(--sidebar); }
+.learning-statistics .stats-disclosure > svg { flex-shrink: 0; color: var(--muted); transition: transform 0.2s ease; }
+.learning-statistics .stats-disclosure[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.learning-statistics .stats-disclosure-body { margin-top: 16px; animation: reviewReveal 0.2s ease; }
+.learning-statistics .stats-disclosure-tools { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+
+/*
+ * 复习页「错题记录 · N 题」：由知识点下方展开的 <details> 改为标准按钮（.button.small），
+ * 点击打开居中的弹窗（复用 Modal，wide），错题列表放在弹窗里。弹窗渲染在 ReviewBoards 层、
+ * 不在 .sy-review 里面，所以不会吃到 syllora.css 里 .sy-review p / .sy-review button 的
+ * 外边距与字号。标题栏固定、列表在弹窗内滚动；正文保持原来的 12px 小字，说明文字用令牌色
+ * （--muted），深色主题自动适配。
+ */
+.modal .wrong-modal-list {
+  display: grid;
+  gap: 14px;
+  max-height: 62dvh;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.modal .wrong-modal-list .sy-question { margin-top: 0; }
+.modal .wrong-modal-list h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.modal .wrong-modal-list p { margin: 8px 0; color: var(--muted); }
+.modal .wrong-modal-list small { color: var(--muted); }
+.modal .wrong-modal-list blockquote {
+  margin: 10px 0 0;
+  padding: 8px 14px;
+  border-left: 2px solid var(--blue);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.modal .wrong-modal-list .sy-row { margin-top: 12px; }
+
+/*
+ * 虚拟课堂（ClassroomWorkspace.tsx）：主内容区居中一张输入框卡片，版式参考多智能体课堂界面：
+ * 顶部一行（左：头像 + 称呼；右：圆角输入条）、大输入区（空时叠一层灰色示例提示）、底部工具与提交。
+ * 颜色全部走设计令牌（--white / --line / --ink / --muted / --blue / --sidebar），深色主题自动适配。
+ *
+ * 上游有两条规则会压住输入控件：`.integrated-shell :is(input:not(…), textarea)`（灰底，特异性 0,5,1）
+ * 与 syllora.css 的 `.sy-app input:not(…)`（7px 圆角 + 1px 描边，0,3,1），都比本页选择器高，
+ * 所以输入控件的背景 / 描边 / 圆角 / 内边距 / 字号 / 颜色用 !important（与左栏常驻修复同一做法）。
+ */
+.classroom-workspace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 24px;
+  background: var(--sidebar);
+}
+.classroom-card {
+  width: min(900px, 100%);
+  padding: 22px 26px 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--white);
+  box-shadow: 0 14px 44px #1b2e590f;
+}
+.classroom-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.classroom-greeting {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.classroom-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--blue-light); color: var(--blue); }
+.classroom-greeting-text { font-size: 15px; color: var(--muted); }
+.classroom-greeting-text strong { color: var(--ink); font-weight: 600; }
+.classroom-greeting-more { display: inline-flex; color: var(--muted); }
+.classroom-bar { display: block; flex: 1; max-width: 520px; }
+.integrated-shell .classroom-card .classroom-bar-input {
+  display: block;
+  width: 100%;
+  height: 46px;
+  padding: 0 20px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--white) !important;
+  color: var(--ink) !important;
+  font-size: 14px !important;
+}
+.integrated-shell .classroom-card .classroom-bar-input::placeholder,
+.integrated-shell .classroom-card .classroom-input::placeholder { color: var(--muted); }
+
+.classroom-field { position: relative; display: block; margin-top: 16px; }
+.integrated-shell .classroom-card .classroom-input {
+  display: block;
+  width: 100%;
+  min-height: 190px;
+  padding: 4px 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-size: 17px !important;
+  line-height: 1.9;
+  resize: none;
+  cursor: text;
+}
+/* 上游聚焦规则 `.integrated-shell :is(input:not(…)×3, textarea, select):focus` 的 outline / box-shadow 都带
+   !important，特异性 (0,5,1)（:is() 取最高的参数 input:not(…)×3 = 0,3,1）。这里选择器是 (0,6,1)：
+   多一层 .classroom-workspace，并写成 textarea.classroom-input 补上元素类型一位。
+   聚焦反馈改由外层卡片承担（见下面的 :focus-within），输入区本身保持无框。 */
+.integrated-shell .classroom-workspace .classroom-card .classroom-field textarea.classroom-input:focus,
+.integrated-shell .classroom-workspace .classroom-card .classroom-field textarea.classroom-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+.classroom-card:focus-within { border-color: var(--blue); }
+/* 灰色示例提示：叠在空输入区上，不拦截点击（点击落到下面的输入框） */
+.classroom-hint {
+  position: absolute;
+  inset: 4px 2px auto 2px;
+  display: grid;
+  font-size: 17px;
+  line-height: 1.9;
+  color: var(--muted);
+  pointer-events: none;
+}
+.classroom-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.classroom-tools, .classroom-actions { display: flex; align-items: center; gap: 12px; }
+.classroom-tool {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--muted);
+}
+.classroom-tool:hover { color: var(--blue); border-color: var(--blue); }
+.classroom-tool.is-accent { border-color: transparent; background: var(--blue-light); color: var(--blue); }
+.classroom-deep {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--blue);
+  font-size: 14px;
+}
+.classroom-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+.classroom-submit:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; opacity: 1; }
+/*
+ * 深色主题：上游 `:root[data-theme=dark] .integrated-shell :is(.sy-panel button, .sy-modal button…)`
+ * 不会命中本页，所以主按钮用 --blue（深色下是亮蓝）配深蓝字，与其它深色主按钮一致。
+ */
+:root[data-theme="dark"] .classroom-submit:not(:disabled) { color: #15233c; }
+:root[data-theme="dark"] .classroom-submit:disabled { background: var(--dark-raised, #1c273a); }
+@media (max-width: 640px) {
+  .classroom-top { flex-direction: column; align-items: stretch; }
+  .classroom-bar { max-width: none; }
+  .classroom-footer { flex-direction: column; align-items: stretch; }
+  .classroom-actions { justify-content: flex-end; flex-wrap: wrap; }
+}
+
+/*
+ * 笔记页 AI 输入框（以及图谱搜索框）：聚焦时只由外层带边框的容器加粗，输入框本身不再自绘蓝色内框。
+ * 上游 integrated.css 本来有这条规则，但选择器带 .desktop-shell 前缀（只在桌面客户端生效），
+ * 浏览器里不命中，于是出现「容器边框加粗 + 里面又套一圈内框」。这里去掉 .desktop-shell 前缀，
+ * 并把 .sy-nw 换成更具体的路径，使特异性不低于上游那条 .desktop-shell 规则的对手
+ * （`.sy-nw :is(input:not(…)×4, textarea):focus-visible`，带 !important，0,6,1 起）。
+ * 容器自己的聚焦加粗（.sy-nw .sy-nw-composer:focus-within）不受影响。
+ */
+.sy-nw .sy-nw-composer textarea:focus,
+.sy-nw .sy-nw-composer textarea:focus-visible,
+.sy-nw .sy-graph-search input:focus,
+.sy-nw .sy-graph-search input:focus-visible {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}

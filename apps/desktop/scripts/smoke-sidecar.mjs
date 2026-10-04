@@ -84,8 +84,14 @@ try {
 
   const root = await fetch(`http://127.0.0.1:${cfg.port}/`)
   const html = await root.text()
-  const injected = html.includes('__SYLLORA__')
-  console.log('[smoke] GET /          →', root.status, 'token-injected:', injected)
+  // CR-16 之后未鉴权的 GET / 是会话票据页：它只提供 /api/session 换票表单，
+  // 绝不注入任何 __SYLLORA__ 引导信息。与 smoke-desktop 同一口径：验票据页 +
+  // Cookie 握手，而不是早已废弃的「token 注入 HTML」。
+  const servesLogin = root.ok && html.includes('/api/session') && !html.includes('__SYLLORA__')
+  console.log('[smoke] GET /          →', root.status, 'session-bootstrap:', servesLogin)
+  const handshake = await fetch(`http://127.0.0.1:${cfg.port}/api/session`, { method: 'POST', headers: { 'x-syllora-token': cfg.token }, signal: AbortSignal.timeout(8000) })
+  const cookie = handshake.headers.get('set-cookie')?.split(';')[0] ?? ''
+  console.log('[smoke] POST /api/session →', handshake.status, 'cookie:', cookie.startsWith('syllora_session=') ? 'syllora_session=' : cookie.slice(0, 24))
 
   const health = await fetch(`http://127.0.0.1:${cfg.port}/api/health`)
   console.log('[smoke] GET /api/health →', health.status, JSON.stringify(await health.json()).slice(0, 80))
@@ -105,7 +111,7 @@ try {
   const savedOk = saveProvider.ok && saveBody.error === undefined
   console.log('[smoke] POST settings.saveProvider →', saveProvider.status, savedOk ? 'OK' : JSON.stringify(saveBody).slice(0, 200))
 
-  const ok = root.ok && injected && health.ok && asset.ok && savedOk
+  const ok = servesLogin && cookie.startsWith('syllora_session=') && health.ok && asset.ok && savedOk
 
   quitting = true
   if (process.platform === 'win32') {

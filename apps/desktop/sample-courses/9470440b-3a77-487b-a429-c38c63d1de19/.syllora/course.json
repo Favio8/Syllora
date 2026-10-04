@@ -1,0 +1,524 @@
+{
+  "version": 1,
+  "courses": [
+    {
+      "id": "9470440b-3a77-487b-a429-c38c63d1de19",
+      "name": "线性代数入门",
+      "timezone": "Asia/Shanghai",
+      "archived": false,
+      "icon": "math",
+      "materials": [
+        {
+          "id": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+          "name": "sources/线性代数入门.md",
+          "fingerprint": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+          "path": "sources/线性代数入门.md",
+          "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+          "status": "ready",
+          "accepted": true,
+          "pages": 0,
+          "sources": [
+            {
+              "id": "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 1–1 · 字符 1–14",
+              "text": "## 1.1 矩阵及其运算\n",
+              "section": "1.1 矩阵及其运算",
+              "context": "1.1 矩阵及其运算",
+              "kind": "heading",
+              "start": 0,
+              "end": 14,
+              "nextId": "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            },
+            {
+              "id": "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 3–5 · 字符 16–446",
+              "text": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素。行数与列数都等于 n 的矩阵称为 n 阶方阵。如果两个矩阵的行数相同、列数也相同，并且对应位置上的元素全部相等，则称这两个矩阵相等。只有行数与列数分别相同的矩阵才能相加，矩阵加法就是对应元素相加；数与矩阵相乘（数乘）则是用这个数去乘矩阵的每一个元素。\n\n两个矩阵相乘有严格的前提：只有当左矩阵的列数等于右矩阵的行数时，二者才能相乘。设 A 是 m×s 矩阵、B 是 s×n 矩阵，则乘积 AB 是 m×n 矩阵，其第 i 行第 j 列的元素等于 A 的第 i 行各元素与 B 的第 j 列对应元素的乘积之和。矩阵乘法不满足交换律，一般来说 AB 与 BA 并不相等，甚至可能一个有意义而另一个没有意义；乘法满足结合律与分配律。把矩阵的行与列互换得到的矩阵称为转置矩阵，记为 Aᵀ。转置运算满足 (Aᵀ)ᵀ=A，以及 (AB)ᵀ=BᵀAᵀ——注意乘积的转置要把顺序颠倒。\n",
+              "section": "1.1 矩阵及其运算",
+              "context": "1.1 矩阵及其运算",
+              "kind": "paragraph",
+              "start": 15,
+              "end": 446,
+              "previousId": "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+              "nextId": "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02"
+            },
+            {
+              "id": "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 7–7 · 字符 448–458",
+              "text": "## 1.2 行列式\n",
+              "section": "1.2 行列式",
+              "context": "1.2 行列式",
+              "kind": "heading",
+              "start": 447,
+              "end": 458,
+              "previousId": "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+              "nextId": "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488"
+            },
+            {
+              "id": "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 9–11 · 字符 460–857",
+              "text": "由 n² 个元素按一定规则确定的一个数称为 n 阶行列式，记为 D。二阶行列式等于主对角线元素之积减去副对角线元素之积；三阶行列式也可以按类似的对角线法则展开。在 n 阶行列式中，把元素所在的第 i 行与第 j 列划去后，余下元素按原顺序构成的 n-1 阶行列式称为该元素的余子式，再乘以 (-1)^(i+j) 得到代数余子式。行列式按某一行（或某一列）展开，等于该行各元素与其代数余子式乘积之和。\n\n行列式具有若干重要性质：行列式与它的转置行列式相等，因此凡是关于行的性质对列同样成立；互换行列式的两行，行列式改变符号；行列式中某一行各元素都乘以同一个数 k，等于用 k 乘这个行列式；如果行列式中有两行完全相同或成比例，则行列式的值为零；把行列式的某一行各元素加上另一行对应元素的 k 倍，行列式的值不变。利用这些性质把行列式化为上三角形式，再用对角线元素相乘，是计算高阶行列式的常用方法。\n",
+              "section": "1.2 行列式",
+              "context": "1.2 行列式",
+              "kind": "paragraph",
+              "start": 459,
+              "end": 857,
+              "previousId": "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02",
+              "nextId": "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a"
+            },
+            {
+              "id": "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 13–13 · 字符 859–876",
+              "text": "## 1.3 线性方程组与矩阵的秩\n",
+              "section": "1.3 线性方程组与矩阵的秩",
+              "context": "1.3 线性方程组与矩阵的秩",
+              "kind": "heading",
+              "start": 858,
+              "end": 876,
+              "previousId": "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488",
+              "nextId": "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79"
+            },
+            {
+              "id": "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983",
+              "anchor": "sources/线性代数入门.md · 行 15–17 · 字符 878–1252",
+              "text": "含有 n 个未知量的线性方程组可以用矩阵形式 Ax=b 表示，其中 A 是系数矩阵，b 是常数项列向量。把常数项列并入系数矩阵得到的矩阵称为增广矩阵，记为 (A|b)。对方程组施行初等行变换——交换两行、用非零数乘某一行、把某一行加上另一行的倍数——相当于对增广矩阵做同样的行变换，变换后得到的方程组与原方程组同解。因此求解线性方程组的过程就是把增广矩阵化为阶梯形矩阵的过程。\n\n矩阵的秩定义为矩阵中非零子式的最高阶数。线性方程组有解的充要条件是系数矩阵的秩等于增广矩阵的秩，即 r(A)=r(A|b)。当 r(A)≠r(A|b) 时方程组无解。在有解的前提下，若秩等于未知量的个数 n，则方程组有唯一解；若秩小于 n，则方程组有无穷多解，此时可以把阶梯形中非主元列对应的未知量取作自由未知量，其余未知量由它们表示，通解中含有 n-r 个任意常数。\n",
+              "section": "1.3 线性方程组与矩阵的秩",
+              "context": "1.3 线性方程组与矩阵的秩",
+              "kind": "paragraph",
+              "start": 877,
+              "end": 1252,
+              "previousId": "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a"
+            }
+          ],
+          "warnings": [
+            "演示用示例资料；题目与问答由应用配置的 AI 在运行时生成。"
+          ],
+          "active": true,
+          "pageIssues": [],
+          "size": 3318,
+          "mtimeMs": 1790944547705.263,
+          "file": null,
+          "revisionNumber": 1,
+          "history": [],
+          "versionOf": null,
+          "parseError": null,
+          "document": null
+        }
+      ],
+      "points": [
+        {
+          "id": "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+          "chapter": "1.1 矩阵及其运算",
+          "name": "矩阵乘法",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+          ],
+          "originKey": "89255bdb0bb1ac120e217b52a89126fc0d853962cf33e76567d8e47bc3d0580e"
+        },
+        {
+          "id": "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+          "chapter": "1.2 行列式",
+          "name": "行列式的性质",
+          "sourceIds": [
+            "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488"
+          ],
+          "originKey": "707dfc1692b07694c9e641025f6f8f8a580fcf77596d237f6004d9c130d91795"
+        },
+        {
+          "id": "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd",
+          "chapter": "1.3 线性方程组与矩阵的秩",
+          "name": "线性方程组解的判定",
+          "sourceIds": [
+            "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79"
+          ],
+          "originKey": "fae113346a262c4f096b3cffd21f55a19baa9e66871b96b49d3204a05640cce3"
+        }
+      ],
+      "scope": [
+        "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+        "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+        "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd"
+      ],
+      "plan": {
+        "id": "6b78d09a-1cfe-4ae8-9c64-fcac97a833ff",
+        "version": 1,
+        "baseVersion": 0,
+        "scope": [
+          "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+          "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+          "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd"
+        ],
+        "tasks": [
+          {
+            "id": "a63197a8-3eb2-4fdf-9da6-9999762f1a2b",
+            "pointId": "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+            "kind": "learn",
+            "date": "2026-10-03",
+            "minutes": 20,
+            "status": "todo",
+            "explained": false,
+            "slots": 2,
+            "cycle": null
+          },
+          {
+            "id": "96b7dd77-54c8-4d06-b5af-c80213327d4f",
+            "pointId": "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+            "kind": "learn",
+            "date": "2026-10-03",
+            "minutes": 20,
+            "status": "todo",
+            "explained": false,
+            "slots": 2,
+            "cycle": null
+          },
+          {
+            "id": "98afd579-850a-4898-ad37-375cf2c9c400",
+            "pointId": "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd",
+            "kind": "learn",
+            "date": "2026-10-04",
+            "minutes": 20,
+            "status": "todo",
+            "explained": false,
+            "slots": 2,
+            "cycle": null
+          }
+        ],
+        "overflow": [],
+        "dailyMinutes": 40,
+        "feasible": true,
+        "days": 7,
+        "deadline": null,
+        "restDays": [],
+        "estimates": {
+          "8d471248-114d-4f4e-a750-4ab19a5b2ce1": 20,
+          "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5": 20,
+          "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd": 20
+        }
+      },
+      "draft": null,
+      "questions": [],
+      "attempts": [],
+      "messages": [
+        {
+          "id": "a9652353-7f71-4091-ba5f-33e1df61483a",
+          "role": "user",
+          "text": "查找相关资料：由 m×n 个数排成的",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+          ],
+          "at": 1790957925012,
+          "reading": {
+            "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+            "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+            "selection": "由 m×n 个数排成的",
+            "sourceIds": [
+              "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            ],
+            "mode": "search"
+          }
+        },
+        {
+          "id": "e35833c9-a347-402b-8f04-6ff3131020e6",
+          "role": "user",
+          "text": "解释：由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+          ],
+          "at": 1790957937218,
+          "reading": {
+            "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+            "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+            "selection": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素",
+            "sourceIds": [
+              "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            ],
+            "mode": "explain"
+          }
+        },
+        {
+          "id": "ac96d5e4-e1e3-48ff-a20e-f080e2569604",
+          "jobId": "b92343c9-1823-477e-bf72-3b9bf5f56f25",
+          "reading": {
+            "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+            "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+            "selection": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素",
+            "sourceIds": [
+              "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            ],
+            "mode": "explain"
+          },
+          "role": "assistant",
+          "text": "【选中内容解读】\n您选中的句子是矩阵的核心定义（资料结论）：\"由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素。\" 它包含两层含义：一是矩阵的\"形状\"由行数 m 和列数 n 决定，写作 m×n；二是矩阵中每个位置上的数叫作该矩阵的元素。\n\n【本知识点讲解：矩阵及其运算】\n1. 资料结论——矩阵的基本概念（来源：片段 f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e，\"1.1 矩阵及其运算\"）：\n- 矩阵：m×n 个数排成 m 行 n 列的矩形数表，记作 m×n 矩阵。\n- 方阵：行数与列数都等于 n 的矩阵称为 n 阶方阵。\n- 矩阵相等：两个矩阵行数相同、列数相同，且对应位置元素全部相等。\n- 矩阵加法：只有行数、列数分别相同的矩阵才能相加，即对应元素相加。\n- 数乘：用一个数去乘矩阵的每一个元素。\n\n2. 资料结论——矩阵乘法与转置（来源同上）：\n- 乘法前提：只有左矩阵的列数等于右矩阵的行数时才能相乘。若 A 是 m×s 矩阵、B 是 s×n 矩阵，则 AB 是 m×n 矩阵。\n- 乘法规则：乘积 AB 的第 i 行第 j 列元素，等于 A 的第 i 行各元素与 B 的第 j 列对应元素的乘积之和。\n- 运算律：矩阵乘法不满足交换律（AB 与 BA 一般不相等，甚至可能只有一个有意义），但满足结合律与分配律。\n- 转置：把矩阵的行与列互换得到转置矩阵 Aᵀ，满足 (Aᵀ)ᵀ=A，以及 (AB)ᵀ=BᵀAᵀ（乘积转置要颠倒顺序）。\n\n3. 教学例子（非资料原文，仅为帮助理解的类比，特此标注）：\n【教学类比】把矩阵比作一张\"座位表\"：m×n 矩阵就像 m 排 n 列的座位，每个座位上坐一个数（元素）；两个座位表要\"对应相加\"，前提是排数和列数完全一样，否则没法一一对应。\n【教学例子】乘法前提可以用\"接龙\"理解：左矩阵有 s 列、右矩阵有 s 行，这个共同的 s 就像接力棒的交接段，必须对得上才能接下去——这是帮助记忆的教学说法，资料原文的准确表述是\"左矩阵的列数等于右矩阵的行数\"。\n\n【章节结构说明】\n本次提供的 3 个片段中，f0557403… 是 1.1 节正文，0e4032c0… 是\"1.1 矩阵及其运算\"标题，90f37a88… 是\"1.2 行列式\"标题。矩阵的其他深入性质（如行列式）不在本次选中内容的解释范围内，资料未展开，故不作推断。\n\n本次使用 3 个资料片段。",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+            "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+            "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02"
+          ],
+          "at": 1790957957562
+        },
+        {
+          "id": "68a36d86-fd2c-4520-acc7-f3f0a8f72c43",
+          "role": "user",
+          "text": "解释：由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素。",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+          ],
+          "at": 1791076418724,
+          "reading": {
+            "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+            "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+            "selection": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素。",
+            "sourceIds": [
+              "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            ],
+            "mode": "explain"
+          }
+        },
+        {
+          "id": "31b8e070-66f4-4146-af57-e8e089ffbc3a",
+          "role": "user",
+          "text": "解释：由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素",
+          "sourceIds": [
+            "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+          ],
+          "at": 1791077085181,
+          "reading": {
+            "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+            "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+            "selection": "由 m×n 个数排成的 m 行 n 列的矩形数表称为 m×n 矩阵，其中的数称为矩阵的元素",
+            "sourceIds": [
+              "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e"
+            ],
+            "mode": "explain"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "kind": "prepare",
+          "text": "导入资料，确认大纲与学习计划",
+          "reason": "还没有确认的学习范围",
+          "pointId": null,
+          "taskId": null,
+          "evidenceState": null,
+          "evidenceCount": null,
+          "availableAt": null,
+          "practice": null,
+          "id": "bb9b99cf-97ab-4fea-99ad-3dd7b34d19fa",
+          "at": 1790944565548,
+          "trigger": "init"
+        },
+        {
+          "kind": "planned",
+          "text": "按已确认计划继续学习",
+          "reason": "计划 v1 的下一项尚未开始",
+          "pointId": "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+          "taskId": "a63197a8-3eb2-4fdf-9da6-9999762f1a2b",
+          "evidenceState": "未评估",
+          "evidenceCount": 0,
+          "availableAt": null,
+          "practice": null,
+          "id": "7a161e74-aaf4-47f2-967a-443e25716fe6",
+          "at": 1790973468320,
+          "trigger": "plan"
+        }
+      ],
+      "drafts": {
+        "prompt": "",
+        "answers": []
+      },
+      "changes": [
+        {
+          "id": "62cb1de1-f4ae-45e5-b30f-d9b9bbb48c22",
+          "at": 1790973468320,
+          "planVersion": 1,
+          "activityBefore": 0,
+          "activityAfter": 3,
+          "scopeBefore": 0,
+          "scopeAfter": 3,
+          "skipped": 0,
+          "text": "计划 v1：任务 0 → 3，范围 0 → 3。新增范围 矩阵乘法；新增范围 行列式的性质；新增范围 线性方程组解的判定；新增任务 矩阵乘法 2026-10-03 20 分钟；新增任务 行列式的性质 2026-10-03 20 分钟；新增任务 线性方程组解的判定 2026-10-04 20 分钟；估时 0 → 60 分钟。跳过 0 项单独列出，不记入完成。",
+          "diff": {
+            "scopeAdded": [
+              "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+              "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+              "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd"
+            ],
+            "scopeRemoved": [],
+            "tasksAdded": [
+              {
+                "id": "a63197a8-3eb2-4fdf-9da6-9999762f1a2b",
+                "pointId": "8d471248-114d-4f4e-a750-4ab19a5b2ce1",
+                "date": "2026-10-03",
+                "minutes": 20,
+                "immediate": false
+              },
+              {
+                "id": "96b7dd77-54c8-4d06-b5af-c80213327d4f",
+                "pointId": "b633ba19-abc4-48c3-a0ba-f5302cdfeeb5",
+                "date": "2026-10-03",
+                "minutes": 20,
+                "immediate": false
+              },
+              {
+                "id": "98afd579-850a-4898-ad37-375cf2c9c400",
+                "pointId": "bf0ee5f1-e31b-4f9e-be7c-af9aee2708bd",
+                "date": "2026-10-04",
+                "minutes": 20,
+                "immediate": false
+              }
+            ],
+            "tasksRemoved": [],
+            "tasksMoved": [],
+            "minutesBefore": 0,
+            "minutesAfter": 60
+          }
+        }
+      ],
+      "notice": null,
+      "createdAt": 1790944547715,
+      "activity": [
+        {
+          "id": "b92343c9-1823-477e-bf72-3b9bf5f56f25",
+          "at": 1790957957562,
+          "kind": "reading",
+          "minutes": 0,
+          "courseId": "9470440b-3a77-487b-a429-c38c63d1de19",
+          "planVersion": 0
+        }
+      ],
+      "sessions": [],
+      "learningEvents": [
+        {
+          "id": "639d4b64-4d1a-46cd-a2d2-02c22980bc1a",
+          "kind": "draft_accepted",
+          "objectKind": "draft",
+          "objectId": "6b78d09a-1cfe-4ae8-9c64-fcac97a833ff",
+          "at": 1790973468320,
+          "sessionId": null,
+          "planVersion": 0,
+          "sourceVersions": [
+            {
+              "sourceId": "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            },
+            {
+              "sourceId": "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            },
+            {
+              "sourceId": "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            },
+            {
+              "sourceId": "536b37b6555f42bf7a7a1eb07e5363f1b43aadad9fb11ab7852b0045a70a7488",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            },
+            {
+              "sourceId": "8aa0fa6f9be9beef2b8b4bedef59328676c0f37d1f5e6cafa2b7f1efe31bb68a",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            },
+            {
+              "sourceId": "744bdbae7e7a561801793f60fdbf2a41471db314d1001f0da8e01f653e8c0c79",
+              "materialId": "ff279f99-2597-5b9b-8047-92184ff0a46a",
+              "version": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+            }
+          ]
+        }
+      ],
+      "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+      "initializedAt": 1790944547715,
+      "readingMarks": {}
+    }
+  ],
+  "jobs": [
+    {
+      "promptVersion": "syllora-teaching-v2",
+      "ruleVersion": "syllora-v1",
+      "finishedAt": 1791076428740,
+      "elapsedMs": 10017,
+      "errorCode": "CANCELLED",
+      "usageKnownCalls": {
+        "input": 0,
+        "output": 0
+      },
+      "id": "943a1018-f92d-4f9a-b2ea-a6acfbcca373",
+      "requestId": "0ea6dc78-f0b3-417e-ad2c-3343eb567a15",
+      "courseId": "9470440b-3a77-487b-a429-c38c63d1de19",
+      "kind": "answer",
+      "state": "cancelled",
+      "message": "已取消",
+      "createdAt": 1791076418723,
+      "model": "mimo-v2.6-flash",
+      "calls": 1,
+      "inputTokens": null,
+      "outputTokens": null,
+      "coverage": {
+        "sourcesUsed": 3,
+        "sourcesTotal": 3,
+        "charsUsed": 456,
+        "charsTotal": 456,
+        "materialsWithOmitted": [],
+        "sourceIds": [
+          "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+          "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+          "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02"
+        ],
+        "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950"
+      }
+    },
+    {
+      "promptVersion": "syllora-teaching-v2",
+      "ruleVersion": "syllora-v1",
+      "finishedAt": 1791077160432,
+      "elapsedMs": 75251,
+      "errorCode": "CANCELLED",
+      "usageKnownCalls": {
+        "input": 0,
+        "output": 0
+      },
+      "id": "402f3a29-30c7-49d7-bca1-2de239c9162a",
+      "requestId": "bff48cbe-92e4-46e8-b64b-6aa6fa0b8610",
+      "courseId": "9470440b-3a77-487b-a429-c38c63d1de19",
+      "kind": "answer",
+      "state": "cancelled",
+      "message": "已取消",
+      "createdAt": 1791077085181,
+      "model": "mimo-v2.6-flash",
+      "calls": 1,
+      "inputTokens": null,
+      "outputTokens": null,
+      "coverage": {
+        "sourcesUsed": 3,
+        "sourcesTotal": 3,
+        "charsUsed": 456,
+        "charsTotal": 456,
+        "materialsWithOmitted": [],
+        "sourceIds": [
+          "f0557403d215cdbe0ef7bd659c805bb78b5a1659e27c53541216eca71323910e",
+          "0e4032c0e8961f21b9b864145807f6cd9b4525b1bb782d0c8a7f916c9af5aa7c",
+          "90f37a882d6379de07ccef647e3915c66a841daa1b8310192f35854e697d3c02"
+        ],
+        "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950"
+      }
+    }
+  ],
+  "consent": true,
+  "calls": 4
+}

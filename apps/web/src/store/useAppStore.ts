@@ -20,6 +20,17 @@ import type {
 } from "@/src/types/api";
 import type { LearningMode } from "@/src/types";
 
+// R10：Agent 对话输入草稿落 localStorage——刷新/重启后可恢复；按 key（工作区/
+// 课程/会话）隔离。存储写失败不阻塞输入（内存草稿仍可用）。
+const composerStorageKey = 'syllora.composer-drafts.v1';
+function restoreComposerDrafts():Record<string,string> {
+  if(typeof window==='undefined')return {};
+  try {const value:unknown=JSON.parse(localStorage.getItem(composerStorageKey)||'{}');if(!value||typeof value!=='object'||Array.isArray(value))return {};return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==='string'));}catch{return {};}
+}
+function rememberComposerDrafts(drafts:Record<string,string>) {
+  try {localStorage.setItem(composerStorageKey,JSON.stringify(drafts));}catch { /* The in-memory draft remains available if storage is full. */ }
+}
+
 export type PanelTab = "progress" | "syllabus" | "heatmap" | "quiz";
 
 /** 大纲 Tab 内的视图（列表 / 思维导图 / 关系图），入 store 跨 Tab/重挂保持。 */
@@ -271,7 +282,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingAsk: null,
   activeModel: null,
   workspacePath: null,
-  composerDrafts: {},
+  composerDrafts: restoreComposerDrafts(),
   messages: [],
   streaming: false,
   syncState: "synced",
@@ -414,9 +425,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (current === draft || (current === undefined && draft === "")) return state;
       if (draft === "") {
         const { [key]: _removed, ...composerDrafts } = state.composerDrafts;
+        rememberComposerDrafts(composerDrafts);
         return { composerDrafts };
       }
-      return { composerDrafts: { ...state.composerDrafts, [key]: draft } };
+      const composerDrafts = { ...state.composerDrafts, [key]: draft };
+      rememberComposerDrafts(composerDrafts);
+      return { composerDrafts };
     }),
   setActiveTab: (tab) =>
     set((state) => ({

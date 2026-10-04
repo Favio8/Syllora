@@ -1,0 +1,17 @@
+{
+  "classroomId": "stage-Mgb1X1yvQ-tR",
+  "title": "矩阵、行列式与线性方程组",
+  "requirement": "把这一章的知识点串成一节课，配两道练习\n\n我的昵称：同学\n\n课堂角色设定：\n- 主讲教师「小艾老师」：耐心讲解，多用生活例子\n- 学生「助教」：补充思路、提醒易错点",
+  "materialIds": [
+    "mat_9qchhyk9jn6dfkw9x7en4e8r6c"
+  ],
+  "sourceCount": 6,
+  "sceneCount": 10,
+  "sceneTypes": {
+    "slide": 8,
+    "quiz": 2
+  },
+  "generatedAt": 1791065485714,
+  "fetchedAt": 1791065485714,
+  "cloudBase": "https://studyandchat.top"
+}

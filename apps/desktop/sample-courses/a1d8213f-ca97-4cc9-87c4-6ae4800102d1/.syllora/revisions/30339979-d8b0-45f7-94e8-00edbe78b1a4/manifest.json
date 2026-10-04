@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "revision": "30339979-d8b0-45f7-94e8-00edbe78b1a4",
+  "courseId": "a1d8213f-ca97-4cc9-87c4-6ae4800102d1",
+  "fingerprints": {
+    "sources/第1章-电路的基本规律.md": "a7492d3e546065589ef753ec300e252eed38fdf3fc976935fdeb15d3bc3a83c2"
+  },
+  "failures": [],
+  "sourceCount": 33,
+  "coveredSourceCount": 33,
+  "promptVersion": "lecture-v2",
+  "model": "mimo:mimo-v2.6-flash:9823e5a7025d0776d831478d08c537c1517cbe376eddfa6cc5b5219271460c95"
+}

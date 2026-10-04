@@ -49,3 +49,7 @@ apps/desktop/host-runtime/package-lock.json
 
 # Claude Code 工具目录（worktree 等，勿提交）
 .claude/
+
+# 示例课程是随包分发的产品数据：它里面的 .syllora 状态必须被跟踪（上面的通用规则会忽略它）。
+!apps/desktop/sample-courses/**/.syllora/
+!apps/desktop/sample-courses/**/.syllora/**

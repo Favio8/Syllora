@@ -32,6 +32,31 @@ export interface ResolvedChatConfig {
   /** Per-request output cap（config.yaml `max_tokens`）；null=适配器默认。 */
   readonly maxTokens?: number | null
   readonly defaultMode: 'quick' | 'feynman' | 'debug'
+  /**
+   * 是否在初始化时生成"幻灯片讲义"（`ui.slides`）。默认**关**。
+   *
+   * 开启后每章会向云端 OpenMAIC 发一次生成请求（资料会上传到该服务器），
+   * 属于用户应显式选择的成本与数据流向，不应该是升级后静默多出来的行为。
+   * 还必须在 `cloud` 里配好 `base_url` 与 `access_code`，否则不会启用。
+   */
+  readonly slides: boolean
+  /**
+   * 是否把「先提炼、再整理」作为初始化管线（`ui.digest`）。默认**开**。
+   *
+   * 开：材料先按章/页组经模型提炼成结构化知识文档，再按节建来源整理讲义——调用次数与
+   * 耗时显著下降（整本教材尤其明显）；关：仍对 DocMind 原始切片按批整理（旧管线）。
+   * 需要模型才能提炼，未配置模型时初始化本来就会失败，这里无需额外条件。
+   */
+  readonly digest?: boolean
+  /** 云端 OpenMAIC 连接信息；未配置时幻灯片功能不可用。 */
+  readonly cloud?: {
+    readonly baseUrl: string
+    readonly accessCode: string
+    readonly provider?: string
+    readonly preset?: string
+    readonly model?: string
+    readonly apiKey?: string
+  }
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
   readonly agentSystemPrompt?: string
@@ -57,7 +82,25 @@ interface ConfigYaml {
     readonly max_concurrency?: number
     readonly max_tokens?: number | null
   }>
-  readonly ui?: { default_mode?: string }
+  readonly ui?: { default_mode?: string; slides?: boolean; digest?: boolean }
+  /**
+   * 云端 OpenMAIC：幻灯片在云端生成，本地只负责渲染。
+   * - `base_url`：站点根地址，如 https://studyandchat.top
+   * - `access_code`：站点访问口令（对应 OpenMAIC 的 ACCESS_CODE）
+   * - `model_*`：代填到云端的模型配置（用户本地输入，写入云端后由云端调用）
+   */
+  readonly cloud?: {
+    readonly base_url?: string
+    readonly access_code?: string
+    /** 密封凭据里的口令引用（settings.cloud.save 写入）；与 access_code 二选一，优先 access_code。 */
+    readonly access_code_env?: string | null
+    readonly provider?: string
+    readonly preset?: string
+    readonly model?: string
+    readonly api_key?: string
+    /** 密封凭据里的模型 Key 引用；与 api_key 二选一，优先 api_key。 */
+    readonly api_key_env?: string | null
+  }
   readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
   readonly permissions?: { preset?: string }
   readonly plugins?: Record<string, unknown>
@@ -167,6 +210,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
       maxConcurrency: 8,
       maxTokens: null,
       defaultMode: 'quick',
+      slides: false,
       agentPreset: 'syllora-learning',
       agentSystemPrompt: '',
       agentSkill: '',
@@ -196,6 +240,7 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
   const judgeEffort = judgeEffortRaw === 'off' || judgeEffortRaw === 'low' || judgeEffortRaw === 'high' || judgeEffortRaw === 'max'
     ? judgeEffortRaw
     : null
+  const cloud = await resolveCloudBlock(workspaceRoot, config)
   return {
     providerId,
     model,
@@ -210,6 +255,9 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     maxConcurrency,
     maxTokens,
     defaultMode,
+    // 幻灯片只有同时具备开关与云端连接信息时才启用，避免"开了但连不上"的模糊状态。
+    slides: config.ui?.slides === true && cloud !== null,
+    ...(cloud ? { cloud } : {}),
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
     agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',
@@ -221,6 +269,54 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
 /** Credential resolution: env var first, then `.syllora/credentials.json`. */
 function credentialsPathOf(workspaceRoot: string): string {
   return join(workspaceStateDirOf(workspaceRoot), 'credentials.json')
+}
+
+/**
+ * 解析 `cloud` 段：地址 + 口令 + 可选的模型代填信息。
+ *
+ * 口令与模型 Key 都支持「字面量写在 config.yaml」与「密封凭据引用（*_env）」两种来源，
+ * 字面量优先——手工编辑过 config.yaml 的部署仍按原样工作；设置页保存走密封凭据，
+ * 避免把凭据以明文写进用户可见的目录。
+ */
+async function resolveCloudBlock(workspaceRoot: string, config: ConfigYaml): Promise<ResolvedChatConfig['cloud'] | null> {
+  const cloud = config.cloud
+  if (!cloud) return null
+  const baseUrl = (cloud.base_url ?? '').trim().replace(/\/+$/, '')
+  const literalCode = (cloud.access_code ?? '').trim()
+  const accessCode = literalCode !== ''
+    ? literalCode
+    : (await resolveCredential(workspaceRoot, 'openmaic', cloud.access_code_env ?? null)) ?? ''
+  if (baseUrl === '' || accessCode === '') return null
+  const literalKey = (cloud.api_key ?? '').trim()
+  const apiKey = literalKey !== ''
+    ? literalKey
+    : (await resolveCredential(workspaceRoot, 'openmaic-model', cloud.api_key_env ?? null)) ?? ''
+  return {
+    baseUrl,
+    accessCode,
+    ...(cloud.provider?.trim() ? { provider: cloud.provider.trim() } : {}),
+    ...(cloud.preset?.trim() ? { preset: cloud.preset.trim() } : {}),
+    ...(cloud.model?.trim() ? { model: cloud.model.trim() } : {}),
+    ...(apiKey !== '' ? { apiKey } : {}),
+  }
+}
+
+/**
+ * 云端连接配置的独立解析：候选目录（课程状态目录 → 课程根）→ 共享设置目录，取第一份齐全的。
+ *
+ * 不复用 loadChatConfig 的回落是因为它的「借 Key」分支只在本地供应商缺失时生效：
+ * 课程自己配了模型（primary 可用）时不会把共享目录里的 cloud 段带出来，
+ * 而设置页保存的云端配置按设计只写共享目录一处。
+ * @param roots - 候选目录（可为空项）；按顺序查找，最后兜底共享设置目录。
+ */
+export async function resolveCloudConfig(roots: Array<string | null | undefined>): Promise<NonNullable<ResolvedChatConfig['cloud']> | null> {
+  const candidates = [...roots, sharedConfigRootOf()]
+  for (const root of candidates) {
+    if (typeof root !== 'string' || root.trim() === '') continue
+    const resolved = await readChatConfig(root).then(config => config.cloud ?? null).catch(() => null)
+    if (resolved) return resolved
+  }
+  return null
 }
 
 async function resolveCredential(workspaceRoot: string, providerId: string, apiKeyEnv: string | null): Promise<string | null> {

@@ -24,6 +24,11 @@ const { flashStatusBanner, apiMocks, catalog, ApiError } = vi.hoisted(() => {
     ApiError,
     apiMocks: {
       settings: vi.fn(),
+      docmindSettings: vi.fn(async () => ({ configured: false, endpoint: "docmind-api.cn-hangzhou.aliyuncs.com" })),
+      saveDocMind: vi.fn(),
+      cloudSettings: vi.fn(async () => ({ configured: false, baseUrl: "", hasAccessCode: false, provider: "", preset: "", model: "", hasModelKey: false })),
+      saveCloud: vi.fn(),
+      classroomCapabilities: vi.fn(async (): Promise<ClassroomCapabilities> => ({ configured: false, baseUrl: null, capabilities: {}, materials: { maxCount: 5, maxTotalBytes: 157286400, maxDocumentBytes: 52428800, formats: ["pdf", "txt", "markdown"] } })),
       saveProvider: vi.fn(),
       setProviderCredential: vi.fn(),
       deleteProvider: vi.fn(),
@@ -65,6 +70,7 @@ vi.mock("../src/lib/api", () => ({
   ApiError,
 }));
 
+import type { ClassroomCapabilities } from "../src/lib/api";
 import ModelsSection from "../src/components/settings/ModelsSection";
 import type { SettingsPayload } from "../src/types/api";
 
@@ -559,5 +565,84 @@ describe("ModelsSection 覆盖路径的 Key 失败一致性（N-1）", () => {
     expect(apiMocks.saveProvider.mock.calls[1][0].overwrite).toBe(true);
     // 确认框已关闭。
     expect(screen.queryByRole("dialog", { name: "Provider 已存在" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ModelsSection DocMind 文档解析（PR #51）", () => {
+  /** 定位 DocMind 卡片（页面上还有云端课堂卡片，同样带「未配置」徽标）。 */
+  const docmindCard = () => screen.getByText("DocMind 文档解析").closest(".docmind-card") as HTMLElement;
+  it("显示配置状态，只提交填写的字段，且不回显密钥", async () => {
+    apiMocks.docmindSettings.mockResolvedValueOnce({ configured: false, endpoint: "docmind-api.cn-hangzhou.aliyuncs.com" });
+    apiMocks.saveDocMind.mockResolvedValueOnce({ configured: true, endpoint: "docmind-api.cn-hangzhou.aliyuncs.com" });
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    expect(await within(docmindCard()).findByText("未配置")).toBeInTheDocument();
+    // 什么都没填时不发请求。
+    fireEvent.click(screen.getByRole("button", { name: "保存 DocMind 设置" }));
+    expect(await screen.findByText("请至少填写一项后再保存。")).toBeInTheDocument();
+    expect(apiMocks.saveDocMind).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("DocMind AccessKey ID"), { target: { value: " fixture-id " } });
+    fireEvent.change(screen.getByLabelText("DocMind AccessKey Secret"), { target: { value: "fixture-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存 DocMind 设置" }));
+    await waitFor(() => expect(apiMocks.saveDocMind).toHaveBeenCalledTimes(1));
+    // 端点留空 → 不提交 endpoint 字段（保留现值），密钥去掉首尾空白。
+    expect(apiMocks.saveDocMind.mock.calls[0][0]).toEqual({ accessKeyId: "fixture-id", accessKeySecret: "fixture-secret" });
+    expect(await within(docmindCard()).findByText("已配置")).toBeInTheDocument();
+    // 保存后输入框清空，密钥不留在页面上。
+    expect(screen.getByLabelText("DocMind AccessKey Secret")).toHaveValue("");
+    expect(document.body.textContent).not.toContain("fixture-secret");
+  });
+
+  it("DocMind 状态读取失败不影响模型配置面板", async () => {
+    apiMocks.docmindSettings.mockRejectedValueOnce(new Error("network"));
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    expect(await within(docmindCard()).findByText("未配置")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "模型配置" })).toBeInTheDocument();
+  });
+});
+
+describe("ModelsSection 虚拟课堂云端连接", () => {
+  const cloudCard = () => screen.getByText("虚拟课堂（云端 OpenMAIC）").closest(".docmind-card") as HTMLElement;
+  it("只提交填写的字段，保存后不回显口令，并给出隐私提示", async () => {
+    apiMocks.cloudSettings.mockResolvedValueOnce({ configured: false, baseUrl: "", hasAccessCode: false, provider: "", preset: "", model: "", hasModelKey: false });
+    apiMocks.saveCloud.mockResolvedValueOnce({ configured: true, baseUrl: "https://studyandchat.top", hasAccessCode: true, provider: "", preset: "", model: "", hasModelKey: false });
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    expect(await within(cloudCard()).findByText("未配置")).toBeInTheDocument();
+    // 隐私明示：开启意味着资料会上传。
+    expect(cloudCard().textContent).toContain("所选资料会上传到下面配置的服务器");
+    // 什么都没填时不发请求。
+    fireEvent.click(screen.getByRole("button", { name: "保存云端连接" }));
+    expect(await screen.findByText("请至少填写服务地址或访问口令后再保存。")).toBeInTheDocument();
+    expect(apiMocks.saveCloud).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("云端服务地址"), { target: { value: " https://studyandchat.top/ " } });
+    fireEvent.change(screen.getByLabelText("云端访问口令"), { target: { value: "fixture-code" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存云端连接" }));
+    await waitFor(() => expect(apiMocks.saveCloud).toHaveBeenCalledTimes(1));
+    expect(apiMocks.saveCloud.mock.calls[0][0]).toEqual({ baseUrl: "https://studyandchat.top/", accessCode: "fixture-code" });
+    expect(await within(cloudCard()).findByText("已配置")).toBeInTheDocument();
+    expect(screen.getByLabelText("云端访问口令")).toHaveValue("");
+    expect(document.body.textContent).not.toContain("fixture-code");
+  });
+
+  it("检测连接显示云端能力与限制，未配置时给出可读原因", async () => {
+    apiMocks.cloudSettings.mockResolvedValueOnce({ configured: true, baseUrl: "https://studyandchat.top", hasAccessCode: true, provider: "", preset: "", model: "", hasModelKey: false });
+    apiMocks.classroomCapabilities.mockResolvedValueOnce({ configured: true, baseUrl: "https://studyandchat.top", capabilities: { tts: true, webSearch: false }, materials: { maxCount: 5, maxTotalBytes: 157286400, maxDocumentBytes: 52428800, formats: ["pdf", "txt", "markdown"] } });
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    fireEvent.click(await screen.findByRole("button", { name: "检测云端连接" }));
+    expect(await screen.findByText(/已连接 https:\/\/studyandchat\.top/)).toBeInTheDocument();
+    expect(screen.getByText(/资料最多 5 份/)).toBeInTheDocument();
+    expect(screen.getByText(/云端额外能力 tts/)).toBeInTheDocument();
+
+    apiMocks.classroomCapabilities.mockResolvedValueOnce({ configured: false, baseUrl: null, capabilities: {}, materials: { maxCount: 5, maxTotalBytes: 157286400, maxDocumentBytes: 52428800, formats: ["pdf", "txt", "markdown"] } });
+    fireEvent.click(screen.getByRole("button", { name: "检测云端连接" }));
+    expect(await screen.findByText(/云端连接尚未配置完整/)).toBeInTheDocument();
+  });
+
+  it("清除连接后回到未配置姿态", async () => {
+    apiMocks.cloudSettings.mockResolvedValueOnce({ configured: true, baseUrl: "https://studyandchat.top", hasAccessCode: true, provider: "", preset: "", model: "", hasModelKey: false });
+    apiMocks.saveCloud.mockResolvedValueOnce({ configured: false, baseUrl: "", hasAccessCode: false, provider: "", preset: "", model: "", hasModelKey: false });
+    render(<ModelsSection initial={makePayload([configuredProvider])} />);
+    fireEvent.click(await screen.findByRole("button", { name: "清除云端连接" }));
+    await waitFor(() => expect(apiMocks.saveCloud).toHaveBeenCalledWith({ baseUrl: "", accessCode: "" }));
+    expect(await within(cloudCard()).findByText("未配置")).toBeInTheDocument();
   });
 });

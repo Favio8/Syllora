@@ -18,7 +18,7 @@ import { SylloraProjects } from '../src/syllora-projects.ts'
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 
-const config = { providerId: 'fixture', model: 'fixture', baseUrl: 'http://fixture.invalid/v1', apiKey: 'fixture', protocol: 'openai' as const, temperature: 0.3, maxConcurrency: 1, defaultMode: 'quick' as const }
+const config = { providerId: 'fixture', model: 'fixture', baseUrl: 'http://fixture.invalid/v1', apiKey: 'fixture', protocol: 'openai' as const, temperature: 0.3, maxConcurrency: 1, digest: false, defaultMode: 'quick' as const }
 
 /** 造一门有资料的课程，返回工程句柄与课程 id。 */
 async function seed(client: StructuredCallClient) {

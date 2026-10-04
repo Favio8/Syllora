@@ -4,15 +4,25 @@
  * @module @syllora/chat-service
  */
 
-export { loadChatConfig, providerFacts } from './config.ts'
+export { loadChatConfig, providerFacts, resolveCloudConfig } from './config.ts'
 export { setSharedConfigRoot } from './shared-root.ts'
 export { verifyCredentialsReadable } from './secret-box.ts'
 export { AGENT_SKILLS, AGENT_SKILL_IDS, agentSkillPrompt } from './skills.ts'
 export type { AgentSkillPayload } from './skills.ts'
 export { SylloraService, SylloraError } from './syllora.ts'
+export { DocMindClient, DocMindError, DOCMIND_ENDPOINT } from './docmind.ts'
+export { docMindExtract, localExtract, pagesFromLayouts, documentOutline, type ExtractInput, type ExtractResult, type DocMindLike } from './syllora-extract.ts'
+export type { ClassroomJobState } from './syllora.ts'
 export { SylloraProjects, migrateSharedSettings } from './syllora-projects.ts'
 export type { ResolvedChatConfig } from './config.ts'
 export {
+  resolveDocMindCredential,
+  docmindConfigPayload,
+  setDocMindCredential,
+  cloudConfigPayload,
+  setCloudConfig,
+  CLOUD_ACCESS_CODE_REF,
+  CLOUD_MODEL_API_KEY_REF,
   settingsPayload,
   providerCatalog,
   discoverModels,
@@ -28,7 +38,9 @@ export {
   deriveKeyRef,
   ProviderExistsError,
 } from './settings.ts'
-export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry, ConnectionTestResult, ConnectionFailureKind, ProviderExportEntry, ProviderExportPayload } from './settings.ts'
+export type { SettingsPayload, ProviderPayload, ProviderModelPayload, CatalogEntry, ConnectionTestResult, ConnectionFailureKind, ProviderExportEntry, ProviderExportPayload, CloudSettingsPayload } from './settings.ts'
+export { ClassroomCloud, ClassroomStore, ClassroomAttachments, ClassroomInputError, classroomFailure, classroomGenerateSchema, classroomJobSchema, classroomGetSchema, classroomListSchema, classroomProgressSchema, classroomRolesBrief, classroomIdSchema, classroomMaterialMarkdown, sceneTypeCounts, CLOUD_ATTACHMENT_COUNT } from './syllora-classroom.ts'
+export type { ClassroomMeta, ClassroomProgress, StagedAttachment } from './syllora-classroom.ts'
 export { createDeepSeekToolClient } from './adapter.ts'
 export {
   listSessions,

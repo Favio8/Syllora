@@ -12,6 +12,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -50,12 +51,24 @@ function run(cmd, args, cwd, label, opts = {}) {
   }
 }
 
-/** 解析 pnpm 虚拟存储中的包真实入口（workspace 根 node_modules 无稳定 .js 入口）。 */
-function pkgBinInPnpmStore(pkgName, binRel) {
+/** 解析 pnpm 虚拟存储中的包真实入口（workspace 根 node_modules 无稳定 .js 入口）。
+ *  fromDir 给定时按「该包自己的依赖图」解析版本：.pnpm 里可能并存同一包的多个
+ *  版本（升级后 next@16.3.1 与 16.3.3 同库），按目录名前缀取第一个会挑到遗留
+ *  版本——next 16.3.1 在静态导出预渲染阶段会稳定触发 "Expected workStore to
+ *  be initialized"，整包构建随机死在某个内置错误页上。 */
+function pkgBinInPnpmStore(pkgName, binRel, fromDir) {
+  if (fromDir !== undefined) {
+    const req = createRequire(join(fromDir, 'package.json'))
+    try {
+      return join(dirname(req.resolve(`${pkgName}/package.json`)), binRel)
+    } catch {
+      // 少数包不导出 package.json：退回目录扫描（取排序最靠后的版本）。
+    }
+  }
   const pnpmDir = join(repoRoot, 'node_modules', '.pnpm')
-  const dir = readdirSync(pnpmDir).find(name => name.startsWith(`${pkgName}@`))
-  if (dir === undefined) throw new Error(`[assemble] ${pkgName} not found under node_modules/.pnpm`)
-  return join(pnpmDir, dir, 'node_modules', pkgName, binRel)
+  const dirs = readdirSync(pnpmDir).filter(name => name.startsWith(`${pkgName}@`)).sort()
+  if (dirs.length === 0) throw new Error(`[assemble] ${pkgName} not found under node_modules/.pnpm`)
+  return join(pnpmDir, dirs.at(-1), 'node_modules', pkgName, binRel)
 }
 
 function mustExist(p, hint) {
@@ -78,9 +91,9 @@ const nodeBin = process.execPath
 if (process.argv.includes('--build')) {
   console.log('[assemble] building CLI bundle (tsc -b + tsdown)…')
   run(nodeBin, [join(repoRoot, 'node_modules', 'typescript', 'bin', 'tsc'), '-b', 'tsconfig.json'], join(repoRoot, 'apps', 'cli'), 'cli tsc -b')
-  run(nodeBin, [pkgBinInPnpmStore('tsdown', 'dist/run.mjs')], join(repoRoot, 'apps', 'cli'), 'cli tsdown')
+  run(nodeBin, [pkgBinInPnpmStore('tsdown', 'dist/run.mjs', join(repoRoot, 'apps', 'cli'))], join(repoRoot, 'apps', 'cli'), 'cli tsdown')
   console.log('[assemble] building web static export (next build)…')
-  run(nodeBin, [pkgBinInPnpmStore('next', 'dist/bin/next'), 'build'], join(repoRoot, 'apps', 'web'), 'web next build')
+  run(nodeBin, [pkgBinInPnpmStore('next', 'dist/bin/next', join(repoRoot, 'apps', 'web')), 'build'], join(repoRoot, 'apps', 'web'), 'web next build')
 }
 
 // 1) clean output
@@ -132,6 +145,18 @@ cpSync(runtimeModules, join(hostOut, 'node_modules'), { recursive: true, derefer
 const webDist = join(repoRoot, 'apps', 'web', 'out')
 mustExist(webDist, 'Run web build first (node scripts/assemble-host.mjs --build).')
 cpSync(webDist, webOut, { recursive: true })
+
+// 4.5) 示例课程（随包分发；宿主首启时复制进课程目录，见 apps/cli/src/demo-seed.ts）。
+// 目录不存在（洁版克隆）时也建一个空目录：extraResources 指向它，构建不会因缺目录失败；
+// 空目录时宿主静默跳过种子。
+const sampleCourses = join(desktop, 'sample-courses')
+const sampleOut = join(resources, 'sample-courses')
+mkdirSync(sampleOut, { recursive: true })
+if (existsSync(sampleCourses)) {
+  cpSync(sampleCourses, sampleOut, { recursive: true })
+  const names = readdirSync(sampleOut)
+  if (names.length > 0) console.log(`[assemble] sample courses → ${names.join('、')}`)
+}
 
 // 5) fail loud when native artifacts for the current platform were not collected
 const natives = listFilesRecursive(join(hostOut, 'node_modules')).filter(f => f.endsWith('.node'))

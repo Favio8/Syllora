@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "revision": "2e478f35-0308-4d56-bd98-ea88adcb7950",
+  "courseId": "9470440b-3a77-487b-a429-c38c63d1de19",
+  "fingerprints": {
+    "sources/线性代数入门.md": "3b43427ccede9292818f4a162d61fa505e5e4a3d46fbdd0fbd20d2444dae5983"
+  },
+  "failures": [],
+  "sourceCount": 6,
+  "coveredSourceCount": 6,
+  "promptVersion": "demo-v1",
+  "model": "demo-fixture",
+  "demo": true
+}

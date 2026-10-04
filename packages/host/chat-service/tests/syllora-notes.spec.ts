@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { SylloraProjects } from '../src/syllora-projects.ts'
@@ -114,3 +114,26 @@ describe('course notes', () => {
     expect((await s.projects.handle('state', {}) as { projects: unknown[] }).projects).toEqual([])
   })
 })
+
+describe('note write recovery and concurrency',()=>{
+  it('keeps all concurrently created notes in the durable index',async()=>{
+    const s=await setup();
+    const notes=await Promise.all(Array.from({length:20},(_,i)=>create(s,`并发 ${i}`)));
+    expect(new Set((await list(s)).map(note=>note.id))).toEqual(new Set(notes.map(note=>note.id)));
+    const restart=new SylloraProjects(join(s.root,'app'));
+    expect((await restart.handle('notes/list',{courseId:s.id}) as any).notes).toHaveLength(20);
+  });
+  it('rejects a stale version without overwriting the current Markdown',async()=>{
+    const s=await setup(),note=await create(s,'版本保护');const payload={courseId:s.id,noteId:note.id};
+    const initial=await s.projects.handle('notes/read',payload) as any;
+    await s.projects.handle('notes/update',{...payload,baseVersion:initial.version,content:'最新正文'});
+    await expect(s.projects.handle('notes/update',{...payload,baseVersion:initial.version,content:'旧页面正文'})).rejects.toMatchObject({code:'VERSION_CONFLICT'});
+    expect((await s.projects.handle('notes/read',payload) as any).content).toBe('最新正文');
+  });
+  it('recovers complete UUID documents omitted from an interrupted index',async()=>{
+    const s=await setup();const note=await create(s,'完整文档');
+    await writeFile(join(s.folder,'notes','index.json'),'[]');
+    expect((await list(s)).map(item=>item.id)).toContain(note.id);
+    expect(JSON.parse(await readFile(join(s.folder,'notes','index.json'),'utf8'))).toHaveLength(1);
+  });
+});

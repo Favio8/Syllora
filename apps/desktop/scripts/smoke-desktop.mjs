@@ -135,12 +135,18 @@ if (fatalErrors.length > 0) console.log(fatalErrors.slice(0, 5).join('\n'))
 // UI 就绪探针：Host 侧 GET / 返回 200 即窗口 loadURL 同源可用。
 const ui = await fetch(`http://127.0.0.1:${cfg.port}/`, { signal: AbortSignal.timeout(8000) })
 const html = await ui.text()
+// R13：按现行协议验证 /api/session Cookie 握手与受保护状态接口；
+// 未鉴权 GET / 不得注入任何 __SYLLORA__ 引导信息。
+const handshake = await fetch(`http://127.0.0.1:${cfg.port}/api/session`, { method:'POST', headers:{'x-syllora-token':cfg.token}, signal:AbortSignal.timeout(8000) })
+const cookie = handshake.headers.get('set-cookie')?.split(';')[0] ?? ''
+const authenticated = await fetch(`http://127.0.0.1:${cfg.port}/api/syllora/state`, { method:'POST', headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({payload:{}}),signal:AbortSignal.timeout(8000) })
+const sessionOk = handshake.ok && cookie.startsWith('syllora_session=') && authenticated.ok && Boolean((await authenticated.json()).result)
 console.log('[smoke] GET / via sidecar →', ui.status, 'token-injected:', html.includes('__SYLLORA__'))
 
 // Verify the real packaged host's automatic course root without a paid model call.
 const rpc = async (action, payload) => {
   const response = await fetch(`http://127.0.0.1:${cfg.port}/api/syllora/${action}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ payload }), signal: AbortSignal.timeout(8000),
   })
   const body = await response.json()
@@ -155,6 +161,20 @@ await rpc('import', { courseId: first.id, name: 'notes.md', text: '# 甲章\n第
 await rpc('import', { courseId: second.id, name: 'notes.md', text: '# 乙章\n第二门课的冒烟资料。' })
 if (!readFileSync(join(first.path, 'sources', 'notes.md'), 'utf8').includes('第一门课') || !readFileSync(join(second.path, 'sources', 'notes.md'), 'utf8').includes('第二门课')) throw new Error('Course uploads were not isolated')
 console.log('[smoke] managed course creation, replay and isolated uploads: PASS')
+
+// R01/R02/planningDraft：打包态 Host 的笔记并发索引、旧版本保存拒绝与课程配置保存。
+const createdNotes = await Promise.all(Array.from({length:20},(_,index)=>rpc('notes/create',{courseId:first.id,title:`并发冒烟笔记 ${index}`})))
+const listedNotes = await rpc('notes/list',{courseId:first.id})
+if(listedNotes.notes.length!==20)throw new Error('Concurrent notes were lost from the packaged host index')
+const notePayload={courseId:first.id,noteId:createdNotes[0].meta.id}
+const beforeNote=await rpc('notes/read',notePayload)
+await rpc('notes/update',{...notePayload,baseVersion:beforeNote.version,content:'较新的冒烟正文'})
+const staleResponse=await fetch(`http://127.0.0.1:${cfg.port}/api/syllora/notes/update`,{method:'POST',headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({payload:{...notePayload,baseVersion:beforeNote.version,content:'旧页面正文'}}),signal:AbortSignal.timeout(8000)})
+if((await staleResponse.json()).error?.code!=='VERSION_CONFLICT'||(await rpc('notes/read',notePayload)).content!=='较新的冒烟正文')throw new Error('Packaged notes conflict protection failed')
+await rpc('planningDraft',{courseId:first.id,baseVersion:0,scope:[],estimates:{}})
+const savedState=await rpc('state',{})
+if(savedState.courses.find(course=>course.id===first.id)?.planningDraft?.revision!==1)throw new Error('Packaged planning configuration was not saved')
+console.log('[smoke] concurrent notes, stale-save protection and planning configuration: PASS')
 
 // 退出：优先走应用自身的退出路径（before-quit → stopHost），验证收尾；
 // 优雅退出宽限内未生效才兜底强杀，并标记 graceful=false。
@@ -188,7 +208,7 @@ const residue = pidAlive(cfg.pid) ? 1 : 0
 console.log('[smoke] graceful exit:', graceful, '| sidecar residue:', residue)
 
 const strict = process.env.SMOKE_STRICT === '1'
-pass = fatalErrors.length === 0 && ui.ok && html.includes('__SYLLORA__')
+pass = fatalErrors.length === 0 && ui.ok && sessionOk && !html.includes('__SYLLORA__')
   && (graceful ? residue === 0 : !strict)
 console.log(pass ? '[smoke] RESULT: PASS' : '[smoke] RESULT: FAIL')
 } catch (error) {

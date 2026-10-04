@@ -22,6 +22,11 @@ extraResources:
   - from: resources/web
     to: web
     filter: ["**/*"]
+  # 示例课程：宿主首启时复制进课程目录（apps/cli/src/demo-seed.ts）；目录缺失时构建会报错，
+  # assemble-host.mjs 按存在与否决定是否拷入（洁版克隆可删掉本节与 sample-courses/）。
+  - from: resources/sample-courses
+    to: sample-courses
+    filter: ["**/*"]
 asar: true
 
 win:

@@ -1,0 +1,52 @@
+{
+  "type": "scenario",
+  "difficulty": 3,
+  "question": "课堂上有同学说：「转置可以分配进括号，(AB)^T 就等于 A^T B^T，顺序不用变。」你已经算出 AB=[[−2,5],[−4,11]]、A^T B^T=[[3,5],[4,6]]、B^T A^T=[[−2,−4],[5,11]]，(AB)^T=[[−2,−4],[5,11]]。请判断该同学的说法，并给出依据上面计算结果的正确结论。",
+  "options": [
+    "说法错误，(AB)^T 等于 A^T B^T，乘积顺序保持不变",
+    "说法正确，(AB)^T 等于 A^T B^T，转置可直接分配",
+    "说法错误，(AB)^T 等于 B^T A^T，乘积顺序需要颠倒",
+    "说法正确，因 AB 恒等于 BA，故转置可以分配进去"
+  ],
+  "answer_index": 2,
+  "answer_rationale": "由直接计算知 (AB)^T=[[−2,−4],[5,11]] 与 B^T A^T 完全相同，而 A^T B^T=[[3,5],[4,6]] 不同，故转置分配时乘积顺序必须颠倒，(AB)^T = B^T A^T；同学的说法错误在于保留了原顺序。",
+  "evaluation_criteria": {
+    "rubric": [
+      "判定该同学说法错误，即 (AB)^T 不等于 A^T B^T",
+      "给出正确等式 (AB)^T = B^T A^T，顺序颠倒",
+      "指出错误根源是转置分配时忽略了矩阵乘法不满足交换律",
+      "引用算得的数值佐证：(AB)^T 与 B^T A^T 相同而与 A^T B^T 不同"
+    ],
+    "keywords": [
+      "(AB)^T = B^T A^T",
+      "顺序颠倒",
+      "不可交换律",
+      "A^T B^T ≠ (AB)^T",
+      "反例：AB ≠ BA",
+      "典型反例线索：答成 A^T B^T 或声称 AB=BA"
+    ],
+    "misattribution_options": [
+      "概念混淆",
+      "推导漏洞",
+      "边界遗漏",
+      "无"
+    ]
+  },
+  "task_id": "32f63067_001",
+  "concept_id": "c_32f63067",
+  "source_ref": {
+    "file": "manual",
+    "chunk_id": "manual_mur0zbqx2"
+  },
+  "history": {
+    "attempts": 0,
+    "last_score": null,
+    "pass_count": 0,
+    "last_review_at": null,
+    "next_review_at": null,
+    "ef": 2.5
+  },
+  "deprecated": false,
+  "dynamic": false,
+  "target_id": null
+}
