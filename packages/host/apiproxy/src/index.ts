@@ -12,7 +12,7 @@
 import { z } from 'zod'
 import type { Workspace, WorkspaceId } from '@syllora/workspace'
 import { WorkspaceNameConflictError, WorkspaceOrderInvalidError } from '@syllora/workspace'
-import { ProviderExistsError } from '@syllora/chat-service'
+import { ProviderExistsError, classroomFailure } from '@syllora/chat-service'
 import type { CourseSummary } from '@syllora/course-summary'
 import type { SessionSummaryView, RestoredSessionView, SessionModelDirectory, SessionModelSelection, SessionEventView } from '@syllora/chat-service'
 
@@ -66,6 +66,7 @@ export type RpcErrorCode =
   | 'agent-not-waiting'
   | 'approval-not-found'
   | 'provider-exists'
+  | 'cloud-connection-failed'
 
 export interface RpcError {
   readonly code: RpcErrorCode
@@ -916,6 +917,15 @@ export async function dispatch(
   try {
     return await handler.run(parsed, services)
   } catch (error) {
+    if (method === 'classroom.capabilities') {
+      const failure = classroomFailure(error)
+      const message = failure.code === 'CLOUD_TIMEOUT'
+        ? '云端课堂连接检测超时，请稍后重试。'
+        : failure.code === 'CLOUD_GENERATION_FAILED'
+          ? '无法检测云端课堂连接，请稍后重试。'
+          : failure.message
+      return err('cloud-connection-failed', message, { reason: failure.code })
+    }
     if (error instanceof WorkspaceNameConflictError) {
       return err('workspace-name-conflict', error.message, { name: error.workspaceName })
     }
