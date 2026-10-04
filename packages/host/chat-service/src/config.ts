@@ -56,6 +56,8 @@ export interface ResolvedChatConfig {
     readonly preset?: string
     readonly model?: string
     readonly apiKey?: string
+    /** 单章生成等待上限（毫秒）；缺省由客户端用 120 分钟兜底。 */
+    readonly waitTimeoutMs?: number
   }
   readonly agentPreset?: string
   /** 用户自定义的 agent 预设提示词；空串=使用预设自带的默认提示词。 */
@@ -100,6 +102,8 @@ interface ConfigYaml {
     readonly api_key?: string
     /** 密封凭据里的模型 Key 引用；与 api_key 二选一，优先 api_key。 */
     readonly api_key_env?: string | null
+    /** 单章生成的等待上限（分钟）。慢配置下 40 页要数小时，默认 120 分钟。 */
+    readonly wait_timeout_minutes?: number
   }
   readonly agent?: { preset?: string; system_prompt?: string; skill?: string }
   readonly permissions?: { preset?: string }
@@ -240,6 +244,13 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
   const judgeEffort = judgeEffortRaw === 'off' || judgeEffortRaw === 'low' || judgeEffortRaw === 'high' || judgeEffortRaw === 'max'
     ? judgeEffortRaw
     : null
+  // 单章生成的等待上限。实测快慢配置差 11 倍（12 秒/页 vs 135 秒/页），
+  // 所以允许配置；非法值（0、负数、非数、超过一天）按「未配置」处理，用客户端默认值。
+  const waitMinutesRaw = config.cloud?.wait_timeout_minutes
+  const waitTimeoutMs = typeof waitMinutesRaw === 'number' && Number.isFinite(waitMinutesRaw)
+    && waitMinutesRaw > 0 && waitMinutesRaw <= 24 * 60
+    ? Math.round(waitMinutesRaw * 60_000)
+    : null
   const cloud = await resolveCloudBlock(workspaceRoot, config)
   return {
     providerId,
@@ -256,8 +267,9 @@ async function readChatConfig(workspaceRoot: string, selection?: { providerId?: 
     maxTokens,
     defaultMode,
     // 幻灯片只有同时具备开关与云端连接信息时才启用，避免"开了但连不上"的模糊状态。
+    // `cloud` 由 resolveCloudBlock 解析（支持字面量与密封凭据两种来源）。
     slides: config.ui?.slides === true && cloud !== null,
-    ...(cloud ? { cloud } : {}),
+    ...(cloud ? { cloud: { ...cloud, ...(waitTimeoutMs !== null ? { waitTimeoutMs } : {}) } } : {}),
     agentPreset: config.agent?.preset === 'general' ? 'general' : 'syllora-learning',
     agentSystemPrompt: typeof config.agent?.system_prompt === 'string' ? config.agent.system_prompt.trim().slice(0, MAX_AGENT_PROMPT_CHARS) : '',
     agentSkill: typeof config.agent?.skill === 'string' ? config.agent.skill.trim() : '',
