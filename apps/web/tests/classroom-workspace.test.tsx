@@ -6,7 +6,7 @@
  * （slide 画布 / quiz 作答 / interactive 沙箱 iframe，无 canvas 不白屏）。
  */
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     classroomCapabilities: vi.fn(),
     classroomList: vi.fn(),
     classroomGet: vi.fn(),
+    classroomAudio: vi.fn(),
     classroomJob: vi.fn(),
     classroomProgress: vi.fn(),
     classroomAttachments: vi.fn(),
@@ -315,5 +316,90 @@ describe('虚拟课堂：删除与生成中进入', () => {
     // 动作播放：台词与步进控制都在。
     expect(screen.getByText('先讲第一页。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /播放讲解/ })).toBeInTheDocument();
+  });
+});
+
+describe('虚拟课堂：讲解音频', () => {
+  const meta = { classroomId: 'stage-audio', title: '声音验收', sceneCount: 2, sceneTypes: { slide: 2 }, fetchedAt: 1 };
+  const scenes = [
+    { id: 's1', type: 'slide', title: '第一页', actions: [{ type: 'speech', text: '第一句', audioId: 'ast_first' }, { type: 'speech', text: '最后一句', audioId: 'ast_last' }] },
+    { id: 's2', type: 'slide', title: '第二页', actions: [{ type: 'speech', text: '下一页', audioId: 'ast_next' }] },
+  ];
+  let play: ReturnType<typeof vi.spyOn>, pause: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: vi.fn(() => 'blob:test-audio') });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: vi.fn() });
+    mocks.api.classroomList.mockResolvedValue({ classrooms: [meta] });
+    mocks.api.classroomGet.mockResolvedValue({ meta, scenes, progress: { sceneId: null, answers: {} } });
+    mocks.api.classroomAudio.mockResolvedValue({ mime: 'audio/wav', base64: 'UklGRg==' });
+  });
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+  async function open() {
+    const view = render(<ClassroomWorkspace course={COURSE} />);
+    fireEvent.click(await openFirstClassroom());
+    const audio = await screen.findByLabelText('课堂讲解音频') as HTMLAudioElement;
+    return { ...view, audio };
+  }
+  it('waits for audio ended instead of a four-second timer, plays the final speech, and replays', async () => {
+    const { audio } = await open();
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    await waitFor(() => expect(play).toHaveBeenCalled());
+    expect(mocks.api.classroomAudio).toHaveBeenCalledWith({ courseId: COURSE.id, classroomId: 'stage-audio', sceneId: 's1', audioId: 'ast_first' });
+    vi.useFakeTimers();
+    await act(async () => { vi.advanceTimersByTime(8000); });
+    expect(screen.getByText('第 1 / 2 步')).toBeInTheDocument();
+    vi.useRealTimers();
+    fireEvent.ended(audio);
+    await waitFor(() => expect(mocks.api.classroomAudio).toHaveBeenLastCalledWith(expect.objectContaining({ audioId: 'ast_last' })));
+    expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument();
+    fireEvent.ended(audio);
+    fireEvent.click(await screen.findByRole('button', { name: '重播' }));
+    await waitFor(() => expect(mocks.api.classroomAudio).toHaveBeenLastCalledWith(expect.objectContaining({ audioId: 'ast_first' })));
+  });
+  it('pauses, resumes at the same position, and stops on page change and unmount', async () => {
+    const { audio, unmount } = await open();
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    await waitFor(() => expect(play).toHaveBeenCalled());
+    audio.currentTime = 2;
+    fireEvent.click(screen.getByRole('button', { name: '暂停' }));
+    expect(pause).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    expect(audio.currentTime).toBe(2);
+    expect(mocks.api.classroomAudio).toHaveBeenCalledTimes(1);
+    pause.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+    expect(pause).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '播放讲解' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    await waitFor(() => expect(mocks.api.classroomAudio).toHaveBeenLastCalledWith(expect.objectContaining({ audioId: 'ast_next' })));
+    pause.mockClear(); unmount();
+    expect(pause).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalled();
+  });
+  it('does not play a late audio response after navigating away', async () => {
+    let resolve!: (value: { mime: string; base64: string }) => void;
+    mocks.api.classroomAudio.mockReturnValue(new Promise(done => { resolve = done; }));
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+    await act(async () => { resolve({ mime: 'audio/wav', base64: 'UklGRg==' }); });
+    expect(play).not.toHaveBeenCalled();
+  });
+  it('keeps the current step and gives a retry message on audio failure', async () => {
+    mocks.api.classroomAudio.mockRejectedValue(new Error('讲解音频读取失败，请检查云端连接后重试。'));
+    await open(); fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('音频读取失败');
+    expect(screen.getByText('第 1 / 2 步')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '播放讲解' })).toBeInTheDocument();
+  });
+  it('allows retry after autoplay is blocked without fetching the audio again', async () => {
+    play.mockRejectedValueOnce(new DOMException('blocked', 'NotAllowedError'));
+    await open(); fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('再次点击');
+    fireEvent.click(screen.getByRole('button', { name: '播放讲解' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(mocks.api.classroomAudio).toHaveBeenCalledTimes(1);
   });
 });

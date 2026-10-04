@@ -362,3 +362,19 @@ describe('OpenMaicCloud 代填模型配置', () => {
     expect(requests.filter(item => item.method === 'PUT')).toHaveLength(1)
   })
 })
+
+describe('OpenMaicCloud audio responses', () => {
+  it.each([
+    { status: 200, type: 'text/html', size: undefined },
+    { status: 302, type: 'audio/wav', size: undefined },
+    { status: 401, type: 'audio/wav', size: undefined },
+    { status: 200, type: 'audio/wav', size: '16777217' },
+  ])('rejects unsafe or unavailable audio: $status $type $size', async ({ status, type, size }) => {
+    const base = await startCloud((req, res) => {
+      if (req.url === '/api/access-code/verify') { json(res, 200, {}, { 'set-cookie': 'openmaic_access=fixture; Path=/' }); return }
+      res.writeHead(status, { 'content-type': type, ...(size ? { 'content-length': size } : {}), ...(status === 302 ? { location: '/unexpected-redirect' } : {}) }); res.end('bad')
+    })
+    await expect(new OpenMaicCloud(config(base)).audio('ast_test')).rejects.toThrow('音频不可用')
+    expect(requests.some(r => r.url === '/unexpected-redirect')).toBe(false)
+  })
+})

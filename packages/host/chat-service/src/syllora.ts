@@ -878,6 +878,7 @@ export class SylloraService {
       if (sub === 'generate') return await this.classroomGenerate(payload)
       if (sub === 'job') return await this.classroomJob(classroomJobSchema.parse(payload))
       if (sub === 'get') return await this.classroomGet(classroomGetSchema.parse(payload))
+      if (sub === 'audio') return await this.classroomAudio(payload)
       if (sub === 'list') return await this.classroomList(classroomListSchema.parse(payload))
       if (sub === 'progress') return await this.classroomProgressSave(classroomProgressSchema.parse(payload))
       if (sub === 'live') return await this.classroomLive(payload)
@@ -1078,6 +1079,24 @@ export class SylloraService {
     if (!stored) fail('NOT_FOUND', '课堂不存在或尚未下载完成')
     const document = stored.document as { stage?: unknown; scenes?: unknown; outline?: unknown }
     return { meta: stored.meta, stage: document.stage ?? null, scenes: document.scenes ?? [], ...(document.outline !== undefined ? { outline: document.outline } : {}), progress: stored.progress }
+  }
+
+  /** Only serve audio referenced by this course's saved classroom or its own live job. */
+  async classroomAudio(payload: unknown): Promise<{ mime: string; base64: string }> {
+    const p = z.object({ courseId: key, classroomId: classroomIdSchema, sceneId: z.string().min(1).max(120), audioId: z.string().regex(/^[A-Za-z0-9_-]{1,120}$/), jobId: z.string().max(120).optional() }).strict().parse(payload)
+    await this.transaction(db => this.course(db, p.courseId, false), false)
+    const stored = await this.classroomStore().read(p.classroomId)
+    const cloud = await this.cloudConfig()
+    if (!cloud) fail('CLOUD_NOT_CONFIGURED', '尚未配置云端课堂服务')
+    const client = new ClassroomCloud(cloud)
+    let scenes = (stored?.document as { scenes?: Array<Record<string, unknown>> } | undefined)?.scenes
+    if (!stored && p.jobId && this.classroomJobs.get(p.jobId)?.classroomId === p.classroomId) scenes = await client.liveScenes(p.classroomId)
+    const scene = scenes?.find(item => item.id === p.sceneId)
+    const actions = Array.isArray(scene?.actions) ? scene.actions : []
+    if (!actions.some(action => action?.type === 'speech' && action.audioId === p.audioId)) fail('NOT_FOUND', '这段音频不属于当前课堂')
+    if (stored && stored.meta.cloudBase.replace(/\/+$/, '') !== cloud.baseUrl.replace(/\/+$/, '')) fail('CLOUD_CHANGED', '课堂来自其他云端地址，请恢复原连接后播放')
+    try { return await client.client.audio(p.audioId) }
+    catch { fail('CLOUD_AUDIO_UNAVAILABLE', '讲解音频读取失败，请检查云端连接后重试。') }
   }
 
   /**

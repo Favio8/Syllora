@@ -741,6 +741,8 @@ export const api = {
     rpc<ClassroomJobState>("classroom.job", { courseId, jobId }),
   classroomGet: (courseId: string, classroomId: string) =>
     rpc<ClassroomDocument>("classroom.get", { courseId, classroomId }),
+  classroomAudio: (input: { courseId: string; classroomId: string; sceneId: string; audioId: string; jobId?: string }) =>
+    sylloraRpc<{ mime: string; base64: string }>("classroom/audio", input),
   classroomList: (courseId: string) =>
     rpc<{ classrooms: ClassroomMeta[] }>("classroom.list", { courseId }),
   classroomCapabilities: (courseId?: string) =>

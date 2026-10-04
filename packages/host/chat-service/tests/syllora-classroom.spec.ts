@@ -446,3 +446,27 @@ describe('虚拟课堂：增量取场景、删除、清除历史任务', () => {
     expect((await projects.handle('clearJobs', {}) as { cleared: number }).cleared).toBe(0)
   })
 })
+
+describe('虚拟课堂：音频读取边界', () => {
+  it('reads only narration referenced by the saved classroom and keeps cloud credentials server-side', async () => {
+    const base = await startCloud((req, res) => {
+      if (!req.url.startsWith('/api/persistence/assets/')) return false
+      expect(req.headers.cookie).toBe('openmaic_access=test-cookie')
+      res.writeHead(200, { 'content-type': 'audio/wav' }); res.end(Buffer.from('RIFF-audio-fixture')); return true
+    })
+    const s = await setup({ cloud: cloudConfig(base) })
+    await new ClassroomStore(s.folder).save({ classroomId: 'stage-audio', title: '声音', requirement: '', materialIds: [], sourceCount: 0, sceneCount: 1, sceneTypes: { slide: 1 }, generatedAt: 1, fetchedAt: 1, cloudBase: base }, {
+      scenes: [{ id: 'scene-audio', actions: [{ type: 'speech', audioId: 'ast_audio' }] }],
+    })
+    const input = { courseId: s.id, classroomId: 'stage-audio', sceneId: 'scene-audio', audioId: 'ast_audio' }
+    const result = await s.projects.handle('classroom/audio', input)
+    expect(result).toEqual({ mime: 'audio/wav', base64: Buffer.from('RIFF-audio-fixture').toString('base64') })
+    const count = requests.length
+    await expect(s.projects.handle('classroom/audio', { ...input, audioId: 'ast_other' })).rejects.toThrow('不属于当前课堂')
+    await expect(s.projects.handle('classroom/audio', { ...input, sceneId: 'other' })).rejects.toThrow('不属于当前课堂')
+    await expect(s.projects.handle('classroom/audio', { ...input, classroomId: 'stage-other' })).rejects.toThrow('不属于当前课堂')
+    await expect(s.projects.handle('classroom/audio', { ...input, classroomId: '../secret' })).rejects.toThrow()
+    await expect(s.projects.handle('classroom/audio', { ...input, courseId: randomUUID() })).rejects.toThrow()
+    expect(requests).toHaveLength(count)
+  })
+})

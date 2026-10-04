@@ -175,7 +175,7 @@ export default function ClassroomWorkspace({ course, onOpenSettings, onActivity 
       ? <ClassroomPlayer
         courseId={course.id}
         document={open}
-        live={{ scenes: live.scenes, sceneTypes: countSceneTypes(live.scenes), generating: !(job?.done === true) }}
+        live={job?.done === true && open !== null ? null : { classroomId: live.classroomId, jobId: job?.jobId, scenes: live.scenes, sceneTypes: countSceneTypes(live.scenes), generating: !(job?.done === true) }}
         progressLabel={job === null ? '生成中' : `${job.step || job.status}${typeof job.scenesGenerated === 'number' && typeof job.totalScenes === 'number' ? ` · 已生成 ${job.scenesGenerated}/${job.totalScenes}` : ''}`}
         onClose={() => { setLiveView(false); setLive(null); }}
       />
@@ -459,7 +459,7 @@ function ClassroomPlayer({ courseId, document, live, progressLabel, onClose }: {
   /** 本地已保存的整份课堂（任务完成后）。生成中还没保存时为空。 */
   document: ClassroomDocument | null;
   /** 生成中的增量来源：云端当前已生成的场景 + 是否仍在生成。 */
-  live: { scenes: ClassroomScene[]; sceneTypes: Record<string, number>; generating: boolean } | null;
+  live: { classroomId: string | null; jobId?: string; scenes: ClassroomScene[]; sceneTypes: Record<string, number>; generating: boolean } | null;
   /** 生成中的进度文字（对象为空时不显示）。 */
   progressLabel?: string;
   onClose: () => void;
@@ -479,6 +479,10 @@ function ClassroomPlayer({ courseId, document, live, progressLabel, onClose }: {
   // 动作播放：按 scene.actions 逐步走（讲解台词 + 聚光灯/高亮/缩放），与官网「一页里逐条讲」一致。
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const loadedAudio = useRef<{ key: string; url: string } | null>(null);
 
   const persist = useCallback((sceneId: string | null, nextAnswers: Record<string, string[]>) => {
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
@@ -493,23 +497,79 @@ function ClassroomPlayer({ courseId, document, live, progressLabel, onClose }: {
 
   const actions = useMemo(() => (scene?.actions ?? []).filter(action => action !== null && typeof action === 'object'), [scene]);
   // 换页时回到动作第一步。
-  useEffect(() => { setStep(0); setPlaying(false); }, [scene?.id]);
+  useEffect(() => { setStep(0); setPlaying(false); setCompleted(false); setAudioError(null); }, [scene?.id]);
 
   /** 走到第 N 步时应该已经说过的台词（逐步累积，最新一条高亮）。 */
   const spoken = useMemo(() => actions.slice(0, step + 1).flatMap(action => typeof action.text === 'string' && action.text.trim() !== '' ? [action.text.trim()] : []), [actions, step]);
 
-  // 自动播放：每 4 秒推进一步，走完停在最后一步（翻页交给用户）。
+  const action = actions[step];
+  const audioId = typeof action?.audioId === 'string' ? action.audioId : null;
+  const playbackClassroomId = classroomId ?? live?.classroomId ?? null;
+  const audioKey = JSON.stringify([courseId, playbackClassroomId, scene?.id, step, audioId]);
+  const liveJobId = live?.jobId;
+  useEffect(() => () => {
+    if (loadedAudio.current) URL.revokeObjectURL(loadedAudio.current.url);
+  }, []);
+
+  // Speech advances on ended, including the final action. Effects get a short display interval.
+  // Reuse the media element so pause/resume keeps position and mobile browsers retain activation.
   useEffect(() => {
-    if (!playing || actions.length === 0) return;
-    if (step >= actions.length - 1) { setPlaying(false); return }
-    const timer = setTimeout(() => setStep(current => Math.min(current + 1, actions.length - 1)), 4000);
-    return () => clearTimeout(timer);
-  }, [playing, step, actions.length]);
+    const audio = audioRef.current;
+    if (!playing || !audio || actions.length === 0) return;
+    let alive = true;
+    setAudioError(null);
+    const advance = () => {
+      if (!alive) return;
+      if (step >= actions.length - 1) { setPlaying(false); setCompleted(true); }
+      else setStep(current => current + 1);
+    };
+    const failed = (error?: unknown) => {
+      if (!alive) return;
+      setPlaying(false);
+      setAudioError(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? '音频已就绪，请再次点击“播放讲解”以允许浏览器播放声音。'
+        : error instanceof Error ? error.message : '讲解音频播放失败，请点击“播放讲解”重试。');
+    };
+    if (action?.type !== 'speech') {
+      const timer = setTimeout(advance, 1000);
+      return () => { alive = false; clearTimeout(timer); audio.pause(); };
+    }
+    audio.addEventListener('ended', advance);
+    const mediaError = () => failed();
+    audio.addEventListener('error', mediaError);
+    void (async () => {
+      if (!audioId || !playbackClassroomId || !scene?.id) throw new Error('这一段尚无云端语音，请稍后刷新课堂；仍可手动查看台词。');
+      if (loadedAudio.current?.key !== audioKey) {
+        const result = await api.classroomAudio({ courseId, classroomId: playbackClassroomId, sceneId: scene.id, audioId, ...(liveJobId ? { jobId: liveJobId } : {}) });
+        if (!alive) return;
+        const bytes = Uint8Array.from(atob(result.base64), char => char.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes], { type: result.mime }));
+        if (loadedAudio.current) URL.revokeObjectURL(loadedAudio.current.url);
+        loadedAudio.current = { key: audioKey, url };
+        audio.src = url;
+      }
+      if (alive) await audio.play();
+    })().catch(failed);
+    return () => {
+      alive = false;
+      audio.removeEventListener('ended', advance);
+      audio.removeEventListener('error', mediaError);
+      audio.pause();
+    };
+  }, [playing, audioKey, action?.type, audioId, playbackClassroomId, courseId, scene?.id, liveJobId, step, actions.length]);
+
+  const togglePlayback = () => {
+    if (playing) { audioRef.current?.pause(); setPlaying(false); return; }
+    if (completed) { setStep(0); setCompleted(false); if (audioRef.current) audioRef.current.currentTime = 0; }
+    // Retry a browser-blocked play directly in the click gesture, after its bytes have arrived.
+    if (!completed && loadedAudio.current?.key === audioKey) void audioRef.current?.play().catch(() => undefined);
+    setPlaying(true);
+  };
 
   const go = (nextIndex: number) => {
     const bounded = Math.min(Math.max(nextIndex, 0), Math.max(scenes.length - 1, 0));
     setIndex(bounded);
-    setStep(0); setPlaying(false);
+    setStep(0); setPlaying(false); setCompleted(false); setAudioError(null);
     persist(scenes[bounded]?.id ?? null, answers);
   };
   const answer = (questionId: string, values: string[]) => {
@@ -558,17 +618,19 @@ function ClassroomPlayer({ courseId, document, live, progressLabel, onClose }: {
         {live?.generating === true && <li className="cl-scene-pending"><p className="cl-muted"><LoaderCircle size={13} className="spin" />后续页面生成中…</p></li>}
       </ol>
       <div className="cl-stage">
+        <audio ref={audioRef} aria-label="课堂讲解音频" preload="auto" />
         <SceneView scene={scene} answers={answers} revealed={revealed} effects={effectsForStep(actions, step)}
           onAnswer={answer} onReveal={questionId => setRevealed(current => ({ ...current, [questionId]: true }))} />
         {actions.length > 0 && <div className="cl-actions" aria-label="讲解台词">
           <div className="cl-actions-bar">
-            <button type="button" className="button small" disabled={step === 0} onClick={() => { setPlaying(false); setStep(current => Math.max(0, current - 1)); }}><ArrowLeft size={13} />上一步</button>
-            <button type="button" className="button small" onClick={() => { if (step >= actions.length - 1) setStep(0); setPlaying(value => !value); }}>
-              {playing ? <><Square size={13} />暂停</> : step >= actions.length - 1 ? <><RotateCcw size={13} />重播</> : <><Play size={13} />播放讲解</>}
+            <button type="button" className="button small" disabled={step === 0} onClick={() => { setPlaying(false); setCompleted(false); setAudioError(null); setStep(current => Math.max(0, current - 1)); }}><ArrowLeft size={13} />上一步</button>
+            <button type="button" className="button small" onClick={togglePlayback}>
+              {playing ? <><Square size={13} />暂停</> : completed ? <><RotateCcw size={13} />重播</> : <><Play size={13} />播放讲解</>}
             </button>
-            <button type="button" className="button small" disabled={step >= actions.length - 1} onClick={() => { setPlaying(false); setStep(current => Math.min(actions.length - 1, current + 1)); }}>下一步<ArrowRight size={13} /></button>
+            <button type="button" className="button small" disabled={step >= actions.length - 1} onClick={() => { setPlaying(false); setCompleted(false); setAudioError(null); setStep(current => Math.min(actions.length - 1, current + 1)); }}>下一步<ArrowRight size={13} /></button>
             <span className="cl-muted">第 {step + 1} / {actions.length} 步</span>
           </div>
+          {audioError && <p className="cl-error" role="alert">{audioError}</p>}
           {spoken.length > 0
             ? spoken.map((text, spokenIndex) => <p key={spokenIndex} className={spokenIndex === spoken.length - 1 ? 'is-current' : ''}>{text}</p>)
             : <p className="cl-muted">这一步没有台词（可能只是舞台效果）。</p>}

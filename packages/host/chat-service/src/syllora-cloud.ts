@@ -125,6 +125,36 @@ export class OpenMaicCloud {
     }
   }
 
+  /** Read narration bytes through the cloud gate; never expose its cookie to the browser. */
+  async audio(assetId: string): Promise<{ mime: string; base64: string }> {
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(assetId)) throw new CloudError('音频标识无效', 400, 'BAD_AUDIO')
+    await this.connect()
+    const response = await fetch(`${this.base}/api/persistence/assets/${encodeURIComponent(assetId)}/content`, {
+      headers: { cookie: this.cookie! }, redirect: 'manual', signal: AbortSignal.timeout(30_000),
+    }).catch(() => { throw new CloudError('无法读取云端讲解音频，请稍后重试', undefined, 'UNREACHABLE') })
+    const mime = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? ''
+    const limit = 16 * 1024 * 1024
+    if (!response.ok || !/^audio\/(wav|x-wav|mpeg|mp3|ogg|webm|mp4|aac|flac)$/.test(mime) || Number(response.headers.get('content-length')) > limit) {
+      await response.body?.cancel()
+      throw new CloudError('云端讲解音频不可用，请检查连接或稍后重试', response.status, 'BAD_AUDIO')
+    }
+    const reader = response.body?.getReader()
+    if (!reader) throw new CloudError('云端讲解音频为空', undefined, 'BAD_AUDIO')
+    const chunks: Uint8Array[] = []
+    let length = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        length += value.length
+        if (length > limit) throw new CloudError('单段讲解音频超过 16 MB', undefined, 'BAD_AUDIO')
+        chunks.push(value)
+      }
+    } finally { await reader.cancel().catch(() => undefined) }
+    if (length === 0) throw new CloudError('云端讲解音频为空', undefined, 'BAD_AUDIO')
+    return { mime, base64: Buffer.concat(chunks).toString('base64') }
+  }
+
   /** 上传一份资料，返回云端 materialId。注意资料会离开本机。 */
   async uploadMaterial(name: string, bytes: Uint8Array, mime: string): Promise<CloudMaterial> {
     await this.connect()
