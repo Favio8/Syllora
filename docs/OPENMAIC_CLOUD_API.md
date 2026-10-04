@@ -8,6 +8,10 @@
 
 配套实现见 `packages/host/chat-service/src/syllora-cloud.ts`（其文件头也记录了同一份契约）。
 
+> **想先把它连起来？** 本文件是**接口契约参考**（每个端点怎么调、返回什么）。
+> 从零到连通的操作顺序（地址与访问口令从哪来、四步顺序、每种连不上分别是什么报错）
+> 在 [OPENMAIC_SLIDES.md 的「怎么把本地和云端连起来」](OPENMAIC_SLIDES.md#怎么把本地和云端连起来)。
+
 ---
 
 ## 0. 先明确一件事：云端不存在"文件"这个概念
@@ -59,7 +63,7 @@ GET /api/access-code/status
 POST /api/access-code/verify
 content-type: application/json
 
-{ "code": "<站点访问口令>" }
+{ "code": "VrkmT41PmBbZPt6iIn1wICck" }
 ```
 
 响应：
@@ -220,6 +224,19 @@ or assign the slot (or an ancestor) in openmaic.yml.
 
 **轮询必须容忍瞬时网络故障**：一次生成要数分钟到数小时，单次 `fetch failed` 不该判死整个任务。
 Syllora 的做法是累计连续失败超过 10 次才放弃，但 4xx（如口令错）立即停。
+
+**任务不跨容器重启存活**（实测）。重启云端容器后再轮询正在跑的任务，会得到 `failed`：
+
+```json
+{ "status": "failed", "error": "Stale job: process may have restarted during generation" }
+```
+
+这不是数据损坏——已生成的场景仍在数据库里。但**正在进行的生成会丢**，所以要避免在生成期间重启容器
+（改 `.env.local`、`docker compose up -d`、升级镜像都会触发）。Syllora 侧的表现是：该章记为失败、
+**不影响讲义发布**，下次初始化会重新生成（成功过的章节走缓存不重算）。
+
+> 排查这一条时顺带确认了资源不是瓶颈：3.5 GB 内存的机器上容器只占约 145 MB（4%），
+> `RestartCount=0`、`OOMKilled=false`、无内核 OOM 记录。**并发不会把服务器压垮**。
 
 ---
 
