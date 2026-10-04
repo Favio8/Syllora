@@ -1,4 +1,4 @@
-# AI软件赛道 - Syllora - 子非鱼
+# Syllora - 子非鱼
 
 **Turn every course into a learning system.**
 
