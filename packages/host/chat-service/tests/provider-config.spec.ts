@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import { activateProvider, deleteProvider, saveProvider } from '../src/settings.ts'
+import { activateProvider, deleteProvider, saveProvider, updateSettings } from '../src/settings.ts'
 import { loadChatConfig } from '../src/config.ts'
 
 async function readYaml(root: string): Promise<Record<string, unknown>> {
@@ -150,5 +150,21 @@ describe('provider configuration write/read contract', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  })
+})
+
+
+describe('shared legacy default compatibility', () => {
+  it('resolves a blank profile default from matching llm defaults without mixing routes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'syllora-empty-default-'))
+    try {
+      await mkdir(join(root,'.syllora'))
+      await writeFile(join(root,'.syllora/config.yaml'), 'providers:\n  deepseek:\n    model: ""\n    base_url: https://example.test/v1\n  other:\n    model: ""\nllm:\n  provider: deepseek\n  model: deepseek-flash\n  api_base: https://legacy.test/v1\n')
+      expect(await loadChatConfig(root)).toMatchObject({model:'deepseek-flash',providerId:'deepseek',configRoot:root})
+      expect(await loadChatConfig(root,{providerId:'other'})).toMatchObject({model:'',baseUrl:''})
+      await updateSettings(root,{model:'deepseek-pro'})
+      expect(await loadChatConfig(root)).toMatchObject({model:'deepseek-pro'})
+      expect((await readYaml(root)).providers).toMatchObject({deepseek:{model:'deepseek-pro'}})
+    } finally { await rm(root,{recursive:true,force:true}) }
   })
 })

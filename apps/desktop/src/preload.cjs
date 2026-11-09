@@ -1,8 +1,9 @@
 'use strict'
 const { contextBridge, ipcRenderer } = require('electron')
 
-// 最小化、显式的桥接。Web UI 不需要 Node 访问；Host token 由静态托管按
-// 浏览器路径的方式注入 window.__SYLLORA__——桌面壳不额外注入任何凭据。
+// 最小化、显式的桥接。Web UI 不需要 Node 访问；CR-16 之后宿主不再把 token
+// 注入页面，桌面主进程读取发现文件并换取 HttpOnly 会话 Cookie，
+// 然后才加载 renderer；桥接 API 不返回访问 token。
 // C-5：host-info 只返回目录事实 {dev, port, hostHome, logsDir, dataDir}，
 // 不透出 host.json 全文（含访问 token）。
 // openPath：设置弹窗「本机与诊断」打开数据/日志目录用；主进程侧只放行

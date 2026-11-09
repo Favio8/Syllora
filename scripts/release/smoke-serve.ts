@@ -78,13 +78,16 @@ try {
   if (withAuth.status !== 200) fail(`带 token 期望 200，实际 ${withAuth.status}`)
   console.log('[smoke-serve] ✓ Bearer token 调 RPC 可达')
 
-  // ④ 静态 UI + tap 注入
+  // ④ 静态 UI 托管 + CR-16 凭据换票
   const page = await fetchJson('/')
   const html = await page.text()
-  if (!page.ok || !html.includes('window.__SYLLORA__') || !html.includes(token)) {
-    fail('index.html 未注入 __SYLLORA__ token tap')
+  if (!page.ok || !html.includes('/api/session')) fail('index.html 未交付票据页')
+  if (html.includes(token)) fail('静态页面泄漏了访问 token')
+  const handoff = await fetchJson('/api/session', { method: 'POST', headers: { 'x-syllora-token': token } })
+  if (handoff.status !== 200 || !(handoff.headers.get('set-cookie') ?? '').includes('syllora_session=')) {
+    fail('会话换票未下发 HttpOnly Cookie')
   }
-  console.log('[smoke-serve] ✓ 同源 Web UI 托管 + token tap 注入')
+  console.log('[smoke-serve] ✓ 同源 Web UI 托管 + 凭据换票（HTML 不含 token）')
 
   // ⑤ CLI 自动发现端口+token
   const status = spawnSync(process.execPath, [binPath, 'status'], {

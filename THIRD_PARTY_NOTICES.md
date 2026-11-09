@@ -16,6 +16,10 @@ notices are retained in the copied files and directories.
   `packages/core/agent-loop`, `packages/core/tools`, `packages/client/ui-model-selection`,
   `packages/client/ui-tool`, and `packages/client/ui-settings-*` contracts. StudyClaw
   implementations are adapted to its existing package boundaries and learning preset.
+- The workbench settings dialog (`apps/web/src/features/workbench/components/SettingsPanel.tsx`,
+  `apps/web/src/features/workbench/settings.css`) adapts the layout and visual language of DSH
+  `packages/client/ui-settings-general` (SettingsRoot), the general-settings rows in
+  `ui-conversation` / `ui-theme`, and `ui-settings-models` section styles.
 
 ## vendored cordis ecosystem (`vendor/`)
 

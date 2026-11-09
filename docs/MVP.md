@@ -34,6 +34,8 @@
 - 课程目录与初始化：`syllora-projects.ts`、`syllora-files.ts`、`syllora-initialize.ts`；存储与接口见 [COURSE_PROJECTS.md](COURSE_PROJECTS.md)。
 - 规则：`packages/host/chat-service/src/syllora-domain.ts`。
 - PDF：复用 `packages/course/builder/src/extract.ts` 中的 PDFParse，增加保留物理页码的提取入口。
+- DOCX／XLSX／HTML（2026-10-02）：课程目录模式经 `extractTextToMarkdown`（mammoth／xlsx／turndown）转为 Markdown 后进入同一分段与校验流程；无原件预览。旧的单文件导入入口仍只接受 PDF／MD／TXT。
+- 文本归一（2026-10-02）：解析阶段把 PDF 文本层中的康熙部首／CJK 部首补充码位归一为常用汉字（中文全角标点不变），解析缓存键升至 `parse-v4`；已初始化课程重新整理时来源 ID 随正文更新。讲义引文校验忽略空白、宽度变体并允许跨所引相邻片段，编造内容仍拒绝。
 - 模型：复用 `adapter.ts`、`config.ts`、`settings.ts`、`secret-box.ts`；没有新增自主 Agent 执行工具。
 
 ## 本轮验证记录

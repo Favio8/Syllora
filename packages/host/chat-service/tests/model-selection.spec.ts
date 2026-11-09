@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename,  join } from 'node:path'
 import { createSession, selectSessionModel, sessionModels } from '../src/service.ts'
+import { loadChatConfig } from '../src/config.ts'
 import { configForSession } from '../src/course.ts'
 import { LearningAgentService } from '../src/service.ts'
 import { AgentRegistry } from '@syllora/agent'
@@ -109,4 +110,21 @@ describe('session model directory', () => {
     expect(resolved).toMatchObject({ providerId: 'acme', model: 'acme-large', apiKey: 'test-key' })
     await rm(root, { recursive: true, force: true })
   })
+})
+
+
+it('uses shared routes for session selection, resumed agents and sync actions',async()=>{
+  const {root:shared}=await setup()
+  const course=await mkdtemp(join(tmpdir(),'syllora-shared-course-'))
+  try {
+    const session=await createSession(course,basename(course),'quick',null,shared)
+    expect(await sessionModels(course,basename(course),session.sessionId,shared)).toMatchObject({routable:true,current:{provider:'acme',model:'acme-small'}})
+    await selectSessionModel(course,basename(course),session.sessionId,{provider:'acme',model:'acme-large'},shared)
+    const fallback=await loadChatConfig(shared)
+    expect(await configForSession(course,basename(course),session.sessionId,fallback)).toMatchObject({model:'acme-large',apiKey:'test-key',configRoot:shared})
+    const service=new LearningAgentService(new AgentRegistry(),undefined,shared)
+    await service.resume(course,basename(course),session.sessionId)
+    expect(service.status(`study-${session.sessionId}`).modelSelection).toMatchObject({model:'acme-large'})
+    await service.dispose(`study-${session.sessionId}`)
+  } finally {await rm(course,{recursive:true,force:true});await rm(shared,{recursive:true,force:true})}
 })
